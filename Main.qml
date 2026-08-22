@@ -6275,6 +6275,20 @@ ApplicationWindow {
                     onClicked: Qt.openUrlExternally("https://ko-fi.com/cmdrforcer")
                 }
             }
+            Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
+            Label {
+                text: "THANK YOU"
+                color: orange
+                font.pixelSize: 11
+                font.bold: true
+            }
+            Label {
+                Layout.fillWidth: true
+                text: "Special thanks to everyone who helped shape ED·OPS — contributors, testers, bug reporters, translators, and the Elite Dangerous community. Thanks also to EDCD/EDDN, INARA, and Spansh for their documentation, services, and community resources."
+                color: textSecondary
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
+            }
             Label {
                 Layout.fillWidth: true
                 text: "Licensed under the GNU General Public License v3.0"
