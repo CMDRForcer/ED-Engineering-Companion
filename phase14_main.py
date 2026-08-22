@@ -168,6 +168,7 @@ class SmokeTestRunner(QObject):
         ("dialog-shortcuts", "qa-dialog-shortcuts"),
         ("dialog-global-search", "qa-dialog-global-search"),
         ("dialog-onboarding", "qa-dialog-onboarding"),
+        ("dialog-about", "qa-dialog-about"),
     ]
 
     def __init__(self, app, window, qml_messages, screenshot=None, parent=None):

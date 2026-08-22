@@ -100,7 +100,7 @@ LEGACY_THEME_IDS = frozenset({
 })
 COMMANDER_CARD_IDS = (
     "ranks", "major-reputation", "finances", "current-ship",
-    "minor-reputation", "squadron", "missions", "permits",
+    "minor-reputation", "squadron",
 )
 NAVIGATION_IDS = (
     "operations", "engineering", "wishlist", "engineers", "materials",
@@ -983,8 +983,6 @@ class CockpitController(QObject):
         ship = {"type": "", "name": "", "system": "", "station": ""}
         minor = {}
         squadron = {"name": "", "role": ""}
-        missions = {}
-        permits = set()
         for event in events:
             if not isinstance(event, dict):
                 continue
@@ -1009,32 +1007,6 @@ class CockpitController(QObject):
                 squadron["role"] = str(
                     event.get("CurrentRank") or event.get("Rank") or squadron["role"]
                 )
-            if name == "MissionAccepted" and event.get("MissionID") is not None:
-                expiry = str(event.get("Expiry") or "")
-                remaining = "EXPIRY UNKNOWN"
-                if expiry:
-                    try:
-                        expiry_at = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
-                        seconds = int((expiry_at - datetime.now(timezone.utc)).total_seconds())
-                        remaining = (
-                            "EXPIRED" if seconds <= 0 else
-                            f"{seconds // 3600}H {(seconds % 3600) // 60}M REMAINING"
-                        )
-                    except ValueError:
-                        remaining = expiry
-                missions[str(event["MissionID"])] = {
-                    "label": str(event.get("LocalisedName") or event.get("Name") or "MISSION"),
-                    "value": str(event.get("DestinationSystem") or event.get("Faction") or "ACTIVE"),
-                    "detail": remaining,
-                }
-            elif name in {"MissionCompleted", "MissionFailed", "MissionAbandoned"}:
-                missions.pop(str(event.get("MissionID")), None)
-            if name == "MissionCompleted":
-                for permit in event.get("PermitsAwarded", []) or []:
-                    if isinstance(permit, dict):
-                        permit = permit.get("System") or permit.get("Name") or permit.get("StarSystem")
-                    if str(permit or "").strip():
-                        permits.add(str(permit).strip())
 
         def card(title, tone, rows, empty):
             return {"title": title, "tone": tone, "rows": rows, "empty": empty}
@@ -1070,11 +1042,6 @@ class CockpitController(QObject):
                 {"label": "SQUADRON", "value": squadron["name"],
                  "detail": squadron["role"] or "ROLE UNKNOWN"}
             ] if squadron["name"] else []), "NO SQUADRON DATA"),
-            "missions": card("ACTIVE MISSIONS", "orange", list(missions.values()), "NO ACTIVE MISSIONS"),
-            "permits": card("SYSTEM PERMITS", "cyan", [
-                {"label": "PERMIT", "value": name, "detail": "ACCESS CONFIRMED"}
-                for name in sorted(permits)
-            ], "NO KNOWN SYSTEM PERMITS"),
         }
         self._derived_cache["commander_cards"] = (cache_key, cards)
         return cards
