@@ -74,6 +74,7 @@ diagnostics/
 # Build and packaging output
 build/
 dist/
+output/
 *.egg-info/
 *.zip
 

@@ -36,16 +36,20 @@ All screenshots use synthetic demo data and do not contain a real Commander prof
 ### Requirements
 
 - Windows 10 or Windows 11
-- Python 3 installed and available from the command line
 - Elite Dangerous Journal files for live Commander data
 
-### Installation
+### Portable installation (recommended)
 
 1. Open the [latest ED·OPS release](https://github.com/CMDRForcer/ED-OPS/releases/latest).
-2. Under **Assets**, download **Source code (zip)**.
-3. Extract the downloaded ZIP. Windows may create two equally named nested folders; this is harmless. Run ED·OPS from the inner folder containing `Main.qml`.
-4. Run `INSTALL_REQUIREMENTS.bat` once to install the required Python packages.
-5. Start ED·OPS with `START_APP.bat`.
+2. Under **Assets**, download `ED-OPS-21.163-Windows.zip`.
+3. Extract the entire ZIP to a writable folder.
+4. Start `ED-OPS.exe`. Keep the `_internal` folder next to the executable.
+
+The portable package includes Python and all required dependencies. Windows SmartScreen may show a warning because the executable is not code-signed yet.
+
+### Run from source
+
+To run the source version instead, install Python 3, download **Source code (zip)**, extract it, run `INSTALL_REQUIREMENTS.bat` once, and then start ED·OPS with `START_APP.bat`.
 
 Personal settings, Journal cursors, caches, and service credentials are stored outside the program folder and are not part of the GitHub download.
 
