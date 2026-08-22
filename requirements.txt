@@ -1,0 +1,3 @@
+requests>=2.31,<3
+pyzmq>=26,<28
+PySide6>=6.8,<7

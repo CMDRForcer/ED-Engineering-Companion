@@ -1,0 +1,92 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+
+# ED·OPS runtime profiles and personal state
+profile-*/
+EDEngineeringCompanion/
+phase14_graphics.json
+phase14.log
+journal_path.txt
+
+inara_config.json
+inara_receipts.json
+inara_journal_cache.json
+
+eddn_config.json
+eddn_journal_cursor.json
+community_upload_queue.json
+hge_live_sightings.json
+
+logbook_notes.json
+session_history.json
+ship_blueprints.json
+ship_metadata.json
+tech_broker_track.json
+blueprint_id_catalog_learned.json
+blueprint_diagnostics.json
+craft_batch_diagnostics.json
+engineer_craft_cursor.json
+
+material_trader_catalog_user.json
+tech_broker_catalog_user.json
+trader_type_cache.json
+system_coordinates_user.json
+
+# Elite Dangerous journal/snapshot files if copied locally
+Journal*.log
+Cargo.json
+Market.json
+NavRoute.json
+Outfitting.json
+Shipyard.json
+ModulesInfo.json
+Status.json
+
+# Logs, temporary files and crash output
+*.log
+*.tmp
+*.bak
+*.crash
+crash-reports/
+diagnostics/
+
+# Build and packaging output
+build/
+dist/
+*.egg-info/
+*.zip
+
+# Local screenshots and smoke-test output
+screenshots/
+smoke-screens/
+*_preview.png
+*_smoke.png
+
+# IDE and OS files
+.vscode/
+.idea/
+.vs/
+.DS_Store
+Thumbs.db
+desktop.ini
