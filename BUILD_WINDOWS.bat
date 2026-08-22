@@ -20,8 +20,13 @@ copy /y "LICENSE" "dist\ED-OPS\LICENSE" >nul
 copy /y "docs\EDOPS_User_Manual_Privacy_EN_21.163.pdf" "dist\ED-OPS\EDOPS_User_Manual_Privacy_EN_21.163.pdf" >nul
 copy /y "docs\EDOPS_User_Manual_Privacy_DE_21.163.pdf" "dist\ED-OPS\EDOPS_User_Manual_Privacy_DE_21.163.pdf" >nul
 
+if not exist "output" mkdir "output"
+powershell -NoProfile -Command "Compress-Archive -Path 'dist\ED-OPS\*' -DestinationPath 'output\ED-OPS-21.163-Windows.zip' -CompressionLevel Optimal -Force"
+if errorlevel 1 goto :failed
+
 echo.
 echo Portable build created in dist\ED-OPS
+echo Windows Explorer compatible ZIP created in output\ED-OPS-21.163-Windows.zip
 exit /b 0
 
 :failed
