@@ -1,0 +1,228 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install build and runtime dependencies
+        run: >-
+          python -m pip install --disable-pip-version-check
+          -r requirements.txt -r requirements-build.txt
+
+      - name: Verify tag and application version
+        shell: pwsh
+        run: |
+          $appVersion = python -c "from ed_companion import APP_VERSION; print(APP_VERSION)"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "APP_VERSION could not be read."
+            exit 1
+          }
+          $appVersion = $appVersion.Trim()
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $tag = "${{ github.ref_name }}"
+            if ($tag -notmatch '^\d+\.\d+$') {
+              Write-Error "Release tag '$tag' must use the numeric EDEC format, for example 21.170."
+              exit 1
+            }
+            if ($appVersion -ne $tag) {
+              Write-Error "Tag '$tag' does not match APP_VERSION '$appVersion'."
+              exit 1
+            }
+          } else {
+            $tag = $appVersion
+          }
+          "EDEC_VERSION=$tag" >> $env:GITHUB_ENV
+
+      - name: Compile Python sources
+        run: python -m compileall -q phase14_main.py external_contract_check.py ed_companion tests
+
+      - name: Run release contract tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Check repository privacy and hygiene
+        run: python tests/check_repository_hygiene.py
+
+      - name: Prepare isolated source smoke profile
+        shell: pwsh
+        run: |
+          $journal = Join-Path $env:RUNNER_TEMP "edec-source-journal"
+          $profile = Join-Path $env:RUNNER_TEMP "edec-source-profile"
+          New-Item -ItemType Directory -Force -Path $journal, $profile | Out-Null
+          Copy-Item -LiteralPath "tests/fixtures/smoke_journal.ndjson" `
+            -Destination (Join-Path $journal "Journal.2026-08-23T190000.01.log")
+          "LOCALAPPDATA=$profile" >> $env:GITHUB_ENV
+          "EDOPS_JOURNAL_DIR=$journal" >> $env:GITHUB_ENV
+          "EDOPS_PROFILE_FID=F0000000" >> $env:GITHUB_ENV
+          "EDEC_SINGLE_INSTANCE_NAME=EDEC-release-source-${{ github.run_id }}-${{ github.run_attempt }}" >> $env:GITHUB_ENV
+          "PHASE14_PREVIEW_SKIP_ONBOARDING=1" >> $env:GITHUB_ENV
+          "PHASE14_SMOKE_TEST=1" >> $env:GITHUB_ENV
+          "QT_QPA_PLATFORM=offscreen" >> $env:GITHUB_ENV
+
+      - name: Run honest source smoke test
+        shell: pwsh
+        run: |
+          python -B phase14_main.py 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/edec-source-smoke.log"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Select-String -Path "$env:RUNNER_TEMP/edec-source-smoke.log" -Pattern 'PHASE14_SMOKE_REPORT=.*"status": "PASS"')) {
+            Write-Error "Smoke process returned success without a PASS report."
+            exit 1
+          }
+
+      - name: Build Windows portable application
+        run: python -m PyInstaller --noconfirm --clean EDEC.spec
+
+      - name: Add portable documentation
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath "PORTABLE_README.txt" -Destination "dist/EDEC/README.txt"
+          Copy-Item -LiteralPath "LICENSE" -Destination "dist/EDEC/LICENSE"
+          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_EN_21.164.pdf" -Destination "dist/EDEC/EDEC_User_Manual_Privacy_EN_21.164.pdf"
+          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_DE_21.164.pdf" -Destination "dist/EDEC/EDEC_User_Manual_Privacy_DE_21.164.pdf"
+
+      - name: Run honest packaged smoke test
+        shell: pwsh
+        run: |
+          $journal = Join-Path $env:RUNNER_TEMP "edec-package-journal"
+          $profile = Join-Path $env:RUNNER_TEMP "edec-package-profile"
+          New-Item -ItemType Directory -Force -Path $journal, $profile | Out-Null
+          Copy-Item -LiteralPath "tests/fixtures/smoke_journal.ndjson" `
+            -Destination (Join-Path $journal "Journal.2026-08-23T190000.01.log")
+          $env:LOCALAPPDATA = $profile
+          $env:EDOPS_JOURNAL_DIR = $journal
+          $env:EDOPS_PROFILE_FID = "F0000000"
+          $env:EDEC_SINGLE_INSTANCE_NAME = "EDEC-release-package-${{ github.run_id }}-${{ github.run_attempt }}"
+          $env:PHASE14_PREVIEW_SKIP_ONBOARDING = "1"
+          $env:PHASE14_SMOKE_TEST = "1"
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $process = Start-Process -FilePath "dist/EDEC/EDEC.exe" -WindowStyle Hidden -PassThru -Wait
+          if ($process.ExitCode -ne 0) {
+            Write-Error "Packaged smoke test failed with exit code $($process.ExitCode)."
+            exit $process.ExitCode
+          }
+
+      - name: Create release archives and checksums
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP "edec-release"
+          New-Item -ItemType Directory -Force -Path $release | Out-Null
+          $windowsZip = Join-Path $release "EDEC-$env:EDEC_VERSION-Windows.zip"
+          $projectZip = Join-Path $release "EDEC-$env:EDEC_VERSION-Full-Project.zip"
+          tar.exe -a -c -f $windowsZip -C "dist/EDEC" .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git archive --format=zip --output=$projectZip HEAD -- . ':(exclude)tests'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $hashes = Get-FileHash -Algorithm SHA256 $windowsZip, $projectZip
+          $lines = $hashes | ForEach-Object {
+            "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)"
+          }
+          Set-Content -LiteralPath (Join-Path $release "SHA256SUMS.txt") `
+            -Value $lines -Encoding ascii
+
+      - name: Verify release archive integrity and privacy
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $release = Join-Path $env:RUNNER_TEMP "edec-release"
+          $archives = Get-ChildItem -LiteralPath $release -Filter "*.zip"
+          if ($archives.Count -ne 2) {
+            Write-Error "Expected exactly two release ZIP files."
+            exit 1
+          }
+          foreach ($archiveFile in $archives) {
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($archiveFile.FullName)
+            try {
+              $entries = @($archive.Entries)
+              if (-not $entries.Count) {
+                Write-Error "$($archiveFile.Name) is empty."
+                exit 1
+              }
+              $forbidden = @($entries | Where-Object {
+                $_.FullName -match '(^|/)(__pycache__|tests|profile-[^/]*|EDEngineeringCompanion|\.git)(/|$)' -or
+                $_.Name -match '^(phase14\.log|inara_config\.json|inara_receipts\.json|inara_journal_cache\.json|eddn_config\.json|Journal.*\.log)$'
+              })
+              if ($forbidden.Count) {
+                Write-Error "Forbidden runtime or personal files found in $($archiveFile.Name): $($forbidden.FullName -join ', ')"
+                exit 1
+              }
+            } finally {
+              $archive.Dispose()
+            }
+          }
+          $windowsZip = Join-Path $release "EDEC-$env:EDEC_VERSION-Windows.zip"
+          $projectZip = Join-Path $release "EDEC-$env:EDEC_VERSION-Full-Project.zip"
+          $windows = [System.IO.Compression.ZipFile]::OpenRead($windowsZip)
+          try {
+            $names = @($windows.Entries.FullName)
+            if (-not ($names -match '(^|/)EDEC\.exe$')) {
+              Write-Error "Portable archive does not contain EDEC.exe."
+              exit 1
+            }
+            if (-not ($names -match 'qml/pages/PowerplayPage\.qml$')) {
+              Write-Error "Portable archive is missing modular QML pages."
+              exit 1
+            }
+          } finally {
+            $windows.Dispose()
+          }
+          $project = [System.IO.Compression.ZipFile]::OpenRead($projectZip)
+          try {
+            $names = @($project.Entries.FullName)
+            if (-not ($names -contains 'phase14_main.py') -or -not ($names -contains 'Main.qml')) {
+              Write-Error "Project archive is missing application entry files."
+              exit 1
+            }
+          } finally {
+            $project.Dispose()
+          }
+
+      - name: Upload verified workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: EDEC-release-assets-${{ github.run_id }}
+          path: ${{ runner.temp }}/edec-release/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create or update GitHub release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $release = Join-Path $env:RUNNER_TEMP "edec-release"
+          $assets = @(
+            (Join-Path $release "EDEC-$env:EDEC_VERSION-Windows.zip"),
+            (Join-Path $release "EDEC-$env:EDEC_VERSION-Full-Project.zip"),
+            (Join-Path $release "SHA256SUMS.txt")
+          )
+          gh release view $tag --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber --repo "${{ github.repository }}"
+          } else {
+            gh release create $tag @assets `
+              --repo "${{ github.repository }}" `
+              --title "EDEC $tag" --generate-notes --latest
+          }
