@@ -38,7 +38,7 @@ exe = EXE(
     analysis.scripts,
     [],
     exclude_binaries=True,
-    name="ED-OPS",
+    name="EDEC",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -58,5 +58,5 @@ collection = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="ED-OPS",
+    name="EDEC",
 )

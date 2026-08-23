@@ -1,9 +1,9 @@
-ED-OPS 21.163 - Portable Windows Edition
-==========================================
+ED Engineering Companion (EDEC) 21.163 - Portable Windows Edition
+===================================================================
 
 1. Extract the complete ZIP archive.
-2. Start ED-OPS.exe.
-3. Keep the _internal folder next to ED-OPS.exe.
+2. Start EDEC.exe.
+3. Keep the _internal folder next to EDEC.exe.
 
 Python and the INSTALL_REQUIREMENTS step are not required for this portable build.
 
@@ -17,5 +17,5 @@ Documentation:
 Project: https://github.com/CMDRForcer/ED-OPS
 License: GNU General Public License v3.0
 
-ED-OPS is an independent third-party project and is not affiliated with
+ED Engineering Companion (EDEC) is an independent third-party project and is not affiliated with
 Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc.

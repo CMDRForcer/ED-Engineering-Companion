@@ -748,7 +748,7 @@ def envelope(prepared, context, uploader_id, version=APP_VERSION):
         ),
         "header": {
             "uploaderID": str(uploader_id),
-            "softwareName": "Elite Dangerous Engineering Companion",
+            "softwareName": "ED Engineering Companion",
             "softwareVersion": str(version),
             "gameversion": str(context.get("gameversion") or ""),
             "gamebuild": str(context.get("gamebuild") or ""),
@@ -779,7 +779,7 @@ def send(prepared, context, uploader_id, opener=urlopen, timeout=20):
         except (OSError, AttributeError):
             detail = ""
         schema_note = (
-            " Schema/message rejected; refresh ED·OPS schema support before retrying."
+            " Schema/message rejected; refresh EDEC schema support before retrying."
             if status in {400, 413, 426} else ""
         )
         raise EddnError(

@@ -884,19 +884,19 @@ class CockpitController(QObject):
         if journal_status not in {"LIVE", "READY"}:
             verdict = "YES — JOURNAL IS NOT HEALTHY"
             tone = "ERROR"
-            reason = "ED·OPS cannot currently prove reliable Journal processing. Keep EDMC until the Journal status is LIVE or READY."
+            reason = "EDEC cannot currently prove reliable Journal processing. Keep EDMC until the Journal status is LIVE or READY."
         elif not upload_enabled:
             verdict = "YES — EDDN SHARING IS OFF"
             tone = "WARNING"
-            reason = "ED·OPS reads the Journal, but anonymous EDDN upload is disabled. EDMC is still needed if you want to contribute community data."
+            reason = "EDEC reads the Journal, but anonymous EDDN upload is disabled. EDMC is still needed if you want to contribute community data."
         elif failed:
             verdict = "RECOMMENDED — EDDN ERRORS PENDING"
             tone = "WARNING"
-            reason = f"ED·OPS has {failed} failed EDDN delivery job(s). Resolve or safely retry them before retiring EDMC."
+            reason = f"EDEC has {failed} failed EDDN delivery job(s). Resolve or safely retry them before retiring EDMC."
         else:
             verdict = "NO — FOR JOURNAL + EDDN"
             tone = "READY"
-            reason = "ED·OPS is processing the Journal and its EDDN sender is enabled. Running EDMC in parallel is not required for these paths."
+            reason = "EDEC is processing the Journal and its EDDN sender is enabled. Running EDMC in parallel is not required for these paths."
         station_note = (
             f"{station_attention} station snapshot(s) need attention. Opening the matching Elite station page refreshes them; EDMC cannot create data Elite has not exposed."
             if station_attention else

@@ -1,4 +1,4 @@
-"""Collision-safe atomic writes for local ED·OPS persistence files."""
+"""Collision-safe atomic writes for local EDEC persistence files."""
 
 import os
 import re

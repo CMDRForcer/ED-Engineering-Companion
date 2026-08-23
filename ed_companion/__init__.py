@@ -1,4 +1,4 @@
-"""Reusable application core for Elite Dangerous Engineering Companion."""
+"""Reusable application core for ED Engineering Companion (EDEC)."""
 
 # Release/build identity shown by the app and sent to optional integrations.
 APP_VERSION = "21.163"

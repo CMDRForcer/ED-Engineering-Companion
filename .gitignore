@@ -22,7 +22,7 @@ env/
 *.pfx
 *.p12
 
-# ED·OPS runtime profiles and personal state
+# EDEC runtime profiles and personal state
 profile-*/
 EDEngineeringCompanion/
 phase14_graphics.json

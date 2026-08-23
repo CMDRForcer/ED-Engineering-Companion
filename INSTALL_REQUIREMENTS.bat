@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Elite Dangerous Engineering Companion - Dependencies
+title ED Engineering Companion - Dependencies
 cd /d "%~dp0"
 set "PYTHON_EXE="
 set "PYTHON_ARGS="

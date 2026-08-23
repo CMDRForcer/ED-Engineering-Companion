@@ -59,7 +59,7 @@ SINGLE_INSTANCE_NAME = "EDOPS-phase14-single-instance"
 
 
 class SingleInstanceRuntime(QObject):
-    """Keep one ED·OPS process and ask the existing window to foreground."""
+    """Keep one EDEC process and ask the existing window to foreground."""
 
     activationRequested = Signal()
 
@@ -418,7 +418,8 @@ def run():
     install_diagnostics(smoke_messages)
     app = QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 12))
-    app.setApplicationName("Elite Dangerous Engineering Companion")
+    app.setApplicationName("ED Engineering Companion")
+    app.setApplicationDisplayName("ED Engineering Companion")
     app.setApplicationVersion(APP_VERSION)
 
     if SingleInstanceRuntime.notify_existing():
@@ -467,6 +468,12 @@ def run():
             window.setProperty(
                 "connectionPreviewMode", int(preview_connection)
             )
+        except ValueError:
+            pass
+    preview_engineers_mode = os.environ.get("PHASE14_PREVIEW_ENGINEERS_MODE")
+    if preview_engineers_mode is not None:
+        try:
+            window.setProperty("previewEngineersMode", int(preview_engineers_mode))
         except ValueError:
             pass
     preview_material = os.environ.get("PHASE14_PREVIEW_MATERIAL")

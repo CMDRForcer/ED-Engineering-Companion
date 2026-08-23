@@ -113,7 +113,7 @@ def build_loadout_export(
 
 def loadout_text(payload: dict[str, Any]) -> str:
     lines = [
-        "ED·OPS SHIP OUTFITTING",
+        "EDEC SHIP OUTFITTING",
         f"STATUS · {payload.get('status', 'PARTIAL')}",
         f"SHIP · {payload.get('Ship') or 'Unknown'}",
         f"MODULES · {len(payload.get('Modules') or [])}",

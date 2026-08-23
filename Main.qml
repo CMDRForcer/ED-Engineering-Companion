@@ -9,7 +9,8 @@ ApplicationWindow {
     minimumWidth: 1120
     minimumHeight: 700
     visible: true
-    title: "ED Engineering Companion · " + cockpit.appVersion
+    title: "ED Engineering Companion (EDEC) · " + cockpit.appVersion
+    property int previewEngineersMode: 0
 
     // The single app-wide source of color truth. Every palette defines the
     // same semantic roles so a theme switch updates every binding at once.
@@ -834,7 +835,7 @@ ApplicationWindow {
             anchors.margins: 20
             spacing: 10
             Label {
-                text: window.compactSidebar ? "ED" : "ED•OPS"
+                text: window.compactSidebar ? "EC" : "EDEC"
                 color: cyan
                 font.pixelSize: 23
                 font.bold: true
@@ -960,7 +961,7 @@ ApplicationWindow {
                 text: window.compactSidebar ? "ⓘ" : "ABOUT"
                 Layout.fillWidth: true
                 ToolTip.visible: hovered
-                ToolTip.text: "About ED·OPS"
+                ToolTip.text: "About ED Engineering Companion"
                 onClicked: aboutDialog.open()
             }
         }
@@ -3102,7 +3103,7 @@ ApplicationWindow {
         property string query: engineerSearch.text.toLowerCase()
         property string statusFilter: engineerStatus.currentText
         property string brokerFilter: "ALL"
-        property bool unlockMode: false
+        property bool unlockMode: window.previewEngineersMode === 1
         property bool guardianMode: false
         property string selectedEngineerName: ""
         property string selectedGuardianName: ""
@@ -5001,23 +5002,23 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
                     Label { text: "WINDOWS BEHAVIOR"; color: green; font.pixelSize: 11; font.bold: true }
                     CheckBox {
-                        text: "Keep ED·OPS running in the system tray when the window closes"
+                        text: "Keep EDEC running in the system tray when the window closes"
                         checked: cockpit.backgroundMode
                         enabled: cockpit.systemTrayAvailable
                         onToggled: cockpit.setBackgroundMode(checked)
                     }
                     CheckBox {
-                        text: "Start ED·OPS with Windows in background mode"
+                        text: "Start EDEC with Windows in background mode"
                         checked: cockpit.autostartEnabled
                         enabled: cockpit.backgroundMode
                         onToggled: cockpit.setAutostartEnabled(checked)
                     }
                     Label {
                         text: !cockpit.systemTrayAvailable
-                              ? "SYSTEM TRAY UNAVAILABLE · Closing the window exits ED·OPS."
+                              ? "SYSTEM TRAY UNAVAILABLE · Closing the window exits EDEC."
                               : cockpit.backgroundMode
-                              ? "TRAY MODE ENABLED · Journal, inventory and EDDN continue after closing the window. Use EXIT ED·OPS in the tray to stop."
-                              : "DISABLED BY DEFAULT · Closing the window exits ED·OPS."
+                              ? "TRAY MODE ENABLED · Journal, inventory and EDDN continue after closing the window. Use EXIT EDEC in the tray to stop."
+                              : "DISABLED BY DEFAULT · Closing the window exits EDEC."
                         color: cockpit.backgroundMode ? green : muted
                         font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true
                     }
@@ -5040,13 +5041,13 @@ ApplicationWindow {
                         spacing: 8
                         CockpitButton {
                             Layout.fillWidth: true
-                            text: cockpit.restartRequired ? "RESTART · APPLY CHANGES" : "RESTART ED·OPS"
+                            text: cockpit.restartRequired ? "RESTART · APPLY CHANGES" : "RESTART EDEC"
                             selected: cockpit.restartRequired
                             onClicked: cockpit.requestRestart()
                         }
                         CockpitButton {
                             Layout.fillWidth: true
-                            text: "EXIT ED·OPS"
+                            text: "EXIT EDEC"
                             onClicked: cockpit.requestExit()
                         }
                     }
@@ -6232,7 +6233,7 @@ ApplicationWindow {
     Dialog {
         id: aboutDialog
         objectName: "qa-dialog-about"
-        title: "About ED·OPS"
+        title: "About ED Engineering Companion"
         modal: true
         anchors.centerIn: parent
         width: Math.min(620, window.width - 80)
@@ -6240,7 +6241,7 @@ ApplicationWindow {
         contentItem: ColumnLayout {
             spacing: 14
             Label {
-                text: "ED·OPS"
+                text: "ED Engineering Companion"
                 color: cyan
                 font.pixelSize: 26
                 font.bold: true
@@ -6284,7 +6285,7 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
-                text: "Special thanks to everyone who helped shape ED·OPS — contributors, testers, bug reporters, translators, and the Elite Dangerous community. Thanks also to EDCD/EDDN, INARA, and Spansh for their documentation, services, and community resources."
+                text: "Special thanks to everyone who helped shape EDEC — contributors, testers, bug reporters, translators, and the Elite Dangerous community. Thanks also to EDCD/EDDN, INARA, and Spansh for their documentation, services, and community resources."
                 color: textSecondary
                 font.pixelSize: 11
                 wrapMode: Text.WordWrap
@@ -6299,7 +6300,7 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
-                text: "ED·OPS is a third-party tool and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc."
+                text: "ED Engineering Companion (EDEC) is a third-party tool and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc."
                 color: muted
                 font.pixelSize: 10
                 wrapMode: Text.WordWrap

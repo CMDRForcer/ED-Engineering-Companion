@@ -1389,7 +1389,7 @@ def send_events(config, events, post=None, timeout=25):
         schema_error = status in {400, 404, 409, 422}
         raise InaraError(
             f"INARA returned HTTP {status}"
-            + (" · request/schema rejected; update ED·OPS before retrying."
+            + (" · request/schema rejected; update EDEC before retrying."
                if schema_error else "."),
             retryable=retryable, status_code=status, schema_error=schema_error,
         ) from None
@@ -1403,7 +1403,7 @@ def send_events(config, events, post=None, timeout=25):
         raise InaraError(
             f"INARA returned HTTP {status}"
             + (f" · {detail}" if detail else "")
-            + (" · request/schema rejected; update ED·OPS before retrying."
+            + (" · request/schema rejected; update EDEC before retrying."
                if schema_error else "."),
             retryable=retryable, status_code=status, schema_error=schema_error,
         )
