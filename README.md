@@ -33,7 +33,7 @@ ED Engineering Companion (EDEC) is a free, open-source companion tool for Elite 
 
 ### Powerplay
 
-![EDEC Powerplay overview using synthetic demo data](docs/images/edec-powerplay-overview.png)
+![EDEC Powerplay overview using synthetic demo data](docs/images/edec-powerplay-overview-clean.png)
 
 The Powerplay page is derived entirely from local Journal events. It automatically selects the pledged leader, displays a local portrait and English background profile, tracks pledge duration live, and hides unavailable sections instead of inventing values.
 
