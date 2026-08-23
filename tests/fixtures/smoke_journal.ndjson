@@ -1,0 +1,10 @@
+{"timestamp":"2026-08-23T17:00:00Z","event":"Fileheader","part":1,"language":"English/UK","gameversion":"4.2.0.0","build":"r0"}
+{"timestamp":"2026-08-23T17:00:01Z","event":"LoadGame","FID":"F0000000","Commander":"Demo Commander","Horizons":true,"Odyssey":true,"Ship":"CobraMkIII","Ship_Localised":"Cobra Mk III","ShipID":42,"ShipName":"DEMO VESSEL","ShipIdent":"EDEC","FuelLevel":16.0,"FuelCapacity":16.0,"GameMode":"Solo","Credits":12500000,"Loan":0}
+{"timestamp":"2026-08-23T17:00:02Z","event":"Materials","Raw":[{"Name":"iron","Count":25}],"Manufactured":[{"Name":"chemicalprocessors","Count":12}],"Encoded":[{"Name":"shielddensityreports","Count":8}]}
+{"timestamp":"2026-08-23T17:00:03Z","event":"Cargo","Vessel":"Ship","Count":2,"Inventory":[{"Name":"gold","Count":2,"Stolen":0}]}
+{"timestamp":"2026-08-23T17:00:04Z","event":"Powerplay","Power":"Aisling Duval","Rank":5,"Merits":14230,"TimePledged":1713600}
+{"timestamp":"2026-08-23T17:00:05Z","event":"PowerplayRank","Power":"Aisling Duval","Rank":5}
+{"timestamp":"2026-08-23T17:00:06Z","event":"PowerplayMerits","Power":"Aisling Duval","TotalMerits":14230}
+{"timestamp":"2026-08-23T17:00:07Z","event":"Location","StarSystem":"Demo System","SystemAddress":1000000001,"StarPos":[0.0,0.0,0.0],"ControllingPower":"Aisling Duval","Powers":["Aisling Duval"],"PowerplayState":"Fortified","PowerplayStateControlProgress":0.72,"PowerplayStateReinforcement":5980,"PowerplayStateUndermining":9428,"Docked":false}
+{"timestamp":"2026-08-23T17:00:08Z","event":"FSDJump","StarSystem":"Demo Junction","SystemAddress":1000000002,"StarPos":[12.0,4.0,-8.0],"JumpDist":18.2,"ControllingPower":"Aisling Duval","Powers":["Aisling Duval"],"PowerplayState":"Fortified","PowerplayStateControlProgress":0.72,"PowerplayStateReinforcement":5980,"PowerplayStateUndermining":9428}
+
