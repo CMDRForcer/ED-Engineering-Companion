@@ -158,6 +158,12 @@ from ed_companion.services import (
 )
 from ed_companion.diagnostics import filtered_log_lines
 
+from .dashboard_views import (
+    build_commander_cards,
+    build_logbook_view,
+    decorate_logbook_entry,
+)
+
 from .state import (
     active_profile_identity,
     assign_plans_to_nearest_engineers,
@@ -177,7 +183,6 @@ from .state import (
     latest_loadout_slots,
     profiled_journal_events,
     LOGBOOK_FILTERS,
-    filter_logbook_entries,
     load_logbook_notes,
     logbook_entries,
     normalize,
@@ -978,71 +983,10 @@ class CockpitController(QObject):
         cached = self._derived_cache.get("commander_cards")
         if cached and cached[0] == cache_key:
             return cached[1]
-        overview = self._state.get("commanderOverview", {}) or {}
-        events = profiled_journal_events()
-        ship = {"type": "", "name": "", "system": "", "station": ""}
-        minor = {}
-        squadron = {"name": "", "role": ""}
-        for event in events:
-            if not isinstance(event, dict):
-                continue
-            name = str(event.get("event") or "")
-            if name in {"LoadGame", "Loadout"}:
-                ship["type"] = str(event.get("Ship") or ship["type"])
-                ship["name"] = str(event.get("ShipName") or ship["name"])
-            if name in {"Location", "Docked", "FSDJump", "CarrierJump"}:
-                ship["system"] = str(event.get("StarSystem") or ship["system"])
-                if name in {"Location", "Docked"}:
-                    ship["station"] = str(event.get("StationName") or "")
-                elif name in {"FSDJump", "CarrierJump"}:
-                    ship["station"] = ""
-                for faction in event.get("Factions", []) or []:
-                    if (isinstance(faction, dict) and faction.get("Name")
-                            and faction.get("MyReputation") is not None):
-                        minor[str(faction["Name"])] = float(faction["MyReputation"])
-            if name in {"SquadronStartup", "SquadronCreated"}:
-                squadron["name"] = str(
-                    event.get("SquadronName") or event.get("Name") or squadron["name"]
-                )
-                squadron["role"] = str(
-                    event.get("CurrentRank") or event.get("Rank") or squadron["role"]
-                )
-
-        def card(title, tone, rows, empty):
-            return {"title": title, "tone": tone, "rows": rows, "empty": empty}
-
-        cards = {
-            "ranks": card("RANKS", "cyan", [{
-                "label": row.get("label", "RANK"),
-                "value": (f"RANK {row.get('rank')}" if row.get("known") else "UNKNOWN"),
-                "detail": (f"{row.get('progress', 0)}% TO NEXT RANK"
-                           if row.get("progressKnown") else "PROGRESS UNKNOWN"),
-            } for row in overview.get("ranks", [])], "NO RANK SNAPSHOT"),
-            "major-reputation": card("MAJOR-FACTION REPUTATION", "green", [{
-                "label": row.get("label", "FACTION"),
-                "value": (f"{float(row.get('value', 0)):.1f}%" if row.get("known") else "UNKNOWN"),
-                "detail": "JOURNAL REPUTATION",
-            } for row in overview.get("reputations", [])], "NO MAJOR-FACTION DATA"),
-            "finances": card("FINANCIAL SNAPSHOTS", "orange", [{
-                "label": label,
-                "value": (f"{int(snapshot.get('value', 0)):,} CR" if snapshot.get("known") else "UNKNOWN"),
-                "detail": str(snapshot.get("timestamp") or "NO JOURNAL SNAPSHOT"),
-            } for label, snapshot in (("CREDITS", overview.get("credits", {})),
-                                      ("ASSETS", overview.get("assets", {})))],
-                                      "NO FINANCIAL SNAPSHOT"),
-            "current-ship": card("CURRENT SHIP", "cyan", ([
-                {"label": ship["type"] or "SHIP", "value": ship["name"] or "UNNAMED",
-                 "detail": " · ".join(value for value in (ship["system"], ship["station"]) if value)}
-            ] if ship["type"] or ship["name"] else []), "NO CURRENT SHIP DATA"),
-            "minor-reputation": card("MINOR-FACTION REPUTATION", "green", [
-                {"label": name, "value": f"{value:.1f}%", "detail": "LOCAL JOURNAL"}
-                for name, value in sorted(minor.items())
-            ], "NO MINOR-FACTION DATA"),
-            "squadron": card("SQUADRON", "cyan", ([
-                {"label": "SQUADRON", "value": squadron["name"],
-                 "detail": squadron["role"] or "ROLE UNKNOWN"}
-            ] if squadron["name"] else []), "NO SQUADRON DATA"),
-        }
+        cards = build_commander_cards(
+            self._state.get("commanderOverview", {}) or {},
+            profiled_journal_events(),
+        )
         self._derived_cache["commander_cards"] = (cache_key, cards)
         return cards
 
@@ -1079,13 +1023,9 @@ class CockpitController(QObject):
         )
 
         def build() -> list[dict[str, object]]:
-            rows = [
-                self._logbook_entry_with_note(row)
-                for row in self._logbook_entries
-            ]
-            return filter_logbook_entries(
-                rows, self._logbook_filter,
-                self._logbook_query,
+            return build_logbook_view(
+                self._logbook_entries, self._logbook_notes,
+                self._logbook_filter, self._logbook_query,
             )
 
         return self._cached_derived("logbook", revision, build)
@@ -1093,14 +1033,7 @@ class CockpitController(QObject):
     def _logbook_entry_with_note(
         self, row: dict[str, object],
     ) -> dict[str, object]:
-        decorated = dict(row)
-        note = self._logbook_notes.get(str(row.get("id") or ""), "")
-        decorated["note"] = note
-        if note:
-            decorated["searchText"] = (
-                f"{decorated.get('searchText', '')} {note.casefold()}".strip()
-            )
-        return decorated
+        return decorate_logbook_entry(row, self._logbook_notes)
 
     @Slot(str)
     def setLogbookFilter(self, value: str) -> None:
