@@ -104,7 +104,7 @@ COMMANDER_CARD_IDS = (
 )
 NAVIGATION_IDS = (
     "operations", "engineering", "wishlist", "engineers", "materials",
-    "state-finds", "cmdr", "logbook", "settings",
+    "state-finds", "cmdr", "logbook", "settings", "powerplay",
 )
 
 
@@ -289,7 +289,7 @@ class CockpitController(QObject):
         self._shutdown_complete = False
         self._network_threads = set()
         self._network_threads_lock = threading.Lock()
-        self._last_page = max(0, min(10, int(ui_config.get("last_page", 0) or 0)))
+        self._last_page = max(0, min(11, int(ui_config.get("last_page", 0) or 0)))
         configured_cards = ui_config.get("commander_card_order", [])
         configured_cards = configured_cards if isinstance(configured_cards, list) else []
         self._commander_card_order = list(dict.fromkeys(
@@ -2040,6 +2040,10 @@ class CockpitController(QObject):
     )
     commanderOverview = Property(
         "QVariantMap", lambda self: self._get("commanderOverview", {}),
+        notify=stateChanged,
+    )
+    powerplayOverview = Property(
+        "QVariantMap", lambda self: self._get("powerplayOverview", {}),
         notify=stateChanged,
     )
     commanderCards = Property(

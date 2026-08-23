@@ -163,6 +163,7 @@ class SmokeTestRunner(QObject):
         ("state-finds", 8, "qa-page-state-finds"),
         ("logbook", 9, "qa-page-logbook"),
         ("cmdr", 10, "qa-page-cmdr"),
+        ("powerplay", 11, "qa-page-powerplay"),
     ]
     DIALOG_STEPS = [
         ("dialog-build-import", "qa-dialog-build-import"),
@@ -304,7 +305,9 @@ class SmokeTestRunner(QObject):
         if ready:
             self.results.append({"area": label, "status": "PASS"})
             self.step_index += 1
-            QTimer.singleShot(50, self._next)
+            # Let delegates and image providers finish incubation before the
+            # next lazy page unloads their Loader hierarchy.
+            QTimer.singleShot(750, self._next)
         elif time.monotonic() >= self.deadline:
             self.results.append({
                 "area": label, "status": "FAIL",
@@ -466,6 +469,7 @@ def run():
         "smokeInjectQmlError",
         smoke_test and os.environ.get("PHASE14_SMOKE_INJECT_QML_ERROR") == "1",
     )
+    engine.rootContext().setContextProperty("smokeTest", smoke_test)
     qml = Path(__file__).resolve().parent / "Main.qml"
     engine.load(QUrl.fromLocalFile(str(qml)))
     if not engine.rootObjects():

@@ -184,6 +184,12 @@ ApplicationWindow {
     property bool narrowWorkspace: (width / Math.max(1.0, cockpit.uiScale)) < 1350
     property var liveHgeTargets: cockpit.hgeTargets
     property double sessionClock: Date.now()
+    readonly property color powerplayUnoccupied: "#74777c"
+    readonly property color powerplayExploited: "#d3424b"
+    readonly property color powerplayFortified: "#35b96b"
+    readonly property color powerplayStronghold: "#8a63df"
+    readonly property color powerplayUndermining: "#d3424b"
+    readonly property color powerplayReinforcement: "#347bd4"
     function countLabel(value, singular, plural) {
         var count = Math.max(0, Number(value) || 0)
         return count + " " + (count === 1 ? singular : plural)
@@ -212,6 +218,27 @@ ApplicationWindow {
                : Math.max(session.durationSeconds || 0,
                           Math.floor((sessionClock - started) / 1000))
     }
+    function relativeJournalTime(timestamp) {
+        var parsed = Date.parse(timestamp || "")
+        if (isNaN(parsed))
+            return ""
+        var seconds = Math.max(0, Math.floor((sessionClock - parsed) / 1000))
+        if (seconds < 60)
+            return "just now"
+        if (seconds < 3600)
+            return Math.floor(seconds / 60) + " min ago"
+        if (seconds < 86400)
+            return Math.floor(seconds / 3600) + " h ago"
+        var days = Math.floor(seconds / 86400)
+        return days + (days === 1 ? " day ago" : " days ago")
+    }
+    function powerplayStateColor(state) {
+        var key = String(state || "").toLowerCase()
+        if (key === "exploited") return powerplayExploited
+        if (key === "fortified") return powerplayFortified
+        if (key === "stronghold" || key === "homesystem") return powerplayStronghold
+        return powerplayUnoccupied
+    }
     property var wishlistMaterialExpansion: ({})
     function wishlistExpansionKey(row, index) {
         return String(row.planId || (cockpit.ship + "|" + index))
@@ -236,7 +263,8 @@ ApplicationWindow {
         {"id": "engineers", "label": "ENGINEERS", "icon": "◎", "page": 4},
         {"id": "state-finds", "label": "STATE FINDS", "icon": "⌖", "page": 8},
         {"id": "logbook", "label": "LOGBOOK", "icon": "≣", "page": 9},
-        {"id": "settings", "label": "SETTINGS", "icon": "≡", "page": 5}
+        {"id": "settings", "label": "SETTINGS", "icon": "≡", "page": 5},
+        {"id": "powerplay", "label": "POWERPLAY", "icon": "⚑", "page": 11}
     ]
     property var navigationOrder: cockpit.navigationOrder || []
     function orderedNavigation() {
@@ -340,7 +368,8 @@ ApplicationWindow {
     Timer {
         interval: 1000
         repeat: true
-        running: window.currentPage === 9 && !!cockpit.currentSession.active
+        running: (window.currentPage === 9 && !!cockpit.currentSession.active)
+                 || window.currentPage === 11
         triggeredOnStart: true
         onTriggered: window.sessionClock = Date.now()
     }
@@ -4755,7 +4784,8 @@ ApplicationWindow {
     Loader {
         id: pageLoader10
         anchors.fill: parent
-        active: window.currentPage === 10
+        active: window.currentPage === 10 || smokeTest
+        visible: window.currentPage === 10
         asynchronous: false
         sourceComponent: Component {
     ColumnLayout {
@@ -4999,6 +5029,266 @@ ApplicationWindow {
     }
 
     Loader {
+        id: pageLoader11
+        anchors.fill: parent
+        active: window.currentPage === 11
+        asynchronous: false
+        sourceComponent: Component {
+    ColumnLayout {
+        id: powerplayPage
+        objectName: "qa-page-powerplay"
+        readonly property var overview: cockpit.powerplayOverview || ({})
+        readonly property var location: overview.location || ({})
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
+        spacing: 14
+
+        RowLayout {
+            Layout.fillWidth: true
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                Label { text: "POWERPLAY"; color: textPrimary; font.pixelSize: 24; font.bold: true }
+                Label {
+                    text: powerplayPage.overview.pledged
+                          ? "Journal-derived Commander pledge and local system state"
+                          : "No active Power pledge found in this Commander's Journal"
+                    color: muted; font.pixelSize: 11
+                }
+            }
+            Label {
+                visible: powerplayPage.overview.pledged
+                         && powerplayPage.overview.timePledgedKnown
+                text: "PLEDGED FOR " + powerplayPage.overview.timePledgedHours + " H"
+                color: muted; font.pixelSize: 12; font.bold: true
+            }
+        }
+
+        EmptyState {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: !powerplayPage.overview.pledged
+            symbol: "⚑"
+            title: "NO POWER AFFILIATION"
+            detail: "EDEC will show Powerplay data after the Journal confirms a Commander pledge. No external account or CAPI query is used."
+            tone: cyan
+        }
+
+        ScrollView {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: powerplayPage.overview.pledged
+            clip: true
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+            ColumnLayout {
+                width: parent.width
+                spacing: 14
+
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: window.narrowWorkspace ? 1 : 3
+                    columnSpacing: 14; rowSpacing: 14
+                    Repeater {
+                        model: [
+                            {"label": "POWER", "value": powerplayPage.overview.power || ""},
+                            {"label": "RANK", "value": powerplayPage.overview.rankKnown ? "RANK " + powerplayPage.overview.rank : ""},
+                            {"label": "MERITS", "value": powerplayPage.overview.meritsKnown ? Number(powerplayPage.overview.merits).toLocaleString(Qt.locale(), "f", 0) : ""}
+                        ]
+                        delegate: ShadowCard {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 118
+                            visible: modelData.value.length > 0
+                            accent: cyan
+                            ColumnLayout {
+                                anchors.fill: parent; anchors.margins: 18; spacing: 8
+                                Label { text: modelData.label; color: muted; font.pixelSize: 11; font.bold: true }
+                                Label { Layout.fillWidth: true; text: modelData.value; color: textPrimary; font.pixelSize: 23; font.bold: true; elide: Text.ElideRight }
+                                Item { Layout.fillHeight: true }
+                            }
+                        }
+                    }
+                }
+
+                ShadowCard {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: powerplayPage.location.tugKnown ? 300 : 208
+                    visible: !!powerplayPage.location.system
+                    accent: window.powerplayStateColor(powerplayPage.location.state)
+                    ColumnLayout {
+                        anchors.fill: parent; anchors.margins: 20; spacing: 10
+                        RowLayout {
+                            Layout.fillWidth: true
+                            ColumnLayout {
+                                Layout.fillWidth: true; spacing: 4
+                                Label { text: "CURRENT SYSTEM"; color: textPrimary; font.pixelSize: 16; font.bold: true }
+                                Label { Layout.fillWidth: true; text: powerplayPage.location.system || ""; color: textSecondary; font.pixelSize: 14; elide: Text.ElideRight }
+                                Label {
+                                    visible: !!powerplayPage.location.controllingPower
+                                    text: "CONTROLLED BY " + powerplayPage.location.controllingPower
+                                    color: muted; font.pixelSize: 9; font.bold: true
+                                }
+                            }
+                            Rectangle {
+                                visible: !!powerplayPage.location.state
+                                implicitWidth: stateBadgeText.implicitWidth + 28
+                                implicitHeight: 34; radius: 17
+                                color: Qt.rgba(
+                                    window.powerplayStateColor(powerplayPage.location.state).r,
+                                    window.powerplayStateColor(powerplayPage.location.state).g,
+                                    window.powerplayStateColor(powerplayPage.location.state).b, 0.22)
+                                border.width: 1
+                                border.color: window.powerplayStateColor(powerplayPage.location.state)
+                                Label {
+                                    id: stateBadgeText
+                                    anchors.centerIn: parent
+                                    text: String(powerplayPage.location.state || "").toUpperCase()
+                                    color: window.powerplayStateColor(powerplayPage.location.state)
+                                    font.pixelSize: 11; font.bold: true
+                                }
+                            }
+                        }
+                        Item {
+                            Layout.fillWidth: true; Layout.preferredHeight: 54
+                            Row {
+                                id: powerplayZones
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.top: parent.top; height: 14; spacing: 3
+                                Repeater {
+                                    model: [
+                                        ["Unoccupied", window.powerplayUnoccupied],
+                                        ["Exploited", window.powerplayExploited],
+                                        ["Fortified", window.powerplayFortified],
+                                        ["Stronghold", window.powerplayStronghold]
+                                    ]
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        width: (powerplayZones.width - 9) / 4
+                                        height: 14; radius: 5
+                                        color: modelData[1]
+                                        opacity: String(powerplayPage.location.state).toLowerCase()
+                                                 === String(modelData[0]).toLowerCase() ? 1.0 : 0.3
+                                    }
+                                }
+                            }
+                            RowLayout {
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.bottom: parent.bottom
+                                Repeater {
+                                    model: ["UNOCCUPIED", "EXPLOITED", "FORTIFIED", "STRONGHOLD"]
+                                    delegate: Label {
+                                        required property string modelData
+                                        required property int index
+                                        Layout.fillWidth: true
+                                        text: modelData
+                                        horizontalAlignment: index === 0 ? Text.AlignLeft
+                                                             : index === 3 ? Text.AlignRight
+                                                             : Text.AlignHCenter
+                                        color: muted; font.pixelSize: 9
+                                    }
+                                }
+                            }
+                        }
+                        Label {
+                            visible: powerplayPage.location.controlProgressKnown
+                            text: "CONTROL PROGRESS · "
+                                  + Math.round(powerplayPage.location.controlProgress * 100) + "%"
+                            color: cyan; font.pixelSize: 10; font.bold: true
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true; spacing: 7
+                            visible: powerplayPage.location.tugKnown
+                            Label { text: "TUG OF WAR"; color: textPrimary; font.pixelSize: 13; font.bold: true }
+                            RowLayout {
+                                Layout.fillWidth: true; spacing: 10
+                                Label {
+                                    text: Number(powerplayPage.location.undermining).toLocaleString(Qt.locale(), "f", 0)
+                                    color: window.powerplayUndermining; font.pixelSize: 13; font.bold: true
+                                }
+                                Rectangle {
+                                    Layout.fillWidth: true; height: 14; radius: 7; color: inputBackground
+                                    Row {
+                                        anchors.fill: parent
+                                        property real total: Math.max(1, Number(powerplayPage.location.undermining) + Number(powerplayPage.location.reinforcement))
+                                        Rectangle { width: parent.width * Number(powerplayPage.location.undermining) / parent.total; height: parent.height; color: window.powerplayUndermining; radius: 7 }
+                                        Rectangle { width: parent.width * Number(powerplayPage.location.reinforcement) / parent.total; height: parent.height; color: window.powerplayReinforcement; radius: 7 }
+                                    }
+                                }
+                                Label {
+                                    text: Number(powerplayPage.location.reinforcement).toLocaleString(Qt.locale(), "f", 0)
+                                    color: window.powerplayReinforcement; font.pixelSize: 13; font.bold: true
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: "UNDERMINING"; color: muted; font.pixelSize: 9 }
+                                Item { Layout.fillWidth: true }
+                                Label { text: "REINFORCEMENT"; color: muted; font.pixelSize: 9 }
+                            }
+                        }
+                    }
+                }
+
+                ShadowCard {
+                    Layout.fillWidth: true; Layout.preferredHeight: 76
+                    visible: powerplayPage.overview.salaryKnown
+                    accent: orange
+                    RowLayout {
+                        anchors.fill: parent; anchors.margins: 18
+                        Label { text: "LAST SALARY"; color: textPrimary; font.pixelSize: 13; font.bold: true }
+                        Item { Layout.fillWidth: true }
+                        Label {
+                            text: Number(powerplayPage.overview.salary.amount).toLocaleString(Qt.locale(), "f", 0)
+                                  + " CR · " + window.relativeJournalTime(powerplayPage.overview.salary.timestamp)
+                            color: textSecondary; font.pixelSize: 13
+                        }
+                    }
+                }
+
+                ShadowCard {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 64 + powerplayPage.overview.cargoHistory.length * 48
+                    visible: powerplayPage.overview.cargoHistory.length > 0
+                    accent: cyan
+                    ColumnLayout {
+                        anchors.fill: parent; anchors.margins: 18; spacing: 4
+                        Label { text: "RECENT CARGO ACTIVITY"; color: textPrimary; font.pixelSize: 14; font.bold: true }
+                        Repeater {
+                            model: powerplayPage.overview.cargoHistory
+                            delegate: ColumnLayout {
+                                required property var modelData
+                                Layout.fillWidth: true; spacing: 3
+                                Rectangle { Layout.fillWidth: true; height: 1; color: divider }
+                                RowLayout {
+                                    Layout.fillWidth: true; Layout.preferredHeight: 40
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: modelData.direction + " · " + modelData.type
+                                        color: modelData.direction === "DELIVER" ? green : cyan
+                                        font.pixelSize: 11; font.bold: true; elide: Text.ElideRight
+                                    }
+                                    Label {
+                                        text: modelData.count + "×"
+                                              + (modelData.system ? " · " + modelData.system : "")
+                                        color: textSecondary; font.pixelSize: 11
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+        }
+    }
+
+    Loader {
         id: pageLoader5
         anchors.fill: parent
         active: window.currentPage === 5
@@ -5112,7 +5402,11 @@ ApplicationWindow {
                     }
                     ColumnLayout {
                         Layout.fillWidth: true
-                        Label { text: "THEME"; color: muted; font.pixelSize: 10; font.bold: true }
+                        Label { text: "DESIGN SKIN"; color: muted; font.pixelSize: 10; font.bold: true }
+                        Label {
+                            text: "Color and accent preview · applies immediately and is saved locally"
+                            color: muted; font.pixelSize: 9
+                        }
                         Flow {
                             Layout.fillWidth: true
                             spacing: 8
@@ -5125,11 +5419,32 @@ ApplicationWindow {
                                     {"id": "crimson_dark", "label": "CRIMSON DARK"},
                                     {"id": "crimson_light", "label": "CRIMSON LIGHT"}
                                 ]
-                                delegate: CockpitButton {
+                                delegate: Rectangle {
                                     required property var modelData
-                                    text: modelData.label
-                                    selected: cockpit.theme === modelData.id
-                                    onClicked: cockpit.setTheme(modelData.id)
+                                    width: 158; height: 54; radius: 10
+                                    color: cockpit.theme === modelData.id ? active : panelRaised
+                                    border.width: cockpit.theme === modelData.id ? 2 : 1
+                                    border.color: cockpit.theme === modelData.id ? cyan : borderTone
+                                    RowLayout {
+                                        anchors.fill: parent; anchors.margins: 9; spacing: 9
+                                        Rectangle {
+                                            width: 20; height: 20; radius: 10
+                                            color: window.themeSets[modelData.id].accent
+                                            border.width: 1
+                                            border.color: window.themeSets[modelData.id].textPrimary
+                                        }
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: modelData.label
+                                            color: textPrimary; font.pixelSize: 9; font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: cockpit.setTheme(modelData.id)
+                                    }
                                 }
                             }
                         }

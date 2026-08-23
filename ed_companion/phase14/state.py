@@ -5010,6 +5010,125 @@ def commander_journal_overview(events):
     }
 
 
+def powerplay_journal_overview(events):
+    """Build one honest Powerplay snapshot exclusively from Journal events."""
+    membership = {"power": "", "rank": None, "merits": None,
+                  "timePledged": None, "timestamp": ""}
+    location = {}
+    salary = {}
+    cargo_rows = []
+    current_system = ""
+    for event in events or []:
+        if not isinstance(event, dict):
+            continue
+        name = str(event.get("event") or "")
+        timestamp = str(event.get("timestamp") or "")
+        if name == "LoadGame":
+            # A new session must prove the current pledge again. Otherwise a
+            # historic Powerplay event could incorrectly survive after leaving.
+            membership = {"power": "", "rank": None, "merits": None,
+                          "timePledged": None, "timestamp": timestamp}
+        elif name in {"Location", "FSDJump", "CarrierJump"}:
+            current_system = str(event.get("StarSystem") or current_system)
+            location = {
+                "system": current_system,
+                "controllingPower": str(event.get("ControllingPower") or ""),
+                "powers": [str(value) for value in event.get("Powers", []) or []],
+                "state": str(event.get("PowerplayState") or ""),
+                "controlProgressKnown": isinstance(
+                    event.get("PowerplayStateControlProgress"), (int, float)
+                ) and not isinstance(event.get("PowerplayStateControlProgress"), bool),
+                "controlProgress": max(0.0, min(
+                    1.0, float(event.get("PowerplayStateControlProgress", 0) or 0)
+                )),
+                "reinforcementKnown": "PowerplayStateReinforcement" in event,
+                "reinforcement": max(0, int(
+                    event.get("PowerplayStateReinforcement", 0) or 0
+                )),
+                "underminingKnown": "PowerplayStateUndermining" in event,
+                "undermining": max(0, int(
+                    event.get("PowerplayStateUndermining", 0) or 0
+                )),
+                "timestamp": timestamp,
+            }
+        elif name == "Powerplay" and str(event.get("Power") or "").strip():
+            membership.update({
+                "power": str(event.get("Power") or ""),
+                "rank": int(event["Rank"]) if isinstance(
+                    event.get("Rank"), (int, float)
+                ) and not isinstance(event.get("Rank"), bool) else membership["rank"],
+                "merits": int(event["Merits"]) if isinstance(
+                    event.get("Merits"), (int, float)
+                ) and not isinstance(event.get("Merits"), bool) else membership["merits"],
+                "timePledged": int(event["TimePledged"]) if isinstance(
+                    event.get("TimePledged"), (int, float)
+                ) and not isinstance(event.get("TimePledged"), bool) else membership["timePledged"],
+                "timestamp": timestamp,
+            })
+        elif name == "PowerplayRank" and str(event.get("Power") or "").strip():
+            membership["power"] = str(event.get("Power") or "")
+            if isinstance(event.get("Rank"), (int, float)) \
+                    and not isinstance(event.get("Rank"), bool):
+                membership["rank"] = max(0, int(event["Rank"]))
+            membership["timestamp"] = timestamp
+        elif name == "PowerplayMerits" and str(event.get("Power") or "").strip():
+            membership["power"] = str(event.get("Power") or "")
+            if isinstance(event.get("TotalMerits"), (int, float)) \
+                    and not isinstance(event.get("TotalMerits"), bool):
+                membership["merits"] = max(0, int(event["TotalMerits"]))
+            membership["timestamp"] = timestamp
+        elif name == "PowerplaySalary" and isinstance(
+            event.get("Amount"), (int, float)
+        ) and not isinstance(event.get("Amount"), bool):
+            salary = {
+                "amount": max(0, int(event["Amount"])),
+                "timestamp": timestamp,
+            }
+        elif name in {"PowerplayDeliver", "PowerplayCollect"}:
+            item_type = str(
+                event.get("Type_Localised") or event.get("Type") or ""
+            ).strip()
+            count = event.get("Count")
+            if item_type and isinstance(count, (int, float)) \
+                    and not isinstance(count, bool):
+                cargo_rows.append({
+                    "direction": "DELIVER" if name == "PowerplayDeliver" else "COLLECT",
+                    "type": item_type,
+                    "count": max(0, int(count)),
+                    "system": current_system,
+                    "timestamp": timestamp,
+                })
+    reinforcement = int(location.get("reinforcement", 0) or 0)
+    undermining = int(location.get("undermining", 0) or 0)
+    location["tugKnown"] = bool(
+        location.get("reinforcementKnown")
+        and location.get("underminingKnown")
+        and (reinforcement > 0 or undermining > 0)
+    )
+    return {
+        "pledged": bool(membership["power"]),
+        "power": membership["power"],
+        "rankKnown": membership["rank"] is not None,
+        "rank": int(membership["rank"] or 0),
+        "meritsKnown": membership["merits"] is not None,
+        "merits": int(membership["merits"] or 0),
+        "timePledgedKnown": membership["timePledged"] is not None,
+        "timePledgedHours": max(0, int(
+            round(float(membership["timePledged"] or 0) / 3600.0)
+        )),
+        "location": location,
+        "salaryKnown": bool(salary),
+        "salary": salary,
+        "cargoHistory": list(reversed(cargo_rows[-10:])),
+        "lastUpdated": max(
+            str(membership.get("timestamp") or ""),
+            str(location.get("timestamp") or ""),
+            str(salary.get("timestamp") or ""),
+            max((str(row.get("timestamp") or "") for row in cargo_rows), default=""),
+        ),
+    }
+
+
 def build_state(package_root, selected_ship="", preferred_plan_id=""):
     data_dir = runtime_data_dir(package_root)
     profile_identity, commander_name = _journal_profile_identity()
@@ -5017,6 +5136,7 @@ def build_state(package_root, selected_ship="", preferred_plan_id=""):
     metadata = material_metadata(reference_data_dir(package_root))
     profile_events = profiled_journal_events()
     commander_overview = commander_journal_overview(profile_events)
+    powerplay_overview = powerplay_journal_overview(profile_events)
     learn_blueprint_id_catalog(
         profile_events, data_dir / "blueprint_id_catalog_learned.json"
     )
@@ -5495,6 +5615,7 @@ def build_state(package_root, selected_ship="", preferred_plan_id=""):
         "commander": commander_name,
         "commanderKnown": bool(profile_identity),
         "commanderOverview": commander_overview,
+        "powerplayOverview": powerplay_overview,
         "fleetKnown": bool(ships),
         "journalPathValid": journal_path_valid,
         "emptyStateReason": (
