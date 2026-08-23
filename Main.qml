@@ -232,12 +232,59 @@ ApplicationWindow {
         var days = Math.floor(seconds / 86400)
         return days + (days === 1 ? " day ago" : " days ago")
     }
+    function powerplayPledgedHours(overview) {
+        if (!overview || !overview.timePledgedKnown)
+            return 0
+        var seconds = Math.max(0, Number(overview.timePledgedSeconds || 0))
+        var observedAt = Date.parse(overview.timePledgedObservedAt || "")
+        if (!isNaN(observedAt))
+            seconds += Math.max(0, Math.floor((sessionClock - observedAt) / 1000))
+        return Math.floor(seconds / 3600)
+    }
     function powerplayStateColor(state) {
         var key = String(state || "").toLowerCase()
         if (key === "exploited") return powerplayExploited
         if (key === "fortified") return powerplayFortified
         if (key === "stronghold" || key === "homesystem") return powerplayStronghold
         return powerplayUnoccupied
+    }
+    function powerplayLeaderPortrait(powerName) {
+        var key = String(powerName || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+        var portraits = {
+            "aislingduval": "assets/powerplay/aisling_duval.png",
+            "arissalavignyduval": "assets/powerplay/arissa_lavigny_duval.png",
+            "alavignyduval": "assets/powerplay/arissa_lavigny_duval.png",
+            "dentonpatreus": "assets/powerplay/denton_patreus.png",
+            "zeminatorval": "assets/powerplay/zemina_torval.png",
+            "feliciawinters": "assets/powerplay/felicia_winters.png",
+            "jeromearcher": "assets/powerplay/jerome_archer.png",
+            "edmundmahon": "assets/powerplay/edmund_mahon.png",
+            "nakatokaine": "assets/powerplay/nakato_kaine.png",
+            "pranavantal": "assets/powerplay/pranav_antal.png",
+            "archondelaine": "assets/powerplay/archon_delaine.png",
+            "yurigrom": "assets/powerplay/yuri_grom.png",
+            "liyongrui": "assets/powerplay/li_yong_rui.png"
+        }
+        return portraits[key] || ""
+    }
+    function powerplayLeaderBiography(powerName) {
+        var key = String(powerName || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+        var biographies = {
+            "aislingduval": "Known as the People's Princess, Aisling Duval combines Imperial celebrity with a reformist political programme. The granddaughter of former Emperor Hengist Duval, she has built broad popular support despite being born outside marriage. From her headquarters in Cubeo, she campaigns against Imperial slavery and narcotics while promoting social welfare and a more modern Empire. She also represents the Empire within the anti-xeno organisation Aegis. Commanders pledged to her can earn access to Prismatic Shield Generators.",
+            "arissalavignyduval": "Arissa Lavigny-Duval is the reigning Emperor and the central figure of traditional Imperial authority. The previously unacknowledged daughter of Hengist Duval rose through the succession crisis by presenting herself as the defender of stability, justice and the rule of law. Her power is based in Kamadhenu, and her supporters expose corruption, reinforce Imperial garrisons and punish criminals. Commanders who serve her can earn the Imperial Hammer railgun.",
+            "alavignyduval": "Arissa Lavigny-Duval is the reigning Emperor and the central figure of traditional Imperial authority. The previously unacknowledged daughter of Hengist Duval rose through the succession crisis by presenting herself as the defender of stability, justice and the rule of law. Her power is based in Kamadhenu, and her supporters expose corruption, reinforce Imperial garrisons and punish criminals. Commanders who serve her can earn the Imperial Hammer railgun.",
+            "dentonpatreus": "Senator Denton Patreus is an Imperial financier, military commander and Admiral of the Fleet. He gained influence by financing governments and using debt, diplomacy and armed intervention to advance Imperial interests. Operating from Eotienses, Patreus favours decisive military action and has led major campaigns against threats such as Emperor's Dawn and Nova Imperium. Commanders pledged to him can earn the Advanced Plasma Accelerator.",
+            "zeminatorval": "Senator Zemina Torval is one of the Empire's most experienced and uncompromising political operators. A powerful industrialist with extensive mining interests, she represents the traditionalist wing of Imperial society and openly defends its hierarchical institutions. From Synteini, she expands her influence through commerce, patronage and resource control rather than public popularity. Commanders who support her can earn the Mining Lance.",
+            "feliciawinters": "Felicia Winters is the liberal President of the Federation and a long-standing advocate of civil rights, social investment and accountable government. Her political network is centred on Rhea, where aid programmes and community development are used to build support for Federal democratic values. Winters has repeatedly opposed authoritarian surveillance and hard-line security policies while remaining committed to the Federation. Commanders pledged to her can earn the Pulse Disruptor.",
+            "jeromearcher": "Jerome Archer is the Federation's security-focused Vice President and the leading figure of its Republican power bloc. Emerging as Zachary Hudson's political successor, he promotes military strength, domestic security and direct action against threats to Federal authority. His organisation operates from Nanomam and uses armed intervention to expand and defend its influence. Commanders pledged to Archer can earn the Pacifier Frag-Cannon.",
+            "edmundmahon": "Edmund Mahon is the Prime Minister of the Alliance and one of the galaxy's most influential economic strategists. Based in Gateway, he strengthens the Alliance through trade agreements, commercial networks and cooperation between independent member systems. His pragmatic leadership has delivered long periods of growth, although critics such as Nakato Kaine challenge his reliance on large external corporations. Commanders pledged to Mahon can earn the Retributor beam laser.",
+            "nakatokaine": "Councillor Nakato Kaine is a prominent Alliance reformer and Edmund Mahon's principal political rival. Based in Tionisla, she argues that the Alliance should protect the sovereignty of its member systems, favour locally founded businesses and reduce dependence on the other superpowers and megacorporations. Her campaigns combine public advocacy with covert and economic pressure. She represents a more independent and decentralised vision of the Alliance.",
+            "pranavantal": "Simguru Pranav Antal leads Utopia, a transhumanist community devoted to scientific progress and the long-term improvement of humanity. From Polevnic, Utopia develops advanced simulation, medical and social technologies while attempting to remain above conventional superpower rivalries. Antal presents himself as a philosopher and visionary, but guards Utopia's discoveries carefully against exploitation. Commanders pledged to him can earn the Enforcer Cannon.",
+            "archondelaine": "Archon Delaine is the ruthless leader of the Kumo Crew and ruler of a criminal domain centred on Harma. He transformed a pirate organisation into a territorial power through violence, intimidation and control of black markets. Delaine demands recognition as a sovereign leader, while most governments still regard his Kumo Council as an organised crime syndicate. Commanders who join him can earn the Cytoscrambler burst laser.",
+            "yurigrom": "Yuri Grom is the authoritarian leader of the EG Pilots and ruler of an independent power centred on Clayakarma. A former military commander, he built his influence around discipline, nationalism and resistance to Federal expansion. His forces rely on direct military pressure and tightly controlled administration to secure their territory. Commanders pledged to Grom can earn the Containment Missile launcher.",
+            "liyongrui": "Li Yong-Rui is the chief executive of Sirius Corporation, one of humanity's most powerful technology and industrial conglomerates. From Lembava, he expands influence through investment, research partnerships, commercial incentives and access to Sirius technology. His pragmatic corporate diplomacy reaches across superpower borders, although critics accuse him of turning strategic dependencies into leverage. Commanders pledged to him can earn the Pack-Hound Missile Rack."
+        }
+        return biographies[key] || ""
     }
     property var wishlistMaterialExpansion: ({})
     function wishlistExpansionKey(row, index) {
@@ -5062,7 +5109,7 @@ ApplicationWindow {
             Label {
                 visible: powerplayPage.overview.pledged
                          && powerplayPage.overview.timePledgedKnown
-                text: "PLEDGED FOR " + powerplayPage.overview.timePledgedHours + " H"
+                text: "PLEDGED FOR " + window.powerplayPledgedHours(powerplayPage.overview) + " H"
                 color: muted; font.pixelSize: 12; font.bold: true
             }
         }
@@ -5089,15 +5136,67 @@ ApplicationWindow {
                 width: parent.width
                 spacing: 14
 
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: leaderPortraitColumn.implicitHeight
+
+                    ColumnLayout {
+                        id: leaderPortraitColumn
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        spacing: 10
+
+                        Rectangle {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: window.narrowWorkspace ? 210 : 260
+                            Layout.preferredHeight: width
+                            radius: 16
+                            color: inputBackground
+                            border.width: 2
+                            border.color: cyan
+                            clip: true
+
+                            Image {
+                                anchors.fill: parent
+                                anchors.margins: 2
+                                source: window.powerplayLeaderPortrait(powerplayPage.overview.power)
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: true
+                            }
+                        }
+
+                        Label {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: powerplayPage.overview.power || ""
+                            color: textPrimary
+                            font.pixelSize: 28
+                            font.bold: true
+                        }
+                    }
+                }
+
+                Label {
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: 1050
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: text.length > 0
+                    text: window.powerplayLeaderBiography(powerplayPage.overview.power)
+                    color: textSecondary
+                    font.pixelSize: 12
+                    lineHeight: 1.25
+                    wrapMode: Text.WordWrap
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
                 GridLayout {
                     Layout.fillWidth: true
                     columns: window.narrowWorkspace ? 1 : 3
                     columnSpacing: 14; rowSpacing: 14
                     Repeater {
                         model: [
-                            {"label": "POWER", "value": powerplayPage.overview.power || ""},
                             {"label": "RANK", "value": powerplayPage.overview.rankKnown ? "RANK " + powerplayPage.overview.rank : ""},
-                            {"label": "MERITS", "value": powerplayPage.overview.meritsKnown ? Number(powerplayPage.overview.merits).toLocaleString(Qt.locale(), "f", 0) : ""}
+                            {"label": "MERITS", "value": powerplayPage.overview.meritsKnown ? Number(powerplayPage.overview.merits).toLocaleString(Qt.locale(), "f", 0) : ""},
+                            {"label": "PLEDGED FOR", "value": powerplayPage.overview.timePledgedKnown ? window.powerplayPledgedHours(powerplayPage.overview) + " H" : ""}
                         ]
                         delegate: ShadowCard {
                             required property var modelData

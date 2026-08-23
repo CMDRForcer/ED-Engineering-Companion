@@ -13,6 +13,8 @@ ED Engineering Companion (EDEC) is a free, open-source companion tool for Elite 
 - Material farming guidance and trader-route support
 - Engineer Unlock Guide and Technology Broker tracking
 - CMDR overview with ranks, reputation, finances, ship, and squadron
+- Journal-driven Powerplay overview with leader portraits, lore profiles, live pledge duration, rank, merits, local system state, salary, and recent cargo activity
+- Multiple persistent dark design skins with immediate in-app switching
 - Logbook, session history, and personal notes
 - Automatic, rate-limited INARA synchronization
 - EDDN contributions for market, outfitting, shipyard, exploration, and exobiology data
@@ -29,6 +31,12 @@ ED Engineering Companion (EDEC) is a free, open-source companion tool for Elite 
 
 ![EDEC Engineer Unlock Guide using demo data](docs/images/edec-unlock-guide.png)
 
+### Powerplay
+
+![EDEC Powerplay overview using synthetic demo data](docs/images/edec-powerplay-overview.png)
+
+The Powerplay page is derived entirely from local Journal events. It automatically selects the pledged leader, displays a local portrait and English background profile, tracks pledge duration live, and hides unavailable sections instead of inventing values.
+
 All screenshots use synthetic demo data and do not contain a real Commander profile or API credentials.
 
 ## Download and install on Windows
@@ -41,7 +49,7 @@ All screenshots use synthetic demo data and do not contain a real Commander prof
 ### Portable installation (recommended)
 
 1. Open the [latest EDEC release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest).
-2. Under **Assets**, download `EDEC-21.167-Windows.zip`.
+2. Under **Assets**, download the `EDEC-<version>-Windows.zip` file.
 3. Extract the entire ZIP to a writable folder.
 4. Start `EDEC.exe`. Keep the `_internal` folder next to the executable.
 

@@ -5013,7 +5013,8 @@ def commander_journal_overview(events):
 def powerplay_journal_overview(events):
     """Build one honest Powerplay snapshot exclusively from Journal events."""
     membership = {"power": "", "rank": None, "merits": None,
-                  "timePledged": None, "timestamp": ""}
+                  "timePledged": None, "timePledgedObservedAt": "",
+                  "timestamp": ""}
     location = {}
     salary = {}
     cargo_rows = []
@@ -5027,7 +5028,8 @@ def powerplay_journal_overview(events):
             # A new session must prove the current pledge again. Otherwise a
             # historic Powerplay event could incorrectly survive after leaving.
             membership = {"power": "", "rank": None, "merits": None,
-                          "timePledged": None, "timestamp": timestamp}
+                          "timePledged": None, "timePledgedObservedAt": "",
+                          "timestamp": timestamp}
         elif name in {"Location", "FSDJump", "CarrierJump"}:
             current_system = str(event.get("StarSystem") or current_system)
             location = {
@@ -5063,6 +5065,10 @@ def powerplay_journal_overview(events):
                 "timePledged": int(event["TimePledged"]) if isinstance(
                     event.get("TimePledged"), (int, float)
                 ) and not isinstance(event.get("TimePledged"), bool) else membership["timePledged"],
+                "timePledgedObservedAt": timestamp if isinstance(
+                    event.get("TimePledged"), (int, float)
+                ) and not isinstance(event.get("TimePledged"), bool)
+                else membership["timePledgedObservedAt"],
                 "timestamp": timestamp,
             })
         elif name == "PowerplayRank" and str(event.get("Power") or "").strip():
@@ -5113,9 +5119,8 @@ def powerplay_journal_overview(events):
         "meritsKnown": membership["merits"] is not None,
         "merits": int(membership["merits"] or 0),
         "timePledgedKnown": membership["timePledged"] is not None,
-        "timePledgedHours": max(0, int(
-            round(float(membership["timePledged"] or 0) / 3600.0)
-        )),
+        "timePledgedSeconds": max(0, int(membership["timePledged"] or 0)),
+        "timePledgedObservedAt": membership["timePledgedObservedAt"],
         "location": location,
         "salaryKnown": bool(salary),
         "salary": salary,
