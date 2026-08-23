@@ -4763,7 +4763,7 @@ ApplicationWindow {
                     width: logbookList.width - 10
                     height: modelData.note ? 102 : 82
                     radius: 11
-                    color: logbookMouse.containsMouse ? hover : panelRaised
+                    color: logbookMouse.containsMouse ? hover : backgroundPrimary
                     border.width: 1; border.color: borderTone
                     activeFocusOnTab: true
                         Accessible.name: "Open Logbook entry: " + modelData.title
