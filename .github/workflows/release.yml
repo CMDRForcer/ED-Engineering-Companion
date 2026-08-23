@@ -129,8 +129,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $release | Out-Null
           $windowsZip = Join-Path $release "EDEC-$env:EDEC_VERSION-Windows.zip"
           $projectZip = Join-Path $release "EDEC-$env:EDEC_VERSION-Full-Project.zip"
-          tar.exe -a -c -f $windowsZip -C "dist/EDEC" .
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Compress-Archive -Path "dist/EDEC/*" -DestinationPath $windowsZip `
+            -CompressionLevel Optimal -Force
           git archive --format=zip --output=$projectZip HEAD -- . ':(exclude)tests'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $hashes = Get-FileHash -Algorithm SHA256 $windowsZip, $projectZip
