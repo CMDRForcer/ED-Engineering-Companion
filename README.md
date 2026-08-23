@@ -4,7 +4,7 @@ ED Engineering Companion (EDEC) is a free, open-source companion tool for Elite 
 
 [Download the latest release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · User manual: [English](docs/EDEC_User_Manual_Privacy_EN_21.163.pdf) / [Deutsch](docs/EDEC_User_Manual_Privacy_DE_21.163.pdf) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
 
-![EDEC Commander Operations](docs/images/operations.png)
+![EDEC Commander Operations](docs/images/edec-operations.png)
 
 ## Features
 
@@ -23,11 +23,11 @@ ED Engineering Companion (EDEC) is a free, open-source companion tool for Elite 
 
 ### CMDR overview
 
-![EDEC CMDR overview using demo data](docs/images/cmdr-overview.png)
+![EDEC CMDR overview using demo data](docs/images/edec-cmdr-overview.png)
 
 ### Engineer Unlock Guide
 
-![EDEC Engineer Unlock Guide using demo data](docs/images/unlock-guide.png)
+![EDEC Engineer Unlock Guide using demo data](docs/images/edec-unlock-guide.png)
 
 All screenshots use synthetic demo data and do not contain a real Commander profile or API credentials.
 
