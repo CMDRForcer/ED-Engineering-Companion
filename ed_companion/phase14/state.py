@@ -1140,24 +1140,6 @@ def technology_broker_unlock_guide(
     return ordered
 
 
-def guardian_unlock_guide(
-    package_root: Path,
-    metadata: dict[str, dict[str, Any]],
-    inventory: dict[str, int],
-    events: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Compatibility view over the shared Tech Broker guide."""
-    rows = [
-        dict(row) for row in technology_broker_unlock_guide(
-            package_root, metadata, inventory, events
-        )
-        if row.get("broker") == "GUARDIAN"
-    ]
-    for index, row in enumerate(rows, 1):
-        row["sequence"] = index
-    return rows
-
-
 RAW_GROUP_FARMS = {
     "Category1": ("Yttrium", "Outotz LS-K d8-3", "B 5 A"),
     "Category2": ("Technetium", "HIP 36601", "C 5 A"),
@@ -4559,26 +4541,6 @@ def load_session_history(data_dir: Path) -> list[dict[str, Any]]:
             normalized[key] = _session_nonnegative_int(row.get(key))
         rows.append(normalized)
     return rows
-
-
-def build_session_statistics(
-    events: list[dict[str, Any]],
-    persisted_history: list[dict[str, Any]] | None = None,
-    now: str | None = None,
-) -> dict[str, Any]:
-    """Build current and recent sessions from already cached Journal events."""
-    history = list(reversed(persisted_history or []))
-    current = None
-    for index, event in enumerate(events):
-        if isinstance(event, dict):
-            current = _apply_session_event(current, history, event, index)
-    current_row = _public_session(
-        current, now or datetime.now(timezone.utc).isoformat()
-    ) if current else {}
-    return {
-        "current": current_row,
-        "recent": list(reversed(history[-SESSION_HISTORY_LIMIT:])),
-    }
 
 
 def session_statistics(data_dir: Path) -> dict[str, Any]:

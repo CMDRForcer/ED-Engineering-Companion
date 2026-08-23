@@ -5294,7 +5294,7 @@ ApplicationWindow {
                             }
                         }
                         Label {
-                            visible: powerplayPage.location.controlProgressKnown
+                            visible: powerplayPage.location.controlProgressKnown === true
                             text: "CONTROL PROGRESS · "
                                   + Math.round(powerplayPage.location.controlProgress * 100) + "%"
                             color: cyan; font.pixelSize: 10; font.bold: true

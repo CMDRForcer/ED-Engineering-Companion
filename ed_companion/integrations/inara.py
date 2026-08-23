@@ -365,15 +365,6 @@ def _stored_modules_public(rows):
     ))
 
 
-def _stored_modules_data(event):
-    rows = []
-    for item in event.get("Items", []) or []:
-        row = _stored_module_row(item)
-        if row:
-            rows.append(row)
-    return _stored_modules_public(rows)
-
-
 def _engineers_data(event):
     rows = []
     for engineer in event.get("Engineers", []) or []:
