@@ -567,6 +567,11 @@ def prepare_journal_batch(events, known_fingerprints=(), expected_identity="",
             return
         if not timestamp or (not data and not allow_empty):
             return
+        if name == "setCommanderShipTransfer" and (
+            not str(data.get("starsystemName") or "").strip()
+            or not str(data.get("stationName") or "").strip()
+        ):
+            return
         event = build_event(name, data, timestamp)
         fingerprint_value = fingerprint_data if fingerprint_data is not None else (
             {"eventName": name, "eventData": data}
