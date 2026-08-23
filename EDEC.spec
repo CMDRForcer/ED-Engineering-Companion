@@ -11,6 +11,7 @@ analysis = Analysis(
     binaries=[],
     datas=[
         (str(project_root / "Main.qml"), "."),
+        (str(project_root / "qml"), "qml"),
         (str(project_root / "assets"), "assets"),
         (str(project_root / "ed_data"), "ed_data"),
         (str(project_root / "LICENSE"), "."),

@@ -7,4 +7,3 @@
 {"timestamp":"2026-08-23T17:00:06Z","event":"PowerplayMerits","Power":"Aisling Duval","TotalMerits":14230}
 {"timestamp":"2026-08-23T17:00:07Z","event":"Location","StarSystem":"Demo System","SystemAddress":1000000001,"StarPos":[0.0,0.0,0.0],"ControllingPower":"Aisling Duval","Powers":["Aisling Duval"],"PowerplayState":"Fortified","PowerplayStateControlProgress":0.72,"PowerplayStateReinforcement":5980,"PowerplayStateUndermining":9428,"Docked":false}
 {"timestamp":"2026-08-23T17:00:08Z","event":"FSDJump","StarSystem":"Demo Junction","SystemAddress":1000000002,"StarPos":[12.0,4.0,-8.0],"JumpDist":18.2,"ControllingPower":"Aisling Duval","Powers":["Aisling Duval"],"PowerplayState":"Fortified","PowerplayStateControlProgress":0.72,"PowerplayStateReinforcement":5980,"PowerplayStateUndermining":9428}
-
