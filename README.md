@@ -41,7 +41,7 @@ All screenshots use synthetic demo data and do not contain a real Commander prof
 ### Portable installation (recommended)
 
 1. Open the [latest EDEC release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest).
-2. Under **Assets**, download `EDEC-21.165-Windows.zip`.
+2. Under **Assets**, download `EDEC-21.166-Windows.zip`.
 3. Extract the entire ZIP to a writable folder.
 4. Start `EDEC.exe`. Keep the `_internal` folder next to the executable.
 

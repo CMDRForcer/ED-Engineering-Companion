@@ -140,6 +140,46 @@ ApplicationWindow {
     property int currentPage: cockpit.lastPage
     property var globalResults: []
     property int connectionPreviewMode: 0
+    // Cross-page navigation requests live at window scope because inactive
+    // pages are unloaded to avoid evaluating their models in the background.
+    property bool materialFarmMissingRequested: false
+    property var guardianPageRequest: ({})
+    // Preserve transient page controls while Loader releases an inactive page.
+    property bool materialsNeededOnlyState: false
+    property bool materialsFarmMissingState: false
+    property string materialsStatusFilterState: "all"
+    property string materialsSearchState: ""
+    property string engineeringCategoryState: "Core Internals"
+    property string engineeringModuleState: "Frame Shift Drive"
+    property string engineeringSearchState: ""
+    property string engineersSearchState: ""
+    property string engineersStatusState: "ALL"
+    property string engineersBrokerState: "ALL"
+    property bool engineersUnlockState: previewEngineersMode === 1
+    property bool engineersGuardianState: false
+    property string selectedEngineerState: ""
+    property string selectedGuardianState: ""
+    property string hgeMaterialState: "ALL HGE MATERIALS"
+    property string hgeFindTypeState: "ALL FIND TYPES"
+    property string hgeStatusState: "ALL STATES"
+    property string hgeAllegianceState: "ALL ALLEGIANCES"
+    property string hgeEvidenceState: "ALL EVIDENCE"
+    property bool hgeAdvancedState: false
+    property int hgeNearbyRadiusState: 0
+    property int hgeVisibleLimitState: 250
+    property bool settingsAdvancedState: false
+    function requestMaterialFarmMissing(openPage) {
+        materialFarmMissingRequested = true
+        if (openPage)
+            currentPage = 2
+    }
+    function requestGuardianPage(row) {
+        guardianPageRequest = {
+            "brokerFilter": row.brokerSubtype === "GUARDIAN" ? "GUARDIAN" : "HUMAN",
+            "selectedGuardianName": row.id || row.name || ""
+        }
+        currentPage = 4
+    }
     property bool compactSidebar: width < 1300
     property bool narrowWorkspace: (width / Math.max(1.0, cockpit.uiScale)) < 1350
     property var liveHgeTargets: cockpit.hgeTargets
@@ -967,14 +1007,20 @@ ApplicationWindow {
         }
     }
 
+    Loader {
+        id: pageLoader0
+        anchors.fill: parent
+        active: window.currentPage === 0
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         objectName: "qa-page-operations"
-        visible: currentPage === 0
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 16
 
         GridLayout {
@@ -1255,7 +1301,7 @@ ApplicationWindow {
                             else if ((cockpit.operationAction.targetPage || -1) >= 0) {
                                 window.currentPage = cockpit.operationAction.targetPage
                                 if (cockpit.operationAction.farmMissing)
-                                    materialsPage.farmMissing = true
+                                    window.requestMaterialFarmMissing(false)
                             }
                         }
                     }
@@ -1337,12 +1383,7 @@ ApplicationWindow {
                                         if (modelData.kind === "WISHLIST") {
                                             window.currentPage = 1
                                         } else {
-                                            engineersPage.unlockMode = false
-                                            engineersPage.guardianMode = true
-                                            engineersPage.brokerFilter = modelData.brokerSubtype === "GUARDIAN"
-                                                                           ? "GUARDIAN" : "HUMAN"
-                                            engineersPage.selectedGuardianName = modelData.id
-                                            window.currentPage = 4
+                                            window.requestGuardianPage(modelData)
                                         }
                                     }
                                 }
@@ -1354,11 +1395,9 @@ ApplicationWindow {
                                         if (modelData.kind === "WISHLIST")
                                             cockpit.prioritizePinnedPlan(modelData.id)
                                         else
-                                            engineersPage.toggleTechBrokerTrack({
-                                                "name": modelData.id,
-                                                "brokerSubtype": modelData.brokerSubtype,
-                                                "isTracked": true
-                                            })
+                                            cockpit.trackTechBrokerUnlock(
+                                                modelData.id,
+                                                modelData.brokerSubtype)
                                     }
                                 }
                             }
@@ -1758,15 +1797,23 @@ ApplicationWindow {
             }
         }
     }
+        }
+    }
 
+    Loader {
+        id: pageLoader1
+        anchors.fill: parent
+        active: window.currentPage === 1
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         objectName: "qa-page-wishlist"
-        visible: currentPage === 1
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 16
 
         RowLayout {
@@ -2351,13 +2398,30 @@ ApplicationWindow {
             }
         }
     }
+        }
+    }
 
+    Loader {
+        id: pageLoader2
+        anchors.fill: parent
+        active: window.currentPage === 2
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         id: materialsPage
         objectName: "qa-page-materials"
-        property bool neededOnly: false
-        property bool farmMissing: false
-        property string statusFilter: "all"
+        property bool neededOnly: window.materialsNeededOnlyState
+        property bool farmMissing: window.materialsFarmMissingState
+        property string statusFilter: window.materialsStatusFilterState
+        onNeededOnlyChanged: window.materialsNeededOnlyState = neededOnly
+        onFarmMissingChanged: window.materialsFarmMissingState = farmMissing
+        onStatusFilterChanged: window.materialsStatusFilterState = statusFilter
+        Component.onCompleted: {
+            if (window.materialFarmMissingRequested) {
+                farmMissing = true
+                window.materialFarmMissingRequested = false
+            }
+        }
         property var farmMissingRows: cockpit.materials.filter(function(row) {
             return row.category === "Raw" && row.missing > 0
                 && (materialSearch.text.length === 0
@@ -2370,12 +2434,12 @@ ApplicationWindow {
                 return right.missing - left.missing
             return left.name.localeCompare(right.name)
         })
-        visible: currentPage === 2
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 16
 
         RowLayout {
@@ -2391,6 +2455,8 @@ ApplicationWindow {
             Item { Layout.fillWidth: true }
             TextField {
                 id: materialSearch
+                text: window.materialsSearchState
+                onTextChanged: window.materialsSearchState = text
                 Layout.preferredWidth: 340
                 Layout.preferredHeight: 42
                 placeholderText: "Search material or category…"
@@ -2602,12 +2668,22 @@ ApplicationWindow {
             }
         }
     }
+        }
+    }
 
+    Loader {
+        id: pageLoader3
+        anchors.fill: parent
+        active: window.currentPage === 3
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         id: engineeringPage
         objectName: "qa-page-engineering"
-        property string selectedCategory: "Core Internals"
-        property string selectedModule: "Frame Shift Drive"
+        property string selectedCategory: window.engineeringCategoryState
+        property string selectedModule: window.engineeringModuleState
+        onSelectedCategoryChanged: window.engineeringCategoryState = selectedCategory
+        onSelectedModuleChanged: window.engineeringModuleState = selectedModule
         property var categoryOrder: [
             "Core Internals", "Optional Internals", "Weapons / Hardpoints",
             "Utility Mounts", "Limpets / Controllers"
@@ -2630,12 +2706,12 @@ ApplicationWindow {
             names.sort()
             return names.length ? names[0] : ""
         }
-        visible: currentPage === 3
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 104
@@ -2666,6 +2742,8 @@ ApplicationWindow {
             }
             TextField {
                 id: blueprintSearch
+                text: window.engineeringSearchState
+                onTextChanged: window.engineeringSearchState = text
                 anchors.right: parent.right
                 anchors.top: parent.top
                 width: 360
@@ -3089,35 +3167,56 @@ ApplicationWindow {
             }
         }
     }
+        }
+    }
 
+    Loader {
+        id: pageLoader4
+        anchors.fill: parent
+        active: window.currentPage === 4
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         id: engineersPage
         objectName: "qa-page-engineers"
-        visible: currentPage === 4
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 14
         property string query: engineerSearch.text.toLowerCase()
-        property string statusFilter: engineerStatus.currentText
-        property string brokerFilter: "ALL"
-        property bool unlockMode: window.previewEngineersMode === 1
-        property bool guardianMode: false
-        property string selectedEngineerName: ""
-        property string selectedGuardianName: ""
+        property string statusFilter: window.engineersStatusState
+        property string brokerFilter: window.engineersBrokerState
+        property bool unlockMode: window.engineersUnlockState
+        property bool guardianMode: window.engineersGuardianState
+        property string selectedEngineerName: window.selectedEngineerState
+        property string selectedGuardianName: window.selectedGuardianState
+        onBrokerFilterChanged: window.engineersBrokerState = brokerFilter
+        onUnlockModeChanged: window.engineersUnlockState = unlockMode
+        onGuardianModeChanged: window.engineersGuardianState = guardianMode
+        onSelectedEngineerNameChanged: window.selectedEngineerState = selectedEngineerName
+        onSelectedGuardianNameChanged: window.selectedGuardianState = selectedGuardianName
+        Component.onCompleted: {
+            if (Object.keys(window.guardianPageRequest).length) {
+                unlockMode = false
+                guardianMode = true
+                brokerFilter = window.guardianPageRequest.brokerFilter || "ALL"
+                selectedGuardianName = window.guardianPageRequest.selectedGuardianName || ""
+                window.guardianPageRequest = ({})
+            }
+        }
         function toggleTechBrokerTrack(row) {
             if (!row || !row.name)
                 return
             const enabling = !row.isTracked
             cockpit.trackTechBrokerUnlock(row.name, row.brokerSubtype)
             if (enabling)
-                materialsPage.farmMissing = true
+                window.requestMaterialFarmMissing(false)
         }
         function openTrackedFarmMissing() {
-            materialsPage.farmMissing = true
-            window.currentPage = 2
+            window.requestMaterialFarmMissing(true)
         }
         property var visibleRows: cockpit.engineers.filter(function(row) {
             if (statusFilter === "UNLOCKED" && row.statusGroup !== "unlocked") return false
@@ -3204,6 +3303,8 @@ ApplicationWindow {
                 spacing: 8
                 TextField {
                     id: engineerSearch
+                    text: window.engineersSearchState
+                    onTextChanged: window.engineersSearchState = text
                     Layout.preferredWidth: 330
                     Layout.preferredHeight: 42
                     placeholderText: "Engineer, system, module or blueprint…"
@@ -3215,6 +3316,14 @@ ApplicationWindow {
                     model: engineersPage.guardianMode
                        ? ["ALL", "READY", "PENDING", "LOCKED", "UNLOCKED"]
                        : ["ALL", "UNLOCKED", "PENDING", "MISSING"]
+                    Component.onCompleted: {
+                        const savedIndex = model.indexOf(window.engineersStatusState)
+                        currentIndex = savedIndex >= 0 ? savedIndex : 0
+                    }
+                    onCurrentTextChanged: {
+                        if (currentText)
+                            window.engineersStatusState = currentText
+                    }
                 }
             }
         }
@@ -3949,18 +4058,34 @@ ApplicationWindow {
             }
         }
     }
+        }
+    }
 
+    Loader {
+        id: pageLoader8
+        anchors.fill: parent
+        active: window.currentPage === 8
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         id: hgeFinderPage
         objectName: "qa-page-state-finds"
-        property string materialFilter: "ALL HGE MATERIALS"
-        property string findTypeFilter: "ALL FIND TYPES"
-        property string stateFilter: "ALL STATES"
-        property string allegianceFilter: "ALL ALLEGIANCES"
-        property string evidenceFilter: "ALL EVIDENCE"
-        property bool advancedFiltersOpen: false
-        property int nearbyRadius: 0
-        property int visibleCandidateLimit: 250
+        property string materialFilter: window.hgeMaterialState
+        property string findTypeFilter: window.hgeFindTypeState
+        property string stateFilter: window.hgeStatusState
+        property string allegianceFilter: window.hgeAllegianceState
+        property string evidenceFilter: window.hgeEvidenceState
+        property bool advancedFiltersOpen: window.hgeAdvancedState
+        property int nearbyRadius: window.hgeNearbyRadiusState
+        property int visibleCandidateLimit: window.hgeVisibleLimitState
+        onMaterialFilterChanged: window.hgeMaterialState = hgeFinderPage.materialFilter
+        onFindTypeFilterChanged: window.hgeFindTypeState = hgeFinderPage.findTypeFilter
+        onStateFilterChanged: window.hgeStatusState = hgeFinderPage.stateFilter
+        onAllegianceFilterChanged: window.hgeAllegianceState = hgeFinderPage.allegianceFilter
+        onEvidenceFilterChanged: window.hgeEvidenceState = hgeFinderPage.evidenceFilter
+        onAdvancedFiltersOpenChanged: window.hgeAdvancedState = hgeFinderPage.advancedFiltersOpen
+        onNearbyRadiusChanged: window.hgeNearbyRadiusState = hgeFinderPage.nearbyRadius
+        onVisibleCandidateLimitChanged: window.hgeVisibleLimitState = hgeFinderPage.visibleCandidateLimit
         readonly property var findTypeOptions: [
             {"label": "All Find Types", "key": "ALL FIND TYPES"},
             {"label": "High Grade Emissions", "key": "HGE"},
@@ -3977,12 +4102,12 @@ ApplicationWindow {
             }
             return labels[key] || "Evidence unavailable"
         }
-        visible: currentPage === 8
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 16
 
         RowLayout {
@@ -4397,15 +4522,23 @@ ApplicationWindow {
             }
         }
     }
+        }
+    }
 
+    Loader {
+        id: pageLoader9
+        anchors.fill: parent
+        active: window.currentPage === 9
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         objectName: "qa-page-logbook"
-        visible: currentPage === 9
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 14
 
         RowLayout {
@@ -4616,7 +4749,15 @@ ApplicationWindow {
             }
         }
     }
+        }
+    }
 
+    Loader {
+        id: pageLoader10
+        anchors.fill: parent
+        active: window.currentPage === 10
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         id: commanderPage
         objectName: "qa-page-cmdr"
@@ -4649,12 +4790,12 @@ ApplicationWindow {
             cardOrder = order
             cockpit.setCommanderCardOrder(order)
         }
-        visible: currentPage === 10
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 14
 
         RowLayout {
@@ -4854,17 +4995,26 @@ ApplicationWindow {
             }
         }
     }
+        }
+    }
 
+    Loader {
+        id: pageLoader5
+        anchors.fill: parent
+        active: window.currentPage === 5
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         id: settingsPage
         objectName: "qa-page-settings"
-        property bool advancedOpen: false
-        visible: currentPage === 5
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        property bool advancedOpen: window.settingsAdvancedState
+        onAdvancedOpenChanged: window.settingsAdvancedState = advancedOpen
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 16
 
         SettingsHeader {
@@ -5099,18 +5249,27 @@ ApplicationWindow {
         }
         }
     }
+        }
+    }
 
+    Loader {
+        id: pageLoader6
+        anchors.fill: parent
+        active: window.currentPage === 6
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         id: connectionsPage
         objectName: "qa-page-connections"
-        visible: currentPage === 6
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 14
         property int connectionMode: window.connectionPreviewMode
+        onConnectionModeChanged: window.connectionPreviewMode = connectionMode
 
         SettingsHeader {
             qaName: "qa-header-connections"
@@ -5583,16 +5742,24 @@ ApplicationWindow {
             }
         }
     }
+        }
+    }
 
+    Loader {
+        id: pageLoader7
+        anchors.fill: parent
+        active: window.currentPage === 7
+        asynchronous: false
+        sourceComponent: Component {
     ColumnLayout {
         id: diagnosticsPage
         objectName: "qa-page-diagnostics"
-        visible: currentPage === 7
-        anchors.left: sidebar.right
-        anchors.right: parent.right
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: window.compactSidebar ? 18 : 26
+        visible: true
+        anchors.fill: parent
+        anchors.leftMargin: sidebar.width + (window.compactSidebar ? 18 : 26)
+        anchors.rightMargin: window.compactSidebar ? 18 : 26
+        anchors.topMargin: window.compactSidebar ? 18 : 26
+        anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 14
         property var health: cockpit.journalHealth
 
@@ -5729,6 +5896,8 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+    }
         }
     }
 

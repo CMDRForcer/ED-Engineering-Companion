@@ -55,7 +55,9 @@ from ed_companion.diagnostics import (
 )
 
 
-SINGLE_INSTANCE_NAME = "EDOPS-phase14-single-instance"
+SINGLE_INSTANCE_NAME = os.environ.get(
+    "EDEC_SINGLE_INSTANCE_NAME", "EDEC-single-instance"
+)
 
 
 class SingleInstanceRuntime(QObject):
@@ -182,6 +184,7 @@ class SmokeTestRunner(QObject):
         self.step_index = 0
         self.deadline = 0.0
         self.current = None
+        self.persistence_phase = 0
         for label, page, object_name in self.PAGE_STEPS:
             self.steps.append((label, lambda p=page, n=object_name: self._page(p, n)))
         self.steps.extend([
@@ -189,6 +192,7 @@ class SmokeTestRunner(QObject):
             ("engineers-unlock-guide", lambda: self._engineer_state(True, False)),
             ("engineers-tech-brokers", lambda: self._engineer_state(False, True)),
             ("connections-preview", self._connection_states),
+            ("lazy-page-state-persistence", self._lazy_page_state),
         ])
         for label, object_name in self.DIALOG_STEPS:
             self.steps.append((label, lambda n=object_name: self._dialog(n)))
@@ -236,6 +240,32 @@ class SmokeTestRunner(QObject):
             if int(self.window.property("connectionPreviewMode")) != mode:
                 return False
         return True
+
+    def _lazy_page_state(self):
+        """Prove an unloaded page restores its transient controls."""
+        if self.persistence_phase == 0:
+            self.window.setProperty("currentPage", 2)
+            target = self._find("qa-page-materials")
+            if not target:
+                return False
+            target.setProperty("neededOnly", True)
+            target.setProperty("statusFilter", "missing")
+            self.window.setProperty("currentPage", 0)
+            self.persistence_phase = 1
+            return False
+        if self.persistence_phase == 1:
+            if self._find("qa-page-materials") is not None:
+                return False
+            self.window.setProperty("currentPage", 2)
+            self.persistence_phase = 2
+            return False
+        target = self._find("qa-page-materials")
+        return bool(
+            target
+            and target.property("visible")
+            and bool(target.property("neededOnly"))
+            and str(target.property("statusFilter")) == "missing"
+        )
 
     def _dialog(self, object_name):
         target = self._find(object_name)

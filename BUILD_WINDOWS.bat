@@ -21,12 +21,12 @@ copy /y "docs\EDEC_User_Manual_Privacy_EN_21.164.pdf" "dist\EDEC\EDEC_User_Manua
 copy /y "docs\EDEC_User_Manual_Privacy_DE_21.164.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_DE_21.164.pdf" >nul
 
 if not exist "output" mkdir "output"
-powershell -NoProfile -Command "Compress-Archive -Path 'dist\EDEC\*' -DestinationPath 'output\EDEC-21.165-Windows.zip' -CompressionLevel Optimal -Force"
+powershell -NoProfile -Command "Compress-Archive -Path 'dist\EDEC\*' -DestinationPath 'output\EDEC-21.166-Windows.zip' -CompressionLevel Optimal -Force"
 if errorlevel 1 goto :failed
 
 echo.
 echo Portable build created in dist\EDEC
-echo Windows Explorer compatible ZIP created in output\EDEC-21.165-Windows.zip
+echo Windows Explorer compatible ZIP created in output\EDEC-21.166-Windows.zip
 exit /b 0
 
 :failed
