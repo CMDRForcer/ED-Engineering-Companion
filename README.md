@@ -2,7 +2,7 @@
 
 ED Engineering Companion (EDEC) is a free, open-source companion tool for Elite Dangerous. It combines blueprint planning, material tracking, Engineer unlock guidance, Journal processing, and optional INARA/EDDN connectivity in one desktop application.
 
-[Download the latest release](https://github.com/CMDRForcer/ED-OPS/releases/latest) · User manual: [English](docs/EDEC_User_Manual_Privacy_EN_21.163.pdf) / [Deutsch](docs/EDEC_User_Manual_Privacy_DE_21.163.pdf) · [Report a bug](https://github.com/CMDRForcer/ED-OPS/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
+[Download the latest release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · User manual: [English](docs/EDEC_User_Manual_Privacy_EN_21.163.pdf) / [Deutsch](docs/EDEC_User_Manual_Privacy_DE_21.163.pdf) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
 
 ![EDEC Commander Operations](docs/images/operations.png)
 
@@ -40,7 +40,7 @@ All screenshots use synthetic demo data and do not contain a real Commander prof
 
 ### Portable installation (recommended)
 
-1. Open the [latest EDEC release](https://github.com/CMDRForcer/ED-OPS/releases/latest).
+1. Open the [latest EDEC release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest).
 2. Under **Assets**, download `EDEC-21.163-Windows.zip`.
 3. Extract the entire ZIP to a writable folder.
 4. Start `EDEC.exe`. Keep the `_internal` folder next to the executable.
@@ -96,7 +96,7 @@ See [`requirements.txt`](requirements.txt) for the Python dependencies.
 
 ## Status
 
-EDEC is under active development. Contributions, bug reports, and feature suggestions are welcome through [GitHub Issues](https://github.com/CMDRForcer/ED-OPS/issues).
+EDEC is under active development. Contributions, bug reports, and feature suggestions are welcome through [GitHub Issues](https://github.com/CMDRForcer/ED-Engineering-Companion/issues).
 
 ## License
 

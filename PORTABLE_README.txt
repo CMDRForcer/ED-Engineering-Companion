@@ -14,7 +14,7 @@ Documentation:
 - EDOPS_User_Manual_Privacy_EN_21.163.pdf
 - EDOPS_User_Manual_Privacy_DE_21.163.pdf
 
-Project: https://github.com/CMDRForcer/ED-OPS
+Project: https://github.com/CMDRForcer/ED-Engineering-Companion
 License: GNU General Public License v3.0
 
 ED Engineering Companion (EDEC) is an independent third-party project and is not affiliated with
