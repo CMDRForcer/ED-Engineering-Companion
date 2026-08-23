@@ -13,6 +13,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .session_views import (
+    SESSION_HISTORY_LIMIT,
+    apply_session_event,
+    normalize_session_history,
+    public_session,
+)
+
 from ed_companion.journal import (
     is_completed_engineer_craft,
     journal_material_name,
@@ -4400,147 +4407,11 @@ def write_logbook_note(
     return notes
 
 
-SESSION_HISTORY_LIMIT = 30
-SESSION_COUNTER_KEYS = (
-    "fsdJumps", "dockings", "engineerCrafts", "gradeCrafts",
-    "experimentalCrafts", "materialTrades", "materialCollectedEvents",
-)
-
-
-def _session_timestamp_seconds(value: object) -> float | None:
-    try:
-        parsed = datetime.fromisoformat(
-            str(value or "").strip().replace("Z", "+00:00")
-        )
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return parsed.timestamp()
-    except (TypeError, ValueError):
-        return None
-
-
-def _session_duration(start: object, end: object) -> int:
-    start_seconds = _session_timestamp_seconds(start)
-    end_seconds = _session_timestamp_seconds(end)
-    if start_seconds is None or end_seconds is None:
-        return 0
-    return max(0, int(end_seconds - start_seconds))
-
-
-def _session_nonnegative_int(value: object) -> int:
-    try:
-        return max(0, int(value or 0))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _session_nonnegative_float(value: object) -> float:
-    try:
-        return max(0.0, float(value or 0))
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _new_session(event: dict[str, Any], index: int) -> dict[str, Any]:
-    start = str(event.get("timestamp") or "")
-    return {
-        "id": start or f"session-{index}",
-        "start": start, "end": "", "active": True,
-        "durationSeconds": 0, "fsdJumps": 0, "distanceLy": 0.0,
-        "dockings": 0, "engineerCrafts": 0, "gradeCrafts": 0,
-        "experimentalCrafts": 0, "materialTrades": 0,
-        "materialCollectedEvents": 0, "visitedSystems": 0,
-        "_systems": set(),
-    }
-
-
-def _public_session(
-    session: dict[str, Any], end: object | None = None,
-) -> dict[str, Any]:
-    result = {
-        key: value for key, value in session.items() if key != "_systems"
-    }
-    result["visitedSystems"] = len(session.get("_systems", set()))
-    if end is not None:
-        result["durationSeconds"] = _session_duration(result.get("start"), end)
-    result["distanceLy"] = round(float(result.get("distanceLy", 0.0) or 0.0), 2)
-    return result
-
-
-def _append_session_history(
-    history: list[dict[str, Any]], session: dict[str, Any], end: object,
-) -> None:
-    completed = _public_session(session, end)
-    completed["end"] = str(end or "")
-    completed["active"] = False
-    history[:] = [row for row in history if row.get("id") != completed["id"]]
-    history.append(completed)
-    del history[:-SESSION_HISTORY_LIMIT]
-
-
-def _apply_session_event(
-    current: dict[str, Any] | None,
-    history: list[dict[str, Any]],
-    event: dict[str, Any],
-    index: int,
-) -> dict[str, Any] | None:
-    name = str(event.get("event") or "")
-    timestamp = str(event.get("timestamp") or "")
-    if name == "LoadGame":
-        if current:
-            _append_session_history(history, current, timestamp)
-        current = _new_session(event, index)
-    if current is None:
-        return None
-    system = str(event.get("StarSystem") or "").strip()
-    if system:
-        current["_systems"].add(system)
-    if name == "FSDJump":
-        current["fsdJumps"] += 1
-        try:
-            current["distanceLy"] += max(0.0, float(event.get("JumpDist", 0) or 0))
-        except (TypeError, ValueError):
-            pass
-    elif name == "Docked":
-        current["dockings"] += 1
-    elif name == "EngineerCraft":
-        current["engineerCrafts"] += 1
-        if _session_nonnegative_int(event.get("Level")) > 0:
-            current["gradeCrafts"] += 1
-        if event.get("ExperimentalEffect") or event.get("ExperimentalEffect_Localised"):
-            current["experimentalCrafts"] += 1
-    elif name == "MaterialTrade":
-        current["materialTrades"] += 1
-    elif name == "MaterialCollected":
-        current["materialCollectedEvents"] += 1
-    if name == "Shutdown":
-        _append_session_history(history, current, timestamp)
-        return None
-    return current
-
-
 def load_session_history(data_dir: Path) -> list[dict[str, Any]]:
     """Load the bounded completed-session history for one profile."""
-    payload = read_json(data_dir / "session_history.json", [])
-    if not isinstance(payload, list):
-        return []
-    rows = []
-    for row in payload[-SESSION_HISTORY_LIMIT:]:
-        if not isinstance(row, dict) or not str(row.get("id") or ""):
-            continue
-        normalized = {
-            "id": str(row.get("id") or ""),
-            "start": str(row.get("start") or ""),
-            "end": str(row.get("end") or ""),
-            "active": False,
-            "durationSeconds": _session_nonnegative_int(row.get("durationSeconds")),
-            "distanceLy": round(_session_nonnegative_float(row.get("distanceLy")), 2),
-            "visitedSystems": _session_nonnegative_int(row.get("visitedSystems")),
-        }
-        for key in SESSION_COUNTER_KEYS:
-            normalized[key] = _session_nonnegative_int(row.get(key))
-        rows.append(normalized)
-    return rows
+    return normalize_session_history(
+        read_json(data_dir / "session_history.json", [])
+    )
 
 
 def session_statistics(data_dir: Path) -> dict[str, Any]:
@@ -4578,7 +4449,7 @@ def session_statistics(data_dir: Path) -> dict[str, Any]:
         history = list(reversed(load_session_history(data_dir)))
         current, start = None, 0
     for index in range(start, len(events)):
-        current = _apply_session_event(current, history, events[index], index)
+        current = apply_session_event(current, history, events[index], index)
     recent = list(reversed(history[-SESSION_HISTORY_LIMIT:]))
     _write_json_if_changed(data_dir / "session_history.json", recent)
     cache_current = deepcopy(current)
@@ -4594,7 +4465,7 @@ def session_statistics(data_dir: Path) -> dict[str, Any]:
             "history": history, "current": cache_current,
         }
     return {
-        "current": _public_session(
+        "current": public_session(
             current, datetime.now(timezone.utc).isoformat()
         ) if current else {},
         "recent": recent,
