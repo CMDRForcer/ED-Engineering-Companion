@@ -2,7 +2,7 @@
 
 ED Engineering Companion (EDEC) is a free, open-source companion tool for Elite Dangerous. It combines blueprint planning, material tracking, Engineer unlock guidance, Journal processing, and optional INARA/EDDN connectivity in one desktop application.
 
-[Download the latest release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · User manual: [English](docs/EDEC_User_Manual_Privacy_EN_21.163.pdf) / [Deutsch](docs/EDEC_User_Manual_Privacy_DE_21.163.pdf) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
+[Download the latest release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · User manual: [English](docs/EDEC_User_Manual_Privacy_EN_21.164.pdf) / [Deutsch](docs/EDEC_User_Manual_Privacy_DE_21.164.pdf) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
 
 ![EDEC Commander Operations](docs/images/edec-operations.png)
 
@@ -41,7 +41,7 @@ All screenshots use synthetic demo data and do not contain a real Commander prof
 ### Portable installation (recommended)
 
 1. Open the [latest EDEC release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest).
-2. Under **Assets**, download `EDEC-21.163-Windows.zip`.
+2. Under **Assets**, download `EDEC-21.164-Windows.zip`.
 3. Extract the entire ZIP to a writable folder.
 4. Start `EDEC.exe`. Keep the `_internal` folder next to the executable.
 
@@ -55,7 +55,7 @@ Personal settings, Journal cursors, caches, and service credentials are stored o
 
 ## User manual and privacy
 
-The illustrated EDEC 21.163 manual explains installation, navigation, Engineering, the Unlock Guide, local data storage, and the complete INARA, EDDN, and Spansh data flows. It is available in [English](docs/EDEC_User_Manual_Privacy_EN_21.163.pdf) and [German](docs/EDEC_User_Manual_Privacy_DE_21.163.pdf). Both editions use synthetic demo screenshots throughout.
+The illustrated EDEC 21.164 manual explains installation, navigation, Engineering, the Unlock Guide, local data storage, and the complete INARA, EDDN, and Spansh data flows. It is available in [English](docs/EDEC_User_Manual_Privacy_EN_21.164.pdf) and [German](docs/EDEC_User_Manual_Privacy_DE_21.164.pdf). Both editions use synthetic demo screenshots throughout.
 
 ## Connections
 

@@ -1,4 +1,4 @@
-ED Engineering Companion (EDEC) 21.163 - Portable Windows Edition
+ED Engineering Companion (EDEC) 21.164 - Portable Windows Edition
 ===================================================================
 
 1. Extract the complete ZIP archive.
@@ -11,8 +11,8 @@ User settings, service credentials, caches and Journal cursors are stored under
 %LOCALAPPDATA%\EDEngineeringCompanion and are not written into this folder.
 
 Documentation:
-- EDOPS_User_Manual_Privacy_EN_21.163.pdf
-- EDOPS_User_Manual_Privacy_DE_21.163.pdf
+- EDEC_User_Manual_Privacy_EN_21.164.pdf
+- EDEC_User_Manual_Privacy_DE_21.164.pdf
 
 Project: https://github.com/CMDRForcer/ED-Engineering-Companion
 License: GNU General Public License v3.0

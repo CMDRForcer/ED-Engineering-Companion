@@ -17,16 +17,16 @@ if errorlevel 1 goto :failed
 
 copy /y "PORTABLE_README.txt" "dist\EDEC\README.txt" >nul
 copy /y "LICENSE" "dist\EDEC\LICENSE" >nul
-copy /y "docs\EDEC_User_Manual_Privacy_EN_21.163.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_EN_21.163.pdf" >nul
-copy /y "docs\EDEC_User_Manual_Privacy_DE_21.163.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_DE_21.163.pdf" >nul
+copy /y "docs\EDEC_User_Manual_Privacy_EN_21.164.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_EN_21.164.pdf" >nul
+copy /y "docs\EDEC_User_Manual_Privacy_DE_21.164.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_DE_21.164.pdf" >nul
 
 if not exist "output" mkdir "output"
-powershell -NoProfile -Command "Compress-Archive -Path 'dist\EDEC\*' -DestinationPath 'output\EDEC-21.163-Windows.zip' -CompressionLevel Optimal -Force"
+powershell -NoProfile -Command "Compress-Archive -Path 'dist\EDEC\*' -DestinationPath 'output\EDEC-21.164-Windows.zip' -CompressionLevel Optimal -Force"
 if errorlevel 1 goto :failed
 
 echo.
 echo Portable build created in dist\EDEC
-echo Windows Explorer compatible ZIP created in output\EDEC-21.163-Windows.zip
+echo Windows Explorer compatible ZIP created in output\EDEC-21.164-Windows.zip
 exit /b 0
 
 :failed
