@@ -516,6 +516,21 @@ def run():
     preview_blueprint = os.environ.get("PHASE14_PREVIEW_BLUEPRINT")
     if preview_blueprint:
         controller.selectBlueprint(preview_blueprint)
+    preview_module_slot = os.environ.get("PHASE14_PREVIEW_MODULE_SLOT")
+    if preview_blueprint and preview_module_slot:
+        def select_preview_module():
+            controller.selectBlueprint(preview_blueprint)
+            controller.setSelectedModuleSlot(preview_module_slot)
+        QTimer.singleShot(500, select_preview_module)
+    preview_plan_mode = os.environ.get("PHASE14_PREVIEW_PLAN_MODE")
+    if preview_plan_mode:
+        def select_preview_plan_mode():
+            controller.setPlanMode(preview_plan_mode)
+            if os.environ.get("PHASE14_PREVIEW_EXPERIMENTAL") == "first":
+                rows = controller._selected_blueprint.get("experimentals", [])
+                if rows:
+                    controller.setSelectedExperimental(rows[0].get("id", ""))
+        QTimer.singleShot(600, select_preview_plan_mode)
     screenshot = os.environ.get("PHASE14_SCREENSHOT")
     smoke_runner = None
     if smoke_test:

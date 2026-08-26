@@ -443,6 +443,63 @@ def _module_types(module_id, blueprint_types, module_matcher):
     return {value for value in textual if len(_key(value)) == longest}
 
 
+def _canonical_import_slot(value, physical_slots, source=""):
+    """Resolve an external slot only when the hull schema makes it deterministic."""
+    slots = [row for row in (physical_slots or []) if isinstance(row, dict)]
+    if not slots:
+        # Backwards-compatible for callers without a hull schema. The desktop
+        # controller always supplies one before an import can be applied.
+        return str(value or "").strip(), ""
+    raw = str(value or "").strip()
+    exact = {
+        _key(row.get("slot")): str(row.get("slot") or "")
+        for row in slots if row.get("slot")
+    }
+    if _key(raw) in exact:
+        return exact[_key(raw)], ""
+    if str(source or "").casefold() != "coriolis json":
+        return "", f"Slot '{raw or '?'}' is not present on the selected hull."
+
+    tokens = [token for token in re.split(r"[/\\.\[\]]+", raw) if token]
+    keys = [_key(token) for token in tokens]
+    joined = "".join(keys)
+    core_aliases = {
+        "armour": "Armour", "armor": "Armour",
+        "powerplant": "PowerPlant", "thrusters": "MainEngines",
+        "mainengines": "MainEngines", "frameshiftdrive": "FrameShiftDrive",
+        "fsd": "FrameShiftDrive", "lifesupport": "LifeSupport",
+        "powerdistributor": "PowerDistributor", "sensors": "Radar",
+        "radar": "Radar", "fueltank": "FuelTank",
+    }
+    for alias, slot in core_aliases.items():
+        if alias in joined and _key(slot) in exact:
+            return exact[_key(slot)], ""
+
+    groups = {
+        "optional": [row for row in slots if row.get("group") == "OPTIONAL INTERNALS"],
+        "internal": [row for row in slots if row.get("group") == "OPTIONAL INTERNALS"],
+        "hardpoint": [row for row in slots if row.get("group") == "HARDPOINTS"],
+        "hardpoints": [row for row in slots if row.get("group") == "HARDPOINTS"],
+        "utility": [row for row in slots if row.get("group") == "UTILITY MOUNTS"],
+        "utilities": [row for row in slots if row.get("group") == "UTILITY MOUNTS"],
+    }
+    for marker, candidates in groups.items():
+        marker_index = next((i for i, key in enumerate(keys) if marker in key), -1)
+        if marker_index < 0:
+            continue
+        number = next((
+            int(match.group(1)) for token in tokens[marker_index:]
+            for match in [re.search(r"(\d+)", token)] if match
+        ), 0)
+        if 1 <= number <= len(candidates):
+            return str(candidates[number - 1].get("slot") or ""), ""
+        return "", (
+            f"Coriolis path '{raw}' has no deterministic {marker} slot "
+            "on the selected hull."
+        )
+    return "", f"Coriolis path '{raw or '?'}' cannot be mapped to a physical hull slot."
+
+
 def _resolve_blueprint_group(evidence, groups, module_types):
     """Resolve Journal machine evidence first, then localized fallback text."""
     for value in evidence:
@@ -458,7 +515,7 @@ def _resolve_blueprint_group(evidence, groups, module_types):
 
 
 def preview_build(value, target_ship_type, blueprints, experimentals,
-                  module_matcher):
+                  module_matcher, physical_slots=None):
     builds = _builds(_read_input(value))
     target_key = _ship_key(target_ship_type)
     compatible = [build for build in builds if _ship_key(build["ship"]) == target_key]
@@ -489,9 +546,12 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
     for position, module in enumerate(selected["modules"], 1):
         if not isinstance(module, dict):
             continue
-        slot = str(
+        source_slot = str(
             module.get("Slot") or module.get("slot")
             or module.get("_SourcePath") or ""
+        )
+        slot, slot_issue = _canonical_import_slot(
+            source_slot, physical_slots, selected["source"]
         )
         module_id = _module_identity(module)
         blueprint_evidence, grade, experimental_evidence = _engineering(module)
@@ -524,7 +584,9 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
                     effect_candidates.append(effect)
         effect = effect_candidates[0] if len(effect_candidates) == 1 else None
         issues = []
-        if not slot:
+        if slot_issue:
+            issues.append(slot_issue)
+        elif not slot:
             issues.append("Module slot is missing; binding will require Journal evidence.")
         if blueprint_name and not blueprint_group:
             issues.append(
@@ -548,16 +610,18 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
             blueprint_group = None
             effect = None
         if issues:
-            warnings.extend(f"{slot}: {issue}" for issue in issues)
+            warnings.extend(f"{slot or source_slot or '?'}: {issue}" for issue in issues)
         plan_mode = (
             "combined" if blueprint_group and effect else
             "grade_only" if blueprint_group else
             "experimental_only" if effect else ""
         )
-        row_status = "partial" if issues else "ready"
+        slot_bound = bool(slot)
+        row_status = "blocked" if not slot_bound else ("partial" if issues else "ready")
         rows.append({
             "status": row_status,
-            "slot": slot, "module": module_id or "Unknown module",
+            "slot": slot, "sourceSlot": source_slot, "slotBound": slot_bound,
+            "module": module_id or "Unknown module",
             "moduleType": blueprint_group[0] if blueprint_group else (
                 next(iter(types)) if len(types) == 1 else ""
             ),
@@ -577,8 +641,10 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
                 "Complete engineering data; ready for wishlist import."
             ),
         })
-    recognized = sum(bool(row.get("planMode")) for row in rows)
-    partial = sum(row.get("status") == "partial" for row in rows)
+    recognized = sum(
+        bool(row.get("planMode")) and bool(row.get("slotBound")) for row in rows
+    )
+    partial = sum(row.get("status") in {"partial", "blocked"} for row in rows)
     return {
         "compatible": True, "source": selected["source"],
         "shipType": str(selected["ship"]), "rows": rows,

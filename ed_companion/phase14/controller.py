@@ -39,7 +39,8 @@ from ed_companion.integrations.inara import (
     send_events,
 )
 from ed_companion.build_import import (
-    BuildImportError, empty_build_import_preview, preview_build,
+    BuildImportError, JOURNAL_BLUEPRINT_NAMES, empty_build_import_preview,
+    preview_build,
 )
 from ed_companion.loadout_export import build_loadout_export, write_loadout_export
 from ed_companion.engineering import (
@@ -289,6 +290,11 @@ class CockpitController(QObject):
         self._journal_auto = bool(ui_config.get("journal_auto", True))
         self._background_mode = bool(ui_config.get("background_mode", False))
         self._autostart_enabled = bool(ui_config.get("autostart_enabled", False))
+        self._trader_preference = str(
+            ui_config.get("trader_preference") or "confirmed"
+        ).casefold()
+        if self._trader_preference not in {"confirmed", "nearest"}:
+            self._trader_preference = "confirmed"
         self._system_tray_available = False
         self._background_runtime_status = "WINDOW OPEN"
         self._shutdown_complete = False
@@ -497,6 +503,9 @@ class CockpitController(QObject):
         self.techBrokerSyncFinished.connect(self._finish_tech_broker_catalog_sync)
         self._data_dir = runtime_data_dir(self.package_root)
         self._reference_data_dir = reference_data_dir(self.package_root)
+        self._ship_catalog = read_json(
+            self._reference_data_dir / "ships.json", []
+        )
         self._engineer_unlock_catalog = load_unlock_catalog(
             self._data_dir, self.package_root
         )
@@ -548,7 +557,10 @@ class CockpitController(QObject):
 
         def worker():
             try:
-                state = build_state(package_root, selected_ship)
+                state = build_state(
+                    package_root, selected_ship,
+                    trader_preference=self._trader_preference,
+                )
                 state["_logbookEntries"] = logbook_entries(package_root)
                 rows = self._build_hge_candidate_rows(
                     state, list(self._hge_sightings)
@@ -648,6 +660,7 @@ class CockpitController(QObject):
             "journal_auto": self._journal_auto,
             "background_mode": self._background_mode,
             "autostart_enabled": self._autostart_enabled,
+            "trader_preference": self._trader_preference,
             "commander_card_order": self._commander_card_order,
             "navigation_order": self._navigation_order,
         }, indent=2))
@@ -2415,6 +2428,31 @@ class CockpitController(QObject):
         "QVariantList", lambda self: self._module_slot_options,
         notify=engineeringChanged,
     )
+    traderPreference = Property(
+        str, lambda self: self._trader_preference, notify=uiChanged,
+    )
+    engineeringInstalledModules = Property(
+        "QVariantList",
+        lambda self: self._state.get("engineeringModuleSlots", []),
+        notify=stateChanged,
+    )
+    engineeringShipSlots = Property(
+        "QVariantList",
+        lambda self: self._state.get("engineeringShipSlots", []),
+        notify=stateChanged,
+    )
+    engineeringShipCatalog = Property(
+        "QVariantList", lambda self: self._ship_catalog, constant=True,
+    )
+    selectedShipType = Property(
+        str, lambda self: str(self._state.get("selectedShipType") or ""),
+        notify=stateChanged,
+    )
+    selectedShipStats = Property(
+        "QVariantMap",
+        lambda self: self._state.get("selectedShipStats", {}),
+        notify=stateChanged,
+    )
     buildImportPreview = Property(
         "QVariantMap", lambda self: self._build_import_preview,
         notify=engineeringChanged,
@@ -2439,11 +2477,13 @@ class CockpitController(QObject):
         selected_ship = self._selected_ship
         follow_active_ship = self._follow_active_ship
         preferred_plan_id = self._armed_plan_id
+        trader_preference = self._trader_preference
 
         def worker():
             try:
                 state = build_state(
-                    package_root, selected_ship, preferred_plan_id
+                    package_root, selected_ship, preferred_plan_id,
+                    trader_preference,
                 )
                 craft_batch = state.get("_craftBatch", {})
                 active_ship = str(state.get("activeShip") or "")
@@ -2452,7 +2492,8 @@ class CockpitController(QObject):
                     and active_ship != state.get("ship")
                 ):
                     state = build_state(
-                        package_root, active_ship, preferred_plan_id
+                        package_root, active_ship, preferred_plan_id,
+                        trader_preference,
                     )
                     state["_craftBatch"] = craft_batch
                 state["_logbookEntries"] = logbook_entries(package_root)
@@ -2816,10 +2857,22 @@ class CockpitController(QObject):
         self._editing_grade_complete = False
         self._selected_experimental_id = ""
         self._plan_mode = "grade_only"
-        compatible_slots = [
-            row for row in self._state.get("moduleSlots", [])
-            if module_matches_type(row.get("moduleId"), module)
-        ]
+        installed_rows = {
+            str(row.get("slot") or ""): row
+            for row in self._state.get("engineeringModuleSlots", [])
+            if isinstance(row, dict)
+        }
+        compatible_slots = []
+        for row in self._state.get("moduleSlots", []):
+            if not module_matches_type(row.get("moduleId"), module):
+                continue
+            candidate = dict(row)
+            candidate["slotLabel"] = str(
+                installed_rows.get(str(row.get("slot") or ""), {}).get(
+                    "displaySlot"
+                ) or row.get("slot") or ""
+            )
+            compatible_slots.append(candidate)
         # Only exact module-type candidates are safe binding choices. Unknown
         # catalog identities remain visibly unbound instead of exposing the
         # complete ship Loadout and inviting a wrong manual selection.
@@ -2834,9 +2887,42 @@ class CockpitController(QObject):
         else:
             self._selected_module_slot = ""
             self._selected_module_id = ""
-        self._selected_engineer = engineer_names[0] if engineer_names else ""
         self._current_grade = 0
         self._target_grade = max(int(value.get("Grade", 0) or 0) for value in grades)
+        engineer_options = [
+            {
+                "name": engineer,
+                "system": ENGINEER_SYSTEMS.get(engineer, "System not stored"),
+                "capabilityGrade": max(
+                    int(grade.get("Grade", 0) or 0) for grade in grades
+                    if engineer in real_engineers(grade)
+                ),
+                "unlockState": str(
+                    progress.get(engineer, {}).get("progress") or "No Journal data"
+                ),
+                "commanderRank": int(
+                    progress.get(engineer, {}).get("rank", 0) or 0
+                ),
+            }
+            for engineer in engineer_names
+        ]
+
+        def engineer_priority(option):
+            capability = int(option.get("capabilityGrade", 0) or 0)
+            rank = int(option.get("commanderRank", 0) or 0)
+            unlocked = str(option.get("unlockState") or "").casefold() == "unlocked"
+            return (
+                capability < self._target_grade,
+                not unlocked,
+                bool(rank and rank < self._target_grade),
+                -capability,
+                str(option.get("name") or "").casefold(),
+            )
+
+        preferred_engineer = min(
+            engineer_options, key=engineer_priority, default={}
+        )
+        self._selected_engineer = str(preferred_engineer.get("name") or "")
         matching_instances = sum(
             1 for row in self._state.get("blueprints", [])
             if row.get("module") == module and row.get("editable")
@@ -2849,28 +2935,43 @@ class CockpitController(QObject):
             "name": name,
             "maxGrade": self._target_grade,
             "engineers": ", ".join(engineer_names),
-            "engineerOptions": [
-                {
-                    "name": engineer,
-                    "system": ENGINEER_SYSTEMS.get(engineer, "System not stored"),
-                    "capabilityGrade": max(
-                        int(grade.get("Grade", 0) or 0) for grade in grades
-                        if engineer in real_engineers(grade)
-                    ),
-                    "unlockState": str(
-                        progress.get(engineer, {}).get("progress") or "No Journal data"
-                    ),
-                    "commanderRank": int(
-                        progress.get(engineer, {}).get("rank", 0) or 0
-                    ),
-                }
-                for engineer in engineer_names
-            ],
+            "engineerOptions": engineer_options,
             "grades": grade_rows,
             "experimentals": compatible,
         }
+        self._apply_installed_slot_engineering()
         self._engineering_status = "Choose current grade, target grade and optional experimental."
         self.engineeringChanged.emit()
+
+    def _apply_installed_slot_engineering(self) -> None:
+        """Project authoritative Loadout engineering onto the selected plan."""
+        selected = next(
+            (
+                row for row in self._module_slot_options
+                if str(row.get("slot") or "") == self._selected_module_slot
+            ),
+            {},
+        )
+        raw_blueprint = str(selected.get("engineeringBlueprint") or "")
+        installed_name = JOURNAL_BLUEPRINT_NAMES.get(
+            normalize(raw_blueprint), raw_blueprint.replace("_", " ")
+        )
+        installed_grade = int(selected.get("engineeringGrade") or 0)
+        selected_name = str(self._selected_blueprint.get("name") or "")
+        matches = bool(
+            installed_grade > 0 and installed_name and selected_name
+            and normalize(installed_name) == normalize(selected_name)
+        )
+        self._selected_blueprint.update({
+            "installedEngineeringKnown": installed_grade > 0,
+            "installedBlueprint": installed_name,
+            "installedGrade": installed_grade,
+            "installedExperimentalEffect": str(
+                selected.get("experimentalEffect") or ""
+            ),
+            "installedMatchesSelection": matches,
+        })
+        self._current_grade = min(installed_grade, self._target_grade) if matches else 0
 
     @Slot(int)
     def setCurrentGrade(self, grade):
@@ -2953,6 +3054,7 @@ class CockpitController(QObject):
         )
         self._selected_module_slot = str(selected.get("slot") or "")
         self._selected_module_id = str(selected.get("moduleId") or "")
+        self._apply_installed_slot_engineering()
         self.engineeringChanged.emit()
 
     @Slot(int)
@@ -3081,6 +3183,7 @@ class CockpitController(QObject):
                 source, target_type,
                 read_json(self._reference_data_dir / "blueprints.json", []),
                 self._experimentals, module_matches_type,
+                physical_slots=self._state.get("engineeringShipSlots", []),
             )
         except BuildImportError as exc:
             preview = empty_build_import_preview(str(exc))
@@ -3133,6 +3236,7 @@ class CockpitController(QObject):
             if (
                 not isinstance(row, dict)
                 or row.get("status") not in {"ready", "partial"}
+                or not row.get("slotBound")
             ):
                 continue
             mode = str(row.get("planMode") or "")
@@ -4807,6 +4911,18 @@ class CockpitController(QObject):
         self._enhanced_visuals = bool(enabled)
         self._save_ui_config()
         self.uiChanged.emit()
+
+    @Slot(str)
+    def setTraderPreference(self, value):
+        value = str(value or "").casefold()
+        if value not in {"confirmed", "nearest"}:
+            return
+        if value == self._trader_preference:
+            return
+        self._trader_preference = value
+        self._save_ui_config()
+        self.uiChanged.emit()
+        self.refresh()
 
     @Slot(int)
     def setLastPage(self, page):

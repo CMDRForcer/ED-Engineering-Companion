@@ -29,7 +29,9 @@ def _spansh_json(post, payload, timeout):
     if not isinstance(body, dict) or not isinstance(body.get("results"), list):
         raise SpanshError("Spansh returned invalid or incomplete JSON (results missing).")
     return body
-def find_nearest_catalog_trader(category, reference_coords, stations):
+def find_nearest_catalog_trader(
+    category, reference_coords, stations, preference="confirmed"
+):
     category = str(category or "").strip().title()
     if category not in TRADER_CATEGORIES:
         return None
@@ -62,11 +64,13 @@ def find_nearest_catalog_trader(category, reference_coords, stations):
         confidence_rank = {"confirmed": 0, "external": 1, "heuristic": 2}.get(
             str(row.get("traderConfidence") or ""), 3
         )
-        candidates.append((
-            confidence_rank, distance, arrival,
-            str(row.get("station") or "").casefold(),
-            location,
-        ))
+        stable_name = str(row.get("station") or "").casefold()
+        rank = (
+            (distance, arrival, confidence_rank, stable_name)
+            if str(preference or "").casefold() == "nearest" else
+            (confidence_rank, distance, arrival, stable_name)
+        )
+        candidates.append((*rank, location))
     return min(candidates, key=lambda item: item[:4])[4] if candidates else None
 
 

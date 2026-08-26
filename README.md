@@ -2,13 +2,14 @@
 
 ED Engineering Companion (EDEC) is a free, open-source companion tool for Elite Dangerous. It combines blueprint planning, material tracking, Engineer unlock guidance, Journal processing, and optional INARA/EDDN connectivity in one desktop application.
 
-[Download the latest release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · User manual: [English](docs/EDEC_User_Manual_Privacy_EN_21.164.pdf) / [Deutsch](docs/EDEC_User_Manual_Privacy_DE_21.164.pdf) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
+[Download the latest release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · [Changelog](CHANGELOG.md) · User manual: [English](docs/EDEC_User_Manual_Privacy_EN_21.164.pdf) / [Deutsch](docs/EDEC_User_Manual_Privacy_DE_21.164.pdf) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
 
 ![EDEC Commander Operations](docs/images/edec-operations.png)
 
 ## Features
 
-- Blueprint, engineering, and wishlist planning
+- Fleet-aware engineering planning bound to each ship's physical module slots
+- Safe EDEC, EDSY/SLEF, and Coriolis build import with exact hull-slot validation
 - Live raw, manufactured, and encoded material inventory
 - Material farming guidance and trader-route support
 - Engineer Unlock Guide and Technology Broker tracking

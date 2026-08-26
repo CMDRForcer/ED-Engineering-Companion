@@ -6,14 +6,36 @@ Item {
     default property alias content: contentHost.data
     property color accent: "transparent"
     property real radius: 18
+    property bool elevated: true
     readonly property var hostWindow: ApplicationWindow.window
 
     Rectangle {
+        visible: shell.elevated
         anchors.fill: parent
-        anchors.leftMargin: 7
-        anchors.topMargin: 9
-        radius: shell.radius
+        anchors.leftMargin: 5
+        anchors.rightMargin: 1
+        anchors.topMargin: 7
+        radius: shell.radius + 1
         color: shell.hostWindow ? shell.hostWindow.shadow : "#80000000"
+        opacity: 0.72
+    }
+    Rectangle {
+        visible: shell.elevated && !!shell.hostWindow && shell.hostWindow.enhancedVisuals
+        anchors.fill: parent
+        anchors.leftMargin: 2
+        anchors.rightMargin: 5
+        anchors.topMargin: 3
+        anchors.bottomMargin: 4
+        radius: shell.radius + 1
+        color: "transparent"
+        border.width: 3
+        border.color: Qt.rgba(shell.accent === "transparent"
+                              ? shell.hostWindow.accentSecondary.r : shell.accent.r,
+                              shell.accent === "transparent"
+                              ? shell.hostWindow.accentSecondary.g : shell.accent.g,
+                              shell.accent === "transparent"
+                              ? shell.hostWindow.accentSecondary.b : shell.accent.b,
+                              0.055)
     }
     Rectangle {
         visible: !!shell.hostWindow
@@ -29,8 +51,8 @@ Item {
     }
     Rectangle {
         anchors.fill: parent
-        anchors.rightMargin: 7
-        anchors.bottomMargin: 9
+        anchors.rightMargin: 5
+        anchors.bottomMargin: 7
         radius: shell.radius
         color: shell.hostWindow ? shell.hostWindow.panel : "#102033"
         border.width: 1
@@ -49,8 +71,8 @@ Item {
         anchors.top: parent.top
         anchors.leftMargin: 20
         anchors.rightMargin: 26
-        height: 1
-        opacity: 0.28
+        height: 2
+        opacity: shell.accent === "transparent" ? 0.16 : 0.32
         gradient: Gradient {
             orientation: Gradient.Horizontal
             GradientStop { position: 0.0; color: "transparent" }
@@ -66,8 +88,7 @@ Item {
     Item {
         id: contentHost
         anchors.fill: parent
-        anchors.rightMargin: 7
-        anchors.bottomMargin: 9
+        anchors.rightMargin: 5
+        anchors.bottomMargin: 7
     }
 }
-

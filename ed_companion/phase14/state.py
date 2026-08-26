@@ -5,6 +5,7 @@ import hashlib
 import logging
 import math
 import os
+import re
 import threading
 import uuid
 from copy import deepcopy
@@ -49,6 +50,7 @@ from ed_companion.navigation.trader_type_cache import normalize_timestamp
 from ed_companion.trader_config import HEURISTIC_TRADER_WARNING
 from ed_companion.material_integrity import material_key
 from ed_companion.persistence import atomic_write
+from ed_companion.build_import import JOURNAL_EXPERIMENTAL_NAMES
 
 
 LOGGER = logging.getLogger(__name__)
@@ -1602,6 +1604,203 @@ def module_matches_type(module_id: object, blueprint_type: object) -> bool:
     return any(module.startswith(prefix) for prefix in prefixes)
 
 
+def engineering_loadout_rows(
+    module_slots: object, catalog_rows: object,
+) -> list[dict[str, Any]]:
+    """Project installed, engineerable modules into slot-first planner rows."""
+    catalog = [row for row in (catalog_rows or []) if isinstance(row, dict)]
+    modules: dict[str, dict[str, Any]] = {}
+    for row in catalog:
+        module = str(row.get("module") or "").strip()
+        if not module:
+            continue
+        target = modules.setdefault(module, {
+            "module": module,
+            "category": str(row.get("category") or "Other"),
+            "blueprintCount": 0,
+        })
+        target["blueprintCount"] += 1
+    rating_letters = {1: "E", 2: "D", 3: "C", 4: "B", 5: "A"}
+    category_rank = {
+        category: index for index, category in enumerate(ENGINEERING_CATEGORY_ORDER)
+    }
+    core_slot_labels = {
+        "Armour": "CORE · ARMOUR",
+        "PowerPlant": "CORE · POWER PLANT",
+        "MainEngines": "CORE · THRUSTERS",
+        "FrameShiftDrive": "CORE · FRAME SHIFT DRIVE",
+        "LifeSupport": "CORE · LIFE SUPPORT",
+        "PowerDistributor": "CORE · POWER DISTRIBUTOR",
+        "Radar": "CORE · SENSORS",
+        "FuelTank": "CORE · FUEL TANK",
+    }
+    result = []
+    for slot_row in module_slots or []:
+        if not isinstance(slot_row, dict):
+            continue
+        module_id = str(slot_row.get("moduleId") or "")
+        match = next(
+            (
+                value for value in modules.values()
+                if module_matches_type(module_id, value["module"])
+            ),
+            None,
+        )
+        if not match:
+            continue
+        size_rating = ""
+        symbol = module_id.strip("$;").casefold()
+        identity = re.search(r"_size(\d+)_class(\d+)", symbol)
+        if identity:
+            size = int(identity.group(1))
+            module_class = int(identity.group(2))
+            size_rating = f"{size}{rating_letters.get(module_class, '')}"
+        slot = str(slot_row.get("slot") or "")
+        result.append({
+            **match,
+            "slot": slot,
+            "moduleId": module_id,
+            "sizeRating": size_rating,
+            "displaySlot": core_slot_labels.get(slot, slot),
+            "bindingKey": f"{slot}\u241f{module_id}",
+            "engineered": bool(slot_row.get("engineered")),
+            "engineeringGrade": int(slot_row.get("engineeringGrade") or 0),
+            "engineeringBlueprint": str(
+                slot_row.get("engineeringBlueprint") or ""
+            ),
+            "experimentalEffect": str(
+                slot_row.get("experimentalEffect") or ""
+            ),
+        })
+    result.sort(key=lambda row: (
+        category_rank.get(row["category"], len(category_rank)),
+        row["slot"].casefold(),
+        row["module"].casefold(),
+    ))
+    return result
+
+
+def ship_slot_layout(
+    ship_data: object, module_slots: object, catalog_rows: object,
+) -> list[dict[str, Any]]:
+    """Build the selected hull's physical slots and overlay known modules."""
+    ship = ship_data if isinstance(ship_data, dict) else {}
+    installed_rows = {
+        str(row.get("slot") or ""): row
+        for row in (module_slots or []) if isinstance(row, dict)
+        and row.get("slot")
+    }
+    engineerable = {
+        str(row.get("slot") or ""): row
+        for row in engineering_loadout_rows(module_slots, catalog_rows)
+    }
+    rating_letters = {1: "E", 2: "D", 3: "C", 4: "B", 5: "A"}
+    core_specs = (
+        ("Armour", "ARMOUR", 0),
+        ("PowerPlant", "POWER PLANT", ship.get("core", {}).get("powerPlant")),
+        ("MainEngines", "THRUSTERS", ship.get("core", {}).get("thrusters")),
+        ("FrameShiftDrive", "FRAME SHIFT DRIVE", ship.get("core", {}).get("frameShiftDrive")),
+        ("LifeSupport", "LIFE SUPPORT", ship.get("core", {}).get("lifeSupport")),
+        ("PowerDistributor", "POWER DISTRIBUTOR", ship.get("core", {}).get("powerDistributor")),
+        ("Radar", "SENSORS", ship.get("core", {}).get("sensors")),
+        ("FuelTank", "FUEL TANK", ship.get("core", {}).get("fuelTank")),
+    )
+    size_names = {1: "SMALL", 2: "MEDIUM", 3: "LARGE", 4: "HUGE"}
+
+    def module_identity(module_id: str) -> tuple[str, str]:
+        symbol = module_id.strip("$;")
+        normalized = normalize(symbol.removesuffix("_Name"))
+        identity = re.search(r"_size(\d+)_class(\d+)", symbol.casefold())
+        size_rating = ""
+        if identity:
+            size_rating = f"{identity.group(1)}{rating_letters.get(int(identity.group(2)), '')}"
+        labels = (
+            ("intpowerplant", "POWER PLANT"),
+            ("intengine", "THRUSTERS"),
+            ("inthyperdrive", "FRAME SHIFT DRIVE"),
+            ("intlifesupport", "LIFE SUPPORT"),
+            ("intpowerdistributor", "POWER DISTRIBUTOR"),
+            ("intsensors", "SENSORS"),
+            ("intfueltank", "FUEL TANK"),
+            ("intcargorack", "CARGO RACK"),
+            ("intshieldgenerator", "SHIELD GENERATOR"),
+            ("intfuelscoop", "FUEL SCOOP"),
+            ("intfighterbay", "FIGHTER HANGAR"),
+            ("intbuggybay", "PLANETARY VEHICLE HANGAR"),
+            ("planetaryapproachsuite", "PLANETARY APPROACH SUITE"),
+            ("dronecontrol", "LIMPET CONTROLLER"),
+            ("multicannon", "MULTI-CANNON"),
+            ("pulselaser", "PULSE LASER"),
+            ("beamlaser", "BEAM LASER"),
+            ("shieldbooster", "SHIELD BOOSTER"),
+            ("heatsink", "HEAT SINK LAUNCHER"),
+            ("armour", "ARMOUR"),
+        )
+        name = next((label for marker, label in labels if marker in normalized), "")
+        if not name:
+            name = re.sub(r"[_-]+", " ", symbol).upper()
+        return name, size_rating
+
+    rows: list[dict[str, Any]] = []
+
+    def append_slot(
+        group: str, slot: str, size: object, fallback_name: str = "",
+        restriction: str = "",
+    ) -> None:
+        installed = installed_rows.get(slot, {})
+        module_id = str(installed.get("moduleId") or "")
+        module_name, size_rating = module_identity(module_id) if module_id else ("", "")
+        engineering = engineerable.get(slot, {})
+        rows.append({
+            "group": group,
+            "slot": slot,
+            "slotSize": int(size or 0),
+            "slotBadge": str(size or ("U" if group == "UTILITY MOUNTS" else "—")),
+            "moduleId": module_id,
+            "module": str(engineering.get("module") or module_name or fallback_name),
+            "sizeRating": str(engineering.get("sizeRating") or size_rating),
+            "empty": not bool(module_id),
+            "restriction": restriction,
+            "engineerable": bool(engineering),
+            "engineered": bool(installed.get("engineered")),
+            "engineeringGrade": int(installed.get("engineeringGrade") or 0),
+            "engineeringBlueprint": str(
+                installed.get("engineeringBlueprint") or ""
+            ),
+            "experimentalEffect": str(
+                installed.get("experimentalEffect") or ""
+            ),
+            "category": str(engineering.get("category") or ""),
+            "blueprintCount": int(engineering.get("blueprintCount") or 0),
+            "bindingKey": f"{slot}\u241f{module_id}" if module_id else slot,
+        })
+
+    for slot, label, size in core_specs:
+        append_slot("CORE INTERNALS", slot, size, label)
+    for index, spec in enumerate(ship.get("optional", []) or [], 1):
+        if not isinstance(spec, dict):
+            continue
+        size = int(spec.get("size") or 0)
+        append_slot(
+            "OPTIONAL INTERNALS", f"Slot{index:02d}_Size{size}", size,
+            restriction=str(spec.get("restriction") or ""),
+        )
+    hardpoint_counts: dict[int, int] = {}
+    for spec in ship.get("hardpoints", []) or []:
+        if not isinstance(spec, dict):
+            continue
+        size = int(spec.get("size") or 0)
+        hardpoint_counts[size] = hardpoint_counts.get(size, 0) + 1
+        append_slot(
+            "HARDPOINTS",
+            f"{size_names.get(size, 'UNKNOWN').title()}Hardpoint{hardpoint_counts[size]}",
+            size,
+        )
+    for index in range(1, int(ship.get("utility") or 0) + 1):
+        append_slot("UTILITY MOUNTS", f"TinyHardpoint{index}", 0)
+    return rows
+
+
 MANDATORY_CORE_STOCK_FAMILIES = {
     "PowerPlant": "int_powerplant",
     "MainEngines": "int_engine",
@@ -1633,10 +1832,31 @@ def module_store_core_replacement(event: dict[str, Any]) -> str:
 
 def latest_loadout_slots(
     events: list[dict[str, Any]], ship_id: object
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """Rebuild current physical bindings from snapshots and module changes."""
     wanted_ship = str(ship_id or "")
-    slots: dict[str, str] = {}
+    slots: dict[str, dict[str, Any]] = {}
+
+    def slot_record(module_id: object, engineering: object = None) -> dict[str, Any]:
+        details = engineering if isinstance(engineering, dict) else {}
+        level = details.get("Level")
+        try:
+            grade = max(0, min(5, int(level or 0)))
+        except (TypeError, ValueError):
+            grade = 0
+        return {
+            "moduleId": str(module_id or ""),
+            "engineered": bool(details and grade > 0),
+            "engineeringGrade": grade,
+            "engineeringBlueprint": str(
+                details.get("BlueprintName_Localised")
+                or details.get("BlueprintName") or ""
+            ),
+            "experimentalEffect": str(
+                details.get("ExperimentalEffect_Localised")
+                or details.get("ExperimentalEffect") or ""
+            ),
+        }
     ordered = sorted(
         (
             (sequence, event) for sequence, event in enumerate(events or [])
@@ -1644,13 +1864,29 @@ def latest_loadout_slots(
         ),
         key=lambda row: (str(row[1].get("timestamp") or ""), row[0]),
     )
+    current_ship_id = ""
     for _sequence, event in ordered:
-        if str(event.get("ShipID") or "") != wanted_ship:
-            continue
         event_name = str(event.get("event") or "")
+        if event.get("ShipID") not in (None, "") and event_name in {
+            "LoadGame", "Loadout", "ShipyardSwap", "SetUserShipName",
+            "EngineerCraft",
+        }:
+            current_ship_id = str(event.get("ShipID"))
+        elif (
+            event_name == "ShipyardBuy"
+            and event.get("NewShipID") not in (None, "")
+        ):
+            current_ship_id = str(event.get("NewShipID"))
+        resolved_ship_id = str(event.get("ShipID") or "")
+        if event_name == "EngineerCraft" and not resolved_ship_id:
+            resolved_ship_id = current_ship_id
+        if resolved_ship_id != wanted_ship:
+            continue
         if event_name == "Loadout":
             slots = {
-                str(module.get("Slot")): str(module.get("Item"))
+                str(module.get("Slot")): slot_record(
+                    module.get("Item"), module.get("Engineering")
+                )
                 for module in (event.get("Modules") or [])
                 if isinstance(module, dict)
                 and module.get("Slot") and module.get("Item")
@@ -1660,7 +1896,7 @@ def latest_loadout_slots(
             slot = str(event.get("Slot") or "")
             item = str(event.get(item_key) or "")
             if slot and item and normalize(item) != "null":
-                slots[slot] = item
+                slots[slot] = slot_record(item)
         elif event_name in {"ModuleSell", "ModuleStore"}:
             slot = str(event.get("Slot") or "")
             if slot:
@@ -1669,7 +1905,7 @@ def latest_loadout_slots(
                     if event_name == "ModuleStore" else ""
                 )
                 if replacement:
-                    slots[slot] = replacement
+                    slots[slot] = slot_record(replacement)
                 else:
                     slots.pop(slot, None)
         elif event_name == "ModuleSwap":
@@ -1677,19 +1913,38 @@ def latest_loadout_slots(
             to_slot = str(event.get("ToSlot") or "")
             from_item = str(event.get("FromItem") or "")
             to_item = str(event.get("ToItem") or "")
+            previous_from = slots.get(from_slot, slot_record(from_item))
+            previous_to = slots.get(to_slot, slot_record(to_item))
             if to_slot:
                 if from_item and normalize(from_item) != "null":
-                    slots[to_slot] = from_item
+                    slots[to_slot] = previous_from
                 else:
                     slots.pop(to_slot, None)
             if from_slot:
                 if to_item and normalize(to_item) != "null":
-                    slots[from_slot] = to_item
+                    slots[from_slot] = previous_to
                 else:
                     slots.pop(from_slot, None)
+        elif event_name == "EngineerCraft":
+            slot = str(event.get("Slot") or "")
+            module_id = str(event.get("Module") or "")
+            installed = slots.get(slot, {})
+            if (
+                slot and module_id and installed
+                and normalize(installed.get("moduleId")) == normalize(module_id)
+            ):
+                engineering = dict(event)
+                previous_effect = str(installed.get("experimentalEffect") or "")
+                applied_effect = str(
+                    event.get("ExperimentalEffect")
+                    or event.get("ApplyExperimentalEffect") or previous_effect
+                )
+                if applied_effect:
+                    engineering["ExperimentalEffect"] = applied_effect
+                slots[slot] = slot_record(module_id, engineering)
     return [
-        {"slot": slot, "moduleId": module_id}
-        for slot, module_id in slots.items()
+        {"slot": slot, **record}
+        for slot, record in slots.items()
     ]
 
 
@@ -1982,13 +2237,24 @@ def blueprint_rows(
         unresolved: list[str] = []
         requirement = required_materials([task], metadata, unresolved)
         plan_requirements[task_index] = (requirement, unresolved)
-        allocation_order.append((task_index, "grade", requirement))
-        plan_id = str(first.get("_Planner", {}).get("plan_id") or "")
+        planner = first.get("_Planner", {})
+        mode = planner_mode(planner)
+        plan_id = str(planner.get("plan_id") or "")
+        if mode == "experimental_only":
+            # A standalone Experimental carries its recipe in its only task.
+            # Treating that recipe as a Grade allocation makes the Wishlist
+            # look READY while Operations sees no executable Experimental.
+            experimental_requirements[plan_id] = requirement
+            allocation_order.append((task_index, "experimental", requirement))
+        else:
+            allocation_order.append((task_index, "grade", requirement))
         experimental_requirement = experimental_requirements.get(plan_id, {})
         if (
+            mode != "experimental_only"
+            and
             experimental_requirement
-            and first.get("_Planner", {}).get("experimental_name")
-            and not first.get("_Planner", {}).get("experimental_complete")
+            and planner.get("experimental_name")
+            and not planner.get("experimental_complete")
         ):
             allocation_order.append(
                 (task_index, "experimental", experimental_requirement)
@@ -2012,16 +2278,19 @@ def blueprint_rows(
         if not isinstance(task, list) or not task:
             continue
         requirement, unresolved = plan_requirements.get(task_index, ({}, []))
-        allocation = allocations.get((task_index, "grade"), {})
+        first = next((item for item in task if isinstance(item, dict)), {})
+        planner = first.get("_Planner", {}) if isinstance(first, dict) else {}
+        mode = planner_mode(planner)
+        allocation = allocations.get(
+            (task_index, "experimental" if mode == "experimental_only" else "grade"),
+            {},
+        )
         total = sum(requirement.values())
         covered = sum(
             allocation.get(key, 0)
             for key in requirement
             if metadata is None or key in metadata
         )
-        first = next((item for item in task if isinstance(item, dict)), {})
-        planner = first.get("_Planner", {}) if isinstance(first, dict) else {}
-        mode = planner_mode(planner)
         is_experimental = first.get("Kind") == "ExperimentalEffect"
         if is_experimental and first.get("_ParentPlanId"):
             continue
@@ -2623,7 +2892,10 @@ def select_operation_action(
         module = str(plan.get("module") or "Module")
         blueprint = str(plan.get("blueprint") or "Blueprint")
         grade = int(plan.get("targetGrade", 0) or 0)
-        identity = f"{module} · {blueprint} · G{grade}"
+        identity = (
+            f"{module} · {blueprint} · G{grade}"
+            if grade > 0 else f"{module} · {blueprint}"
+        )
         engineer_options = engineer_options_for_plan(
             plan, engineer_rows, blueprint_records
         )
@@ -2642,7 +2914,11 @@ def select_operation_action(
             }
         label = str(plan.get("experimental") or "Experimental Effect")
         if experimental:
-            title = f"Experimental · {identity} · {label}"
+            title = (
+                f"Experimental · {identity}"
+                if str(plan.get("planMode") or "") == "experimental_only"
+                else f"Experimental · {identity} · {label}"
+            )
             reason = "The target Grade is complete and the planned Experimental materials are ready."
             after = "After the Journal confirms the Experimental, continue with the next unfinished plan."
             kind = "EXPERIMENTAL_CRAFT"
@@ -3320,6 +3596,31 @@ def _craft_can_bind(
     )
 
 
+def _experimental_craft_matches(
+    planner: dict[str, Any], event: dict[str, Any]
+) -> bool:
+    """Match Frontier machine IDs, EDEC IDs and localized effect names."""
+    journal_value = str(
+        event.get("ApplyExperimentalEffect")
+        or event.get("ExperimentalEffect") or ""
+    )
+    journal_key = normalize(journal_value)
+    canonical_name = JOURNAL_EXPERIMENTAL_NAMES.get(journal_key, "")
+    event_keys = {
+        normalize(value) for value in (
+            journal_value, canonical_name,
+            event.get("ExperimentalEffect_Localised"),
+        ) if value
+    }
+    planner_keys = {
+        normalize(value) for value in (
+            planner.get("experimental_id"),
+            planner.get("experimental_name"),
+        ) if value
+    }
+    return bool(event_keys.intersection(planner_keys))
+
+
 def apply_engineer_craft(
     path: Path, ship: str, event: dict[str, Any], preferred_plan_id: str = "",
     ship_id: object = "", eligible_plan_ids: set[str] | None = None,
@@ -3372,7 +3673,7 @@ def apply_engineer_craft(
                 planner
                 and mode in {"experimental_only", "combined"}
                 and not planner.get("experimental_complete")
-                and str(planner.get("experimental_id") or "") == wanted
+                and _experimental_craft_matches(planner, event)
                 and _craft_can_bind(planner, first, event, ship_id)
                 and (
                     mode == "experimental_only"
@@ -4967,7 +5268,10 @@ def powerplay_journal_overview(events):
     }
 
 
-def build_state(package_root, selected_ship="", preferred_plan_id=""):
+def build_state(
+    package_root, selected_ship="", preferred_plan_id="",
+    trader_preference="confirmed",
+):
     data_dir = runtime_data_dir(package_root)
     profile_identity, commander_name = _journal_profile_identity()
     journal_path_valid = journal_dir().is_dir()
@@ -5007,7 +5311,52 @@ def build_state(package_root, selected_ship="", preferred_plan_id=""):
         (str(row["id"]) for row in fleet_state.get("ships", [])
          if row.get("label") == ship), "",
     )
-    module_slots = latest_loadout_slots(ship_events, selected_ship_id)
+    selected_ship_type = next(
+        (str(row.get("type") or "") for row in fleet_state.get("ships", [])
+         if row.get("label") == ship), "",
+    )
+    # Physical module state starts with fleet/loadout events but must also see
+    # later EngineerCraft events, which ship_journal_events deliberately omits.
+    module_slots = latest_loadout_slots(profile_events, selected_ship_id)
+    engineering_slots = engineering_loadout_rows(
+        module_slots, blueprint_catalog(reference_data_dir(package_root)),
+    )
+    ship_catalog = read_json(package_root / "ed_data" / "ships.json", [])
+    selected_ship_data = next(
+        (
+            row for row in (ship_catalog if isinstance(ship_catalog, list) else [])
+            if isinstance(row, dict) and normalize(
+                row.get("symbol") or ""
+            ) == normalize(selected_ship_type)
+            or isinstance(row, dict) and normalize(
+                row.get("name") or ""
+            ) == normalize(selected_ship_type)
+        ),
+        {},
+    )
+    engineering_ship_slots = ship_slot_layout(
+        selected_ship_data, module_slots,
+        blueprint_catalog(reference_data_dir(package_root)),
+    )
+    selected_loadout = next(
+        (
+            event for event in reversed(ship_events)
+            if event.get("event") == "Loadout"
+            and str(event.get("ShipID") or event.get("_ResolvedShipID") or "")
+            == selected_ship_id
+        ),
+        {},
+    )
+    selected_ship_stats = {
+        "jumpRange": selected_loadout.get("MaxJumpRange"),
+        "unladenMass": selected_loadout.get("UnladenMass"),
+        "cargoCapacity": selected_loadout.get("CargoCapacity"),
+        "fuelCapacity": (
+            selected_loadout.get("FuelCapacity", {}).get("Main")
+            if isinstance(selected_loadout.get("FuelCapacity"), dict)
+            else selected_loadout.get("FuelCapacity")
+        ),
+    }
     wishlist_required = required_materials(tasks, metadata, consistency_issues)
     unlock_catalog = load_unlock_catalog(data_dir, package_root)
     unlock_signals = engineer_unlock_signals(unlock_events, unlock_catalog)
@@ -5169,7 +5518,7 @@ def build_state(package_root, selected_ship="", preferred_plan_id=""):
         resolved_stations.append(resolved)
     trader_by_category = {
         category: find_nearest_catalog_trader(
-            category, position, resolved_stations
+            category, position, resolved_stations, trader_preference
         )
         if isinstance(position, list) and len(position) == 3 else None
         for category in ("Raw", "Manufactured", "Encoded")
@@ -5469,7 +5818,11 @@ def build_state(package_root, selected_ship="", preferred_plan_id=""):
         "activeShipId": str(fleet_state.get("active_id") or ""),
         "activeShipKnown": active_ship in ships,
         "selectedShipId": selected_ship_id,
+        "selectedShipType": selected_ship_type,
+        "selectedShipStats": selected_ship_stats,
         "moduleSlots": module_slots,
+        "engineeringModuleSlots": engineering_slots,
+        "engineeringShipSlots": engineering_ship_slots,
         "system": latest_location.get("StarSystem") or "Unknown system",
         "currentPosition": position or [],
         "techBrokerTrack": dict(tracked_row) if tracked_row else {},
@@ -5510,6 +5863,7 @@ def build_state(package_root, selected_ship="", preferred_plan_id=""):
         "missingKinds": len(missing),
         "trades": cards,
         "traderRoute": route.get("stops", []),
+        "traderPreference": trader_preference,
         "routeDistance": float(route.get("total_distance_ly", 0.0) or 0.0),
         "tradeHistory": trade_history,
         "blueprints": blueprint_state,

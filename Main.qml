@@ -446,6 +446,32 @@ ApplicationWindow {
         }
     }
 
+    // Subtle structural texture for large cockpit surfaces. It remains faint
+    // enough to preserve text contrast and disappears with enhanced visuals.
+    Canvas {
+        anchors.fill: parent
+        z: -18
+        visible: window.enhancedVisuals
+        opacity: cockpit.theme === "crimson_light" ? 0.025 : 0.045
+        property color gridColor: window.accentSecondary
+        onGridColorChanged: requestPaint()
+        onWidthChanged: requestPaint()
+        onHeightChanged: requestPaint()
+        onPaint: {
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+            ctx.strokeStyle = gridColor
+            ctx.lineWidth = 1
+            var step = 64
+            for (var x = step; x < width; x += step) {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke()
+            }
+            for (var y = step; y < height; y += step) {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke()
+            }
+        }
+    }
+
     Item {
         anchors.fill: parent
         z: -15
@@ -494,7 +520,7 @@ ApplicationWindow {
         Accessible.description: helpText
         ToolTip.visible: hovered && helpText.length > 0
         ToolTip.text: helpText
-        scale: down ? 0.97 : (hovered ? 1.015 : 1.0)
+        scale: down ? 0.975 : (hovered ? 1.01 : 1.0)
         Behavior on scale {
             enabled: !window.reducedMotion
             NumberAnimation { duration: 100; easing.type: Easing.OutCubic }
@@ -519,6 +545,30 @@ ApplicationWindow {
                    : (control.hovered ? hover : inputBackground)
             border.width: control.activeFocus ? 2 : (control.selected ? 0 : 1)
             border.color: control.activeFocus || control.hovered ? control.accentColor : borderTone
+            Rectangle {
+                visible: window.enhancedVisuals && (control.selected || control.hovered)
+                anchors.fill: parent
+                anchors.margins: control.selected ? -2 : 1
+                radius: parent.radius + 2
+                color: "transparent"
+                border.width: 1
+                border.color: Qt.rgba(control.accentColor.r,
+                                      control.accentColor.g,
+                                      control.accentColor.b,
+                                      control.selected ? 0.38 : 0.16)
+            }
+            Rectangle {
+                visible: window.enhancedVisuals && control.selected
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.leftMargin: 8
+                anchors.rightMargin: 8
+                anchors.topMargin: 1
+                height: 1
+                radius: 1
+                color: Qt.rgba(1, 1, 1, 0.34)
+            }
             Behavior on color { enabled: !window.reducedMotion; ColorAnimation { duration: 130 } }
             Behavior on border.color { enabled: !window.reducedMotion; ColorAnimation { duration: 130 } }
         }
@@ -579,6 +629,8 @@ ApplicationWindow {
         background: Rectangle {
             radius: 7
             color: divider
+            border.width: 1
+            border.color: Qt.rgba(textMuted.r, textMuted.g, textMuted.b, 0.16)
         }
         contentItem: Item {
             Rectangle {
@@ -601,6 +653,18 @@ ApplicationWindow {
                 Behavior on width {
                     enabled: !window.reducedMotion
                     NumberAnimation { duration: 420; easing.type: Easing.OutCubic }
+                }
+                Rectangle {
+                    visible: window.enhancedVisuals && parent.width > 12
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.leftMargin: 3
+                    anchors.rightMargin: 3
+                    anchors.topMargin: 2
+                    height: 1
+                    radius: 1
+                    color: Qt.rgba(1, 1, 1, 0.34)
                 }
             }
         }
@@ -824,7 +888,7 @@ ApplicationWindow {
 
     Rectangle {
         id: sidebar
-        width: window.compactSidebar ? 82 : 230
+        width: window.compactSidebar ? 76 : 210
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         color: backgroundSecondary
@@ -1634,6 +1698,31 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Label { text: "TRADER ROUTE"; color: textPrimary; font.pixelSize: 17; font.bold: true }
                         Item { Layout.fillWidth: true }
+                        ComboBox {
+                            id: traderPreferenceChoice
+                            Layout.preferredWidth: 124
+                            Layout.preferredHeight: 32
+                            model: ["CONFIRMED", "NEAREST"]
+                            currentIndex: cockpit.traderPreference === "nearest" ? 1 : 0
+                            onActivated: cockpit.setTraderPreference(
+                                currentIndex === 1 ? "nearest" : "confirmed"
+                            )
+                            contentItem: Label {
+                                leftPadding: 10
+                                text: traderPreferenceChoice.displayText
+                                color: cyan; font.pixelSize: 10; font.bold: true
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                radius: 9; color: inputBackground
+                                border.color: traderPreferenceChoice.activeFocus
+                                              ? cyan : borderTone
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: currentIndex === 1
+                                          ? "Prefer the shortest catalog distance; confidence is secondary."
+                                          : "Prefer Journal-confirmed trader types; distance is secondary."
+                        }
                         Label {
                             text: cockpit.routeDistance.toFixed(1) + " LY"
                             color: cyan; font.pixelSize: 12; font.bold: true
@@ -2648,6 +2737,22 @@ ApplicationWindow {
         objectName: "qa-page-engineering"
         property string selectedCategory: window.engineeringCategoryState
         property string selectedModule: window.engineeringModuleState
+        property string selectedInstalledSlot: ""
+        property var selectedShipData: {
+            var symbol = String(cockpit.selectedShipType || "")
+            var normalized = symbol.toLowerCase().replace(/[^a-z0-9]/g, "")
+            var rows = cockpit.engineeringShipCatalog || []
+            for (var index = 0; index < rows.length; ++index) {
+                var rowSymbol = String(rows[index].symbol || "")
+                var rowName = String(rows[index].name || "")
+                if (rowSymbol.toLowerCase() === symbol.toLowerCase()
+                        || rowName.toLowerCase() === symbol.toLowerCase()
+                        || rowSymbol.toLowerCase().replace(/[^a-z0-9]/g, "") === normalized
+                        || rowName.toLowerCase().replace(/[^a-z0-9]/g, "") === normalized)
+                    return rows[index]
+            }
+            return ({})
+        }
         onSelectedCategoryChanged: window.engineeringCategoryState = selectedCategory
         onSelectedModuleChanged: window.engineeringModuleState = selectedModule
         property var categoryOrder: [
@@ -2663,6 +2768,44 @@ ApplicationWindow {
             })
             return names.sort()
         }
+        property var installedModules: {
+            var rows = (cockpit.engineeringInstalledModules || []).filter(function(row) {
+                return row.category === engineeringPage.selectedCategory
+            })
+            if (rows.length)
+                return rows
+            return engineeringPage.moduleNames.map(function(name) {
+                return { module: name, slot: "", sizeRating: "", blueprintCount: 0 }
+            })
+        }
+        property var selectedBlueprintChoices: cockpit.blueprintCatalog.filter(function(row) {
+            return row.category === engineeringPage.selectedCategory
+                && row.module === engineeringPage.selectedModule
+                && (blueprintSearch.text.length === 0
+                    || row.name.toLowerCase().indexOf(blueprintSearch.text.toLowerCase()) >= 0)
+        })
+        property string selectedModuleSlotLabel: {
+            var rows = cockpit.moduleSlotOptions || []
+            for (var index = 0; index < rows.length; ++index) {
+                if (rows[index].slot === cockpit.selectedModuleSlot) {
+                    var slot = String(rows[index].slot || "")
+                    var label = String(rows[index].slotLabel || slot)
+                    var optional = /^Slot(\d+)_Size(\d+)$/i.exec(slot)
+                    if (optional)
+                        return "OPTIONAL SLOT " + parseInt(optional[1])
+                               + " · SIZE " + optional[2]
+                    var utility = /^TinyHardpoint(\d+)$/i.exec(slot)
+                    if (utility)
+                        return "UTILITY SLOT " + parseInt(utility[1])
+                    var hardpoint = /^(Small|Medium|Large|Huge)Hardpoint(\d+)$/i.exec(slot)
+                    if (hardpoint)
+                        return hardpoint[1].toUpperCase() + " HARDPOINT "
+                               + parseInt(hardpoint[2])
+                    return label
+                }
+            }
+            return cockpit.selectedModuleSlot || "NO PHYSICAL SLOT"
+        }
         function firstModuleFor(category) {
             var names = []
             cockpit.blueprintCatalog.forEach(function(row) {
@@ -2671,6 +2814,24 @@ ApplicationWindow {
             })
             names.sort()
             return names.length ? names[0] : ""
+        }
+        function selectPhysicalSlot(row) {
+            if (!row || !row.engineerable)
+                return
+            selectedCategory = String(row.category || "")
+            selectedModule = String(row.module || "")
+            selectedInstalledSlot = String(row.slot || "")
+            var choices = cockpit.blueprintCatalog.filter(function(blueprint) {
+                return blueprint.category === selectedCategory
+                    && blueprint.module === selectedModule
+            })
+            var currentMatches = choices.some(function(blueprint) {
+                return blueprint.id === cockpit.selectedBlueprint.id
+            })
+            if (!currentMatches && choices.length)
+                cockpit.selectBlueprint(choices[0].id)
+            if (selectedInstalledSlot)
+                cockpit.setSelectedModuleSlot(selectedInstalledSlot)
         }
         visible: true
         anchors.fill: parent
@@ -2684,8 +2845,8 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.left: parent.left
                 anchors.top: parent.top
-                Label { text: "ENGINEERING PLANNER"; color: textPrimary; font.pixelSize: 24; font.bold: true }
-                Label { text: "Category → module → modification → grade → engineer → experimental"; color: muted; font.pixelSize: 13 }
+                Label { text: "SHIP ENGINEERING"; color: textPrimary; font.pixelSize: 24; font.bold: true }
+                Label { text: "Ship → physical module → modification → target"; color: muted; font.pixelSize: 13 }
             }
             RowLayout {
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -2727,118 +2888,205 @@ ApplicationWindow {
             }
         }
         RowLayout {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: 8
-            Repeater {
-                model: engineeringPage.categoryOrder
-                delegate: CockpitButton {
-                    required property string modelData
-                    text: modelData.toUpperCase()
-                    selected: engineeringPage.selectedCategory === modelData
-                    onClicked: {
-                        engineeringPage.selectedCategory = modelData
-                        engineeringPage.selectedModule = engineeringPage.firstModuleFor(modelData)
-                        blueprintSearch.text = ""
-                    }
-                }
-            }
-        }
-        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 14
             ShadowCard {
-                Layout.preferredWidth: window.compactSidebar ? 360 : 430
+                Layout.preferredWidth: 300
                 Layout.fillHeight: true
+                visible: !window.narrowWorkspace
                 ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 16; spacing: 10
-                    RowLayout {
+                    anchors.fill: parent; anchors.margins: 16; spacing: 12
+                    Label {
+                        text: "ACTIVE SHIP"
+                        color: cyan; font.pixelSize: 13; font.bold: true
+                    }
+                    ComboBox {
+                        id: engineeringShipSelector
                         Layout.fillWidth: true
-                        Label { text: "1 · MODULE"; color: cyan; font.pixelSize: 13; font.bold: true }
-                        Item { Layout.fillWidth: true }
+                        Layout.preferredHeight: 44
+                        model: cockpit.ships
+                        currentIndex: Math.max(0, cockpit.ships.indexOf(cockpit.ship))
+                        onActivated: {
+                            engineeringPage.selectedInstalledSlot = ""
+                            cockpit.setSelectedShip(currentText)
+                        }
+                        contentItem: Label {
+                            leftPadding: 12
+                            text: engineeringShipSelector.displayText
+                            color: textPrimary
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                        background: Rectangle {
+                            radius: 9; color: inputBackground
+                            border.width: engineeringShipSelector.activeFocus ? 2 : 1
+                            border.color: engineeringShipSelector.activeFocus ? cyan : borderTone
+                        }
+                    }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 270
+                        radius: 12; color: backgroundSecondary
+                        border.width: 1; border.color: borderTone
+                        clip: true
+                        Image {
+                            anchors.centerIn: parent
+                            // The source schematics share a generous 1200x800
+                            // safety canvas. Compensate for that transparent
+                            // perimeter so the actual hull uses this panel.
+                            width: parent.width * 1.58
+                            height: parent.height * 1.58
+                            source: engineeringPage.selectedShipData.symbol
+                                    ? "assets/ships/" + engineeringPage.selectedShipData.symbol + ".svg"
+                                    : ""
+                            fillMode: Image.PreserveAspectFit
+                            asynchronous: true
+                        }
                         Label {
-                            text: engineeringPage.moduleNames.length
+                            anchors.centerIn: parent
+                            visible: !engineeringPage.selectedShipData.symbol
+                            text: "NO SHIP SCHEMATIC"
                             color: muted; font.pixelSize: 11; font.bold: true
                         }
                     }
-                    ListView {
-                        id: moduleList
+                    Label {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Math.min(230, contentHeight)
-                        clip: true; spacing: 6
-                        model: engineeringPage.moduleNames
-                        ScrollBar.vertical: CockpitScrollBar {}
-                        delegate: Rectangle {
-                            required property string modelData
-                            width: moduleList.width - 10; height: 50; radius: 10
-                            color: engineeringPage.selectedModule === modelData
-                                   ? active : moduleMouse.containsMouse ? hover : panelRaised
-                            border.width: engineeringPage.selectedModule === modelData ? 2 : 1
-                            border.color: engineeringPage.selectedModule === modelData ? cyan : borderTone
-                            Label {
-                                anchors.left: parent.left; anchors.leftMargin: 12
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: parent.width - 24
-                                text: modelData; color: textPrimary; font.pixelSize: 14; font.bold: true
-                                elide: Text.ElideRight
-                            }
-                            MouseArea {
-                                id: moduleMouse
-                                anchors.fill: parent; hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: engineeringPage.selectedModule = modelData
+                        text: cockpit.ship
+                        color: textPrimary; font.pixelSize: 17; font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: (engineeringPage.selectedShipData.manufacturer || "UNKNOWN MANUFACTURER")
+                              + " · " + String(engineeringPage.selectedShipData.size || "").toUpperCase()
+                        color: muted; font.pixelSize: 10; font.bold: true
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                    }
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 2; columnSpacing: 8; rowSpacing: 8
+                        Repeater {
+                            model: [
+                                {label: "MAX SPEED", value: (engineeringPage.selectedShipData.maximumSpeed || "—") + " m/s"},
+                                {label: "BOOST", value: (engineeringPage.selectedShipData.boost || "—") + " m/s"},
+                                {label: "JUMP RANGE", value: cockpit.selectedShipStats.jumpRange !== null
+                                        && cockpit.selectedShipStats.jumpRange !== undefined
+                                        ? Number(cockpit.selectedShipStats.jumpRange).toFixed(1) + " LY" : "—"},
+                                {label: "UNLADEN MASS", value: cockpit.selectedShipStats.unladenMass !== null
+                                        && cockpit.selectedShipStats.unladenMass !== undefined
+                                        ? Number(cockpit.selectedShipStats.unladenMass).toFixed(1) + " t" : "—"},
+                                {label: "CARGO", value: cockpit.selectedShipStats.cargoCapacity !== null
+                                        && cockpit.selectedShipStats.cargoCapacity !== undefined
+                                        ? cockpit.selectedShipStats.cargoCapacity + " t" : "—"},
+                                {label: "ENGINEERABLE", value: cockpit.engineeringInstalledModules.length}
+                            ]
+                            delegate: Rectangle {
+                                required property var modelData
+                                Layout.fillWidth: true; Layout.preferredHeight: 64
+                                radius: 9; color: panelRaised
+                                ColumnLayout {
+                                    anchors.fill: parent; anchors.margins: 9; spacing: 2
+                                    Label { text: modelData.value; color: textPrimary; font.pixelSize: 15; font.bold: true }
+                                    Label { text: modelData.label; color: muted; font.pixelSize: 9; font.bold: true }
+                                }
                             }
                         }
                     }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label { text: "2 · MODIFICATION"; color: orange; font.pixelSize: 13; font.bold: true }
-                        Item { Layout.fillWidth: true }
-                        Label { text: blueprintList.count; color: muted; font.pixelSize: 11; font.bold: true }
-                    }
                     Label {
-                        visible: engineeringPage.selectedModule.length === 0
-                        text: "Choose a module above."
-                        color: muted; font.pixelSize: 12
+                        Layout.fillWidth: true
+                        text: "Select any ship in your fleet to plan without switching ships in-game."
+                        color: muted; font.pixelSize: 10; wrapMode: Text.WordWrap
                     }
-                    ListView {
-                        id: blueprintList
-                        Layout.fillWidth: true; Layout.fillHeight: true
-                        clip: true; spacing: 7
-                        property string query: blueprintSearch.text.toLowerCase()
-                        model: cockpit.blueprintCatalog.filter(function(row) {
-                            return row.category === engineeringPage.selectedCategory
-                                && row.module === engineeringPage.selectedModule
-                                && (blueprintList.query.length === 0
-                                    || row.name.toLowerCase().indexOf(blueprintList.query) >= 0)
-                        })
-                        ScrollBar.vertical: CockpitScrollBar {}
-                        delegate: Rectangle {
+                    Item { Layout.fillHeight: true }
+                }
+            }
+            ShadowCard {
+                Layout.preferredWidth: window.compactSidebar ? 600 : 650
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                RowLayout {
+                    anchors.fill: parent; anchors.margins: 14; spacing: 12
+                    property var leftSlots: cockpit.engineeringShipSlots.filter(function(row) {
+                        return row.group === "CORE INTERNALS" || row.group === "OPTIONAL INTERNALS"
+                    })
+                    property var rightSlots: cockpit.engineeringShipSlots.filter(function(row) {
+                        return row.group === "HARDPOINTS" || row.group === "UTILITY MOUNTS"
+                    })
+                    Repeater {
+                        model: [parent.leftSlots, parent.rightSlots]
+                        delegate: ListView {
                             required property var modelData
-                            width: blueprintList.width - 10; height: 94; radius: 11
-                            color: blueprintMouse.containsMouse ? hover : panelRaised
-                            border.width: cockpit.selectedBlueprint.id === modelData.id ? 2 : 1
-                            border.color: cockpit.selectedBlueprint.id === modelData.id ? cyan : borderTone
-                            MouseArea {
-                                id: blueprintMouse
-                                anchors.fill: parent; hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: cockpit.selectBlueprint(modelData.id)
+                            Layout.fillWidth: true; Layout.fillHeight: true
+                            clip: true; spacing: 4
+                            model: modelData
+                            // The two slot columns normally fit without a
+                            // scrollbar. Keep wheel/touch scrolling available
+                            // for short windows without drawing permanent rails.
+                            ScrollBar.vertical: CockpitScrollBar {
+                                policy: ScrollBar.AlwaysOff
                             }
-                            ColumnLayout {
-                                anchors.fill: parent; anchors.margins: 14
-                                RowLayout {
-                                    Layout.fillWidth: true
+                            section.property: "group"
+                            section.criteria: ViewSection.FullString
+                            section.delegate: Label {
+                                required property string section
+                                width: ListView.view.width - 8; height: 30
+                                verticalAlignment: Text.AlignVCenter
+                                text: section; color: cyan
+                                font.pixelSize: 12; font.bold: true
+                            }
+                            delegate: Rectangle {
+                                required property var modelData
+                                width: ListView.view.width - 8; height: 38; radius: 8
+                                property bool exactSelection:
+                                    engineeringPage.selectedInstalledSlot === String(modelData.slot || "")
+                                color: exactSelection ? active
+                                     : slotMouse.containsMouse ? hover : panelRaised
+                                border.width: exactSelection ? 2 : 1
+                                border.color: exactSelection ? cyan : borderTone
+                                Rectangle {
+                                    anchors.left: parent.left; anchors.leftMargin: 7
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 30; height: 26; radius: 6
+                                    color: backgroundSecondary
                                     Label {
-                                        text: modelData.name; color: textPrimary; font.pixelSize: 15; font.bold: true
-                                        Layout.fillWidth: true; elide: Text.ElideRight
+                                        anchors.centerIn: parent
+                                        text: modelData.sizeRating || modelData.slotBadge
+                                        color: cyan; font.pixelSize: 11; font.bold: true
                                     }
-                                    Label { text: "G" + modelData.maxGrade; color: orange; font.pixelSize: 14; font.bold: true }
                                 }
                                 Label {
-                                    text: modelData.engineers
-                                    color: muted; font.pixelSize: 12
-                                    Layout.fillWidth: true; elide: Text.ElideRight
+                                    anchors.left: parent.left; anchors.leftMargin: 45
+                                    anchors.right: slotStatus.left; anchors.rightMargin: 6
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: modelData.empty
+                                          ? (modelData.restriction
+                                             ? String(modelData.restriction).replace(/([A-Z])/g, " $1").toUpperCase()
+                                             : "EMPTY")
+                                          : modelData.module
+                                    color: modelData.empty ? textDisabled : textPrimary
+                                    font.pixelSize: 11; font.bold: !modelData.empty
+                                    elide: Text.ElideRight
+                                }
+                                Label {
+                                    id: slotStatus
+                                    anchors.right: parent.right; anchors.rightMargin: 9
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: modelData.engineered
+                                          ? "🔧 G" + modelData.engineeringGrade
+                                          : modelData.engineerable ? "PLAN ›" : ""
+                                    color: modelData.engineered ? orange
+                                         : modelData.engineerable ? green : muted
+                                    font.pixelSize: 9; font.bold: true
+                                }
+                                MouseArea {
+                                    id: slotMouse
+                                    anchors.fill: parent; hoverEnabled: true
+                                    enabled: modelData.engineerable
+                                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: engineeringPage.selectPhysicalSlot(modelData)
                                 }
                             }
                         }
@@ -2846,30 +3094,80 @@ ApplicationWindow {
                 }
             }
             ShadowCard {
+                Layout.preferredWidth: window.compactSidebar ? 520 : 650
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 18; spacing: 12
+                    anchors.fill: parent; anchors.margins: 14; spacing: 9
                     Label {
                         visible: !cockpit.selectedBlueprint.id
                         text: "SELECT A BLUEPRINT FROM THE CATALOG"
                         color: muted; font.pixelSize: 15; font.bold: true
                         Layout.alignment: Qt.AlignHCenter
                     }
+                    RowLayout {
+                        visible: !!cockpit.selectedBlueprint.id
+                                 && engineeringPage.selectedBlueprintChoices.length > 0
+                        Layout.fillWidth: true
+                        Label {
+                            text: "MODIFICATION"
+                            color: orange; font.pixelSize: 11; font.bold: true
+                        }
+                        ComboBox {
+                            id: engineeringModificationSelector
+                            Layout.fillWidth: true; Layout.preferredHeight: 42
+                            model: engineeringPage.selectedBlueprintChoices
+                            textRole: "name"
+                            currentIndex: {
+                                for (var index = 0; index < model.length; ++index) {
+                                    if (model[index].id === cockpit.selectedBlueprint.id)
+                                        return index
+                                }
+                                return model.length ? 0 : -1
+                            }
+                            onActivated: {
+                                if (currentIndex < 0 || currentIndex >= model.length)
+                                    return
+                                cockpit.selectBlueprint(model[currentIndex].id)
+                                if (engineeringPage.selectedInstalledSlot)
+                                    cockpit.setSelectedModuleSlot(engineeringPage.selectedInstalledSlot)
+                            }
+                            contentItem: Label {
+                                leftPadding: 12
+                                text: engineeringModificationSelector.displayText
+                                color: textPrimary; verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+                            background: Rectangle {
+                                radius: 9; color: backgroundSecondary
+                                border.width: 1
+                                border.color: engineeringModificationSelector.activeFocus ? cyan : borderTone
+                            }
+                        }
+                    }
                     ScrollView {
                         id: engineeringDetailScroll
                         visible: !!cockpit.selectedBlueprint.id
-                        Layout.fillWidth: true; Layout.fillHeight: true
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
                         clip: true
                         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                         ColumnLayout {
                             id: blueprintDetail
                             width: engineeringDetailScroll.availableWidth
-                            spacing: 10
+                            spacing: 7
                             property var guideData: (
                             cockpit.selectedBlueprint.grades
                             && cockpit.selectedBlueprint.grades.length >= cockpit.targetGrade
                         ) ? cockpit.selectedBlueprint.grades[cockpit.targetGrade - 1] : ({})
+                        property var selectedExperimentalDetails: {
+                            var rows = cockpit.selectedBlueprint.experimentals || []
+                            for (var index = 0; index < rows.length; ++index) {
+                                if (rows[index].id === cockpit.selectedExperimentalId)
+                                    return rows[index]
+                            }
+                            return ({})
+                        }
                         Label {
                             text: (cockpit.selectedBlueprint.module || "") + " · "
                                   + (cockpit.selectedBlueprint.name || "")
@@ -2882,8 +3180,34 @@ ApplicationWindow {
                             Layout.fillWidth: true; elide: Text.ElideRight
                         }
                         Rectangle {
+                            visible: !!cockpit.selectedBlueprint.installedEngineeringKnown
+                            Layout.fillWidth: true; Layout.preferredHeight: 42
+                            radius: 10
+                            color: cockpit.selectedBlueprint.installedMatchesSelection
+                                   ? successBackground : panelRaised
+                            border.width: 1
+                            border.color: cockpit.selectedBlueprint.installedMatchesSelection
+                                          ? green : orange
+                            Label {
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.margins: 12
+                                text: "🔧 INSTALLED · "
+                                      + cockpit.selectedBlueprint.installedBlueprint
+                                      + " · G" + cockpit.selectedBlueprint.installedGrade
+                                      + (cockpit.selectedBlueprint.installedExperimentalEffect
+                                         ? " · " + cockpit.selectedBlueprint.installedExperimentalEffect : "")
+                                      + (cockpit.selectedBlueprint.installedMatchesSelection
+                                         ? "" : " · SELECTED BLUEPRINT WOULD REPLACE THIS")
+                                color: cockpit.selectedBlueprint.installedMatchesSelection
+                                       ? green : orange
+                                font.pixelSize: 11; font.bold: true
+                                elide: Text.ElideRight
+                            }
+                        }
+                        Rectangle {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Math.max(72, modificationGuideText.implicitHeight + 28)
+                            Layout.preferredHeight: Math.max(64, modificationGuideText.implicitHeight + 22)
                             radius: 12; color: active
                             border.width: 1; border.color: accentSecondary
                             Label {
@@ -2897,91 +3221,90 @@ ApplicationWindow {
                             }
                         }
                         RowLayout {
-                            Layout.fillWidth: true
-                            Label {
-                                text: cockpit.editingPlanIndex >= 0 ? "EDITING MODULE" : "MODULE INSTANCE"
-                                color: cockpit.editingPlanIndex >= 0 ? orange : cyan
-                                font.pixelSize: 10; font.bold: true
-                            }
-                            TextField {
-                                id: moduleInstanceField
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 44
-                                text: cockpit.moduleInstance
-                                onEditingFinished: cockpit.setModuleInstance(text)
-                                color: textPrimary; selectByMouse: true
-                                font.pixelSize: 13
-                                leftPadding: 12; rightPadding: 12
-                                background: Rectangle {
-                                    radius: 9; color: backgroundSecondary
-                                    border.width: 1
-                                    border.color: moduleInstanceField.activeFocus ? cyan : borderTone
+                            Layout.fillWidth: true; spacing: 8
+                            Rectangle {
+                                Layout.fillWidth: true; Layout.preferredHeight: 32
+                                radius: 9
+                                color: cockpit.selectedModuleSlot ? active : panelRaised
+                                border.width: 1
+                                border.color: cockpit.selectedModuleSlot ? cyan : orange
+                                Label {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 12; anchors.rightMargin: 12
+                                    text: cockpit.selectedModuleSlot
+                                          ? "BOUND TO · "
+                                            + engineeringPage.selectedModuleSlotLabel
+                                            + " · " + engineeringPage.selectedModule.toUpperCase()
+                                          : "NOT YET BOUND · JOURNAL CONFIRMATION REQUIRED"
+                                    color: cockpit.selectedModuleSlot ? cyan : orange
+                                    font.pixelSize: 10; font.bold: true
+                                    verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
                                 }
                             }
                             CockpitButton {
                                 visible: cockpit.editingPlanIndex >= 0
+                                Layout.preferredWidth: 104
                                 text: "CANCEL EDIT"
                                 onClicked: cockpit.cancelPlanEdit()
                             }
                         }
-                        Label { text: "PHYSICAL MODULE SLOT"; color: cyan; font.pixelSize: 12; font.bold: true }
-                        Label {
-                            visible: cockpit.moduleSlotOptions.length > 1
-                            text: cockpit.moduleSlotOptions.length + " matching modules · select the physical slot"
-                            color: textSecondary; font.pixelSize: 11
-                        }
-                        Flow {
-                            Layout.fillWidth: true; spacing: 8
-                            Repeater {
-                                model: cockpit.moduleSlotOptions
-                                delegate: CockpitButton {
-                                    required property var modelData
-                                    text: modelData.slot
-                                    selected: cockpit.selectedModuleSlot === modelData.slot
-                                    onClicked: cockpit.setSelectedModuleSlot(modelData.slot)
-                                }
-                            }
-                        }
-                        Label {
-                            visible: cockpit.moduleSlotOptions.length === 0
-                            text: "No compatible module in the latest Loadout · binding required"
-                            color: error; font.pixelSize: 11
-                        }
                         Label { text: "PLAN MODE"; color: cyan; font.pixelSize: 12; font.bold: true }
-                        Flow {
-                            Layout.fillWidth: true; spacing: 8
-                            CockpitButton { text: "GRADE ONLY"; selected: cockpit.planMode === "grade_only"; onClicked: cockpit.setPlanMode("grade_only") }
-                            CockpitButton { text: "EXPERIMENTAL ONLY"; selected: cockpit.planMode === "experimental_only"; onClicked: cockpit.setPlanMode("experimental_only") }
-                            CockpitButton { text: "GRADE + EXPERIMENTAL"; selected: cockpit.planMode === "combined"; onClicked: cockpit.setPlanMode("combined") }
-                        }
-                        Label { visible: cockpit.planMode !== "experimental_only"; text: "GRADE · CURRENT GRADE"; color: cyan; font.pixelSize: 12; font.bold: true }
                         RowLayout {
+                            Layout.fillWidth: true; spacing: 6
+                            CockpitButton { Layout.fillWidth: true; font.pixelSize: 10; text: "GRADE ONLY"; selected: cockpit.planMode === "grade_only"; onClicked: cockpit.setPlanMode("grade_only") }
+                            CockpitButton { Layout.fillWidth: true; font.pixelSize: 10; text: "EXPERIMENTAL ONLY"; selected: cockpit.planMode === "experimental_only"; onClicked: cockpit.setPlanMode("experimental_only") }
+                            CockpitButton { Layout.fillWidth: true; font.pixelSize: 10; text: "GRADE + EXPERIMENTAL"; selected: cockpit.planMode === "combined"; onClicked: cockpit.setPlanMode("combined") }
+                        }
+                        GridLayout {
                             visible: cockpit.planMode !== "experimental_only"
-                            Repeater {
-                                model: (cockpit.selectedBlueprint.maxGrade || 0) + 1
-                                delegate: CockpitButton {
-                                    required property int index
-                                    text: index === 0 ? "NONE" : "G" + index
-                                    selected: cockpit.currentGrade === index
-                                    enabled: !cockpit.editingGradeComplete
-                                    implicitWidth: 70; implicitHeight: 42
-                                    onClicked: cockpit.setCurrentGrade(index)
+                            Layout.fillWidth: true
+                            columns: width >= 620 ? 2 : 1
+                            columnSpacing: 16; rowSpacing: 7
+                            ColumnLayout {
+                                Layout.fillWidth: true; spacing: 6
+                                Label {
+                                    text: "GRADE · CURRENT GRADE"
+                                    color: cyan; font.pixelSize: 12; font.bold: true
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true; spacing: 6
+                                    Repeater {
+                                        model: (cockpit.selectedBlueprint.maxGrade || 0) + 1
+                                        delegate: CockpitButton {
+                                            required property int index
+                                            Layout.fillWidth: true
+                                            text: index === 0 ? "NONE" : "G" + index
+                                            selected: cockpit.currentGrade === index
+                                            enabled: !cockpit.editingGradeComplete
+                                            implicitWidth: index === 0 ? 62 : 48
+                                            implicitHeight: 38
+                                            onClicked: cockpit.setCurrentGrade(index)
+                                        }
+                                    }
                                 }
                             }
-                        }
-                        Label { visible: cockpit.planMode !== "experimental_only"; text: "TARGET GRADE"; color: cyan; font.pixelSize: 12; font.bold: true }
-                        RowLayout {
-                            visible: cockpit.planMode !== "experimental_only"
-                            Repeater {
-                                model: cockpit.selectedBlueprint.maxGrade || 0
-                                delegate: CockpitButton {
-                                    required property int index
-                                    property int gradeValue: index + 1
-                                    text: "G" + gradeValue
-                                    selected: cockpit.targetGrade === gradeValue
-                                    enabled: !cockpit.editingGradeComplete
-                                    implicitWidth: 70; implicitHeight: 42
-                                    onClicked: cockpit.setTargetGrade(gradeValue)
+                            ColumnLayout {
+                                Layout.fillWidth: true; spacing: 6
+                                Label {
+                                    text: "TARGET GRADE"
+                                    color: cyan; font.pixelSize: 12; font.bold: true
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true; spacing: 6
+                                    Repeater {
+                                        model: cockpit.selectedBlueprint.maxGrade || 0
+                                        delegate: CockpitButton {
+                                            required property int index
+                                            property int gradeValue: index + 1
+                                            Layout.fillWidth: true
+                                            text: "G" + gradeValue
+                                            selected: cockpit.targetGrade === gradeValue
+                                            enabled: !cockpit.editingGradeComplete
+                                            implicitWidth: 48; implicitHeight: 38
+                                            onClicked: cockpit.setTargetGrade(gradeValue)
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2996,7 +3319,7 @@ ApplicationWindow {
                                 model: parent.targetData.ingredients || []
                                 delegate: Rectangle {
                                     required property var modelData
-                                    width: ingredientText.implicitWidth + 28; height: 40; radius: 10
+                                    width: ingredientText.implicitWidth + 24; height: 36; radius: 9
                                     color: modelData.missing > 0 ? errorBackground : successBackground
                                     border.width: 1
                                     border.color: modelData.missing > 0 ? error : success
@@ -3009,72 +3332,97 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        Label { text: "ENGINEER DESTINATION"; color: cyan; font.pixelSize: 12; font.bold: true }
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: 6
-                            Repeater {
+                        RowLayout {
+                            Layout.fillWidth: true; spacing: 8
+                            Label {
+                                text: "ENGINEER"
+                                color: cyan; font.pixelSize: 11; font.bold: true
+                            }
+                            ComboBox {
+                                id: engineeringEngineerSelector
+                                Layout.fillWidth: true; Layout.preferredHeight: 38
                                 model: cockpit.selectedBlueprint.engineerOptions || []
-                                delegate: CockpitButton {
-                                    required property var modelData
-                                    text: modelData.name + " · " + modelData.system
-                                          + " · G" + modelData.capabilityGrade
-                                          + (modelData.commanderRank > 0
-                                             ? " · Rank " + modelData.commanderRank
-                                             : "")
-                                    selected: cockpit.selectedEngineer === modelData.name
-                                    onClicked: cockpit.setSelectedEngineer(modelData.name)
+                                textRole: "name"
+                                currentIndex: {
+                                    for (var index = 0; index < model.length; ++index) {
+                                        if (model[index].name === cockpit.selectedEngineer)
+                                            return index
+                                    }
+                                    return model.length ? 0 : -1
+                                }
+                                onActivated: {
+                                    if (currentIndex >= 0 && currentIndex < model.length)
+                                        cockpit.setSelectedEngineer(model[currentIndex].name)
+                                }
+                                contentItem: Label {
+                                    leftPadding: 12
+                                    text: engineeringEngineerSelector.currentIndex >= 0
+                                          ? engineeringEngineerSelector.model[engineeringEngineerSelector.currentIndex].name
+                                            + " · " + engineeringEngineerSelector.model[engineeringEngineerSelector.currentIndex].system
+                                            + " · G" + engineeringEngineerSelector.model[engineeringEngineerSelector.currentIndex].capabilityGrade
+                                          : "NO ENGINEER AVAILABLE"
+                                    color: textPrimary; verticalAlignment: Text.AlignVCenter
+                                    elide: Text.ElideRight
+                                }
+                                background: Rectangle {
+                                    radius: 9; color: backgroundSecondary
+                                    border.width: 1
+                                    border.color: engineeringEngineerSelector.activeFocus ? cyan : borderTone
                                 }
                             }
                         }
-                        Label { visible: cockpit.planMode !== "grade_only"; text: "EXPERIMENTAL EFFECT"; color: green; font.pixelSize: 13; font.bold: true }
-                        ListView {
-                            Layout.fillWidth: true; Layout.preferredHeight: 302
-                            orientation: ListView.Horizontal
-                            clip: true; spacing: 12
-                            model: cockpit.selectedBlueprint.experimentals || []
+                        Label {
                             visible: cockpit.planMode !== "grade_only"
-                            ScrollBar.horizontal: CockpitScrollBar {}
-                            delegate: Rectangle {
-                                required property var modelData
-                                width: 460; height: 270; radius: 14
-                                color: cockpit.selectedExperimentalId === modelData.id ? successBackground : panelRaised
-                                border.width: cockpit.selectedExperimentalId === modelData.id ? 2 : 1
-                                border.color: cockpit.selectedExperimentalId === modelData.id ? green : borderTone
-                                MouseArea {
-                                    anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                                    enabled: cockpit.planMode !== "grade_only"
-                                    onClicked: cockpit.setSelectedExperimental(
-                                        cockpit.selectedExperimentalId === modelData.id ? "" : modelData.id
-                                    )
-                                }
-                                ColumnLayout {
-                                    anchors.fill: parent; anchors.margins: 16
-                                    spacing: 9
-                                    Label {
-                                        text: modelData.name; color: textPrimary
-                                        font.pixelSize: 17; font.bold: true
+                                     && (cockpit.selectedBlueprint.experimentals || []).length > 0
+                            text: "AVAILABLE EXPERIMENTALS · SELECT DIRECTLY"
+                            color: green; font.pixelSize: 11; font.bold: true
+                        }
+                        GridLayout {
+                            visible: cockpit.planMode !== "grade_only"
+                                     && (cockpit.selectedBlueprint.experimentals || []).length > 0
+                            Layout.fillWidth: true
+                            columns: width >= 920 ? 3 : width >= 580 ? 2 : 1
+                            columnSpacing: 7; rowSpacing: 7
+                            Repeater {
+                                model: cockpit.selectedBlueprint.experimentals || []
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    property bool selectedEffect:
+                                        String(modelData.id || "") === cockpit.selectedExperimentalId
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 66
+                                    radius: 9
+                                    color: selectedEffect ? successBackground
+                                                          : panelRaised
+                                    border.width: selectedEffect ? 2 : 1
+                                    border.color: selectedEffect ? green : borderTone
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 9; spacing: 2
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: modelData.name || "EXPERIMENTAL"
+                                            color: parent.parent.selectedEffect ? green : textPrimary
+                                            font.pixelSize: 11; font.bold: true
+                                            elide: Text.ElideRight
+                                        }
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: "BENEFIT · " + (modelData.benefits || "No listed benefit")
+                                            color: green; font.pixelSize: 9
+                                            elide: Text.ElideRight
+                                        }
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: "TRADE-OFF · " + (modelData.tradeoffs || "No listed drawback")
+                                            color: orange; font.pixelSize: 9
+                                            elide: Text.ElideRight
+                                        }
                                     }
-                                    Label {
-                                        text: modelData.description
-                                        color: textSecondary; font.pixelSize: 13
-                                        wrapMode: Text.WordWrap; Layout.fillWidth: true
-                                        maximumLineCount: 5; elide: Text.ElideRight
-                                    }
-                                    Label {
-                                        text: "BENEFIT · " + modelData.benefits
-                                        color: green; font.pixelSize: 12
-                                        wrapMode: Text.WordWrap; Layout.fillWidth: true
-                                    }
-                                    Label {
-                                        text: "TRADE-OFF · " + modelData.tradeoffs
-                                        color: orange; font.pixelSize: 12
-                                        wrapMode: Text.WordWrap; Layout.fillWidth: true
-                                    }
-                                    Label {
-                                        text: modelData.engineers; color: green; font.pixelSize: 11
-                                        wrapMode: Text.WordWrap; Layout.fillWidth: true
-                                        maximumLineCount: 2; elide: Text.ElideRight
+                                    MouseArea {
+                                        anchors.fill: parent; hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: cockpit.setSelectedExperimental(modelData.id || "")
                                     }
                                 }
                             }
