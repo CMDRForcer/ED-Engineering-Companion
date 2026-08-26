@@ -20,6 +20,9 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtQuick import QQuickWindow
 
 from ed_companion import APP_VERSION
+from ed_companion.i18n import (
+    DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, TranslationCatalog,
+)
 from ed_companion.persistence import atomic_write
 from ed_companion.integrations.inara import (
     INARA_BATCH_WINDOW_SECONDS,
@@ -258,6 +261,16 @@ class CockpitController(QObject):
         self.config_dir = runtime_data_dir(self.package_root)
         self.config_file = self.config_dir / "phase14_graphics.json"
         ui_config = self._load_ui_config()
+        configured_language = str(
+            ui_config.get("interface_language") or DEFAULT_LANGUAGE
+        ).casefold()
+        self._interface_language = (
+            configured_language
+            if configured_language in SUPPORTED_LANGUAGES else DEFAULT_LANGUAGE
+        )
+        self._translations = TranslationCatalog(
+            self.package_root / "ed_data" / "i18n"
+        )
         self._renderer_mode = str(ui_config.get("renderer_mode") or "auto")
         if self._renderer_mode not in {"auto", "gpu", "software"}:
             self._renderer_mode = "auto"
@@ -651,6 +664,7 @@ class CockpitController(QObject):
             "renderer_mode": self._renderer_mode,
             "ui_scale": self._ui_scale,
             "theme": self._theme,
+            "interface_language": self._interface_language,
             "reduced_motion": self._reduced_motion,
             "commander_update_popups": self._commander_update_popups,
             "enhanced_visuals": self._enhanced_visuals,
@@ -2127,6 +2141,22 @@ class CockpitController(QObject):
     restartRequired = Property(bool, lambda self: self._restart_required, notify=rendererChanged)
     uiScale = Property(float, lambda self: self._ui_scale, notify=uiChanged)
     theme = Property(str, lambda self: self._theme, notify=uiChanged)
+    interfaceLanguage = Property(
+        str, lambda self: self._interface_language, notify=uiChanged,
+    )
+    interfaceLanguages = Property(
+        "QVariantList",
+        lambda self: [
+            {
+                "id": language,
+                "label": self._translations.translate(
+                    language, "language.name", language.upper()
+                ),
+            }
+            for language in SUPPORTED_LANGUAGES
+        ],
+        constant=True,
+    )
     reducedMotion = Property(bool, lambda self: self._reduced_motion, notify=uiChanged)
     commanderUpdatePopups = Property(
         bool, lambda self: self._commander_update_popups, notify=uiChanged,
@@ -4893,6 +4923,21 @@ class CockpitController(QObject):
         self._theme = value
         self._save_ui_config()
         self.uiChanged.emit()
+
+    @Slot(str)
+    def setInterfaceLanguage(self, value):
+        value = str(value or "").casefold()
+        if value not in SUPPORTED_LANGUAGES or value == self._interface_language:
+            return
+        self._interface_language = value
+        self._save_ui_config()
+        self.uiChanged.emit()
+
+    @Slot(str, str, result=str)
+    def translate(self, key, fallback=""):
+        return self._translations.translate(
+            self._interface_language, key, fallback
+        )
 
     @Slot(bool)
     def setReducedMotion(self, enabled):

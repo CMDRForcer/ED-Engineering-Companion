@@ -34,11 +34,13 @@ ColumnLayout {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 2
-            Label { text: "COMMANDER LOGBOOK"; color: textPrimary; font.pixelSize: 24; font.bold: true }
-            Label { text: "Profile-isolated Journal highlights · newest first"; color: muted; font.pixelSize: 11 }
+            Label { text: appWindow.t("logbook.title", "COMMANDER LOGBOOK"); color: textPrimary; font.pixelSize: 24; font.bold: true }
+            Label { text: appWindow.t("logbook.subtitle", "Profile-isolated Journal highlights · newest first"); color: muted; font.pixelSize: 11 }
         }
         Label {
-            text: cockpit.journalAuto ? "● LIVE" : "Ⅱ PAUSED"
+                text: cockpit.journalAuto
+                      ? appWindow.t("common.live", "● LIVE")
+                      : appWindow.t("common.paused", "Ⅱ PAUSED")
             color: cockpit.journalAuto ? green : orange
             font.pixelSize: 11
             font.bold: true
@@ -58,7 +60,7 @@ ColumnLayout {
                 spacing: 8
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: "CURRENT SESSION"; color: green; font.pixelSize: 12; font.bold: true }
+                    Label { text: appWindow.t("logbook.current_session", "CURRENT SESSION"); color: green; font.pixelSize: 12; font.bold: true }
                     Item { Layout.fillWidth: true }
                     Label {
                         visible: !!cockpit.currentSession.active
@@ -107,8 +109,8 @@ ColumnLayout {
                     Layout.fillHeight: true
                     visible: !cockpit.currentSession.active
                     symbol: "◷"
-                    title: "NO ACTIVE SESSION"
-                    detail: "A session starts when the active Commander writes a LoadGame event."
+                    title: appWindow.t("logbook.no_active", "NO ACTIVE SESSION")
+                    detail: appWindow.t("logbook.no_active_help", "A session starts when the active Commander writes a LoadGame event.")
                     tone: green
                 }
             }
@@ -117,7 +119,7 @@ ColumnLayout {
                 Layout.preferredWidth: 320
                 Layout.fillHeight: true
                 spacing: 6
-                Label { text: "RECENT SESSIONS"; color: cyan; font.pixelSize: 12; font.bold: true }
+                    Label { text: appWindow.t("logbook.recent_sessions", "RECENT SESSIONS"); color: cyan; font.pixelSize: 12; font.bold: true }
                 ListView {
                     id: recentSessionList
                     Layout.fillWidth: true
@@ -155,7 +157,7 @@ ColumnLayout {
                     Label {
                         anchors.centerIn: parent
                         visible: parent.count === 0
-                        text: "No completed sessions stored yet."
+                        text: appWindow.t("logbook.no_history", "No completed sessions stored yet.")
                         color: muted
                         font.pixelSize: 10
                     }
@@ -168,7 +170,7 @@ ColumnLayout {
         spacing: 10
         TextField {
             Layout.fillWidth: true
-            placeholderText: "Search system, station, blueprint, material or ship…"
+            placeholderText: appWindow.t("logbook.search", "Search system, station, blueprint, material or ship…")
             onTextChanged: cockpit.setLogbookQuery(text)
         }
         ComboBox {
@@ -177,7 +179,7 @@ ColumnLayout {
             onActivated: cockpit.setLogbookFilter(currentText)
         }
         Label {
-            text: cockpit.logbookEntries.length + " ENTRIES"
+                text: appWindow.tf("logbook.entry_count", "%1 ENTRIES", [cockpit.logbookEntries.length])
             color: cyan
             font.pixelSize: 10
             font.bold: true
@@ -204,7 +206,7 @@ ColumnLayout {
                 border.width: 1
                 border.color: borderTone
                 activeFocusOnTab: true
-                Accessible.name: "Open Logbook entry: " + modelData.title
+                Accessible.name: appWindow.tf("logbook.open_entry", "Open Logbook entry: %1", [modelData.title])
                 Accessible.role: Accessible.Button
                 Keys.onReturnPressed: logbookPage.entryRequested(modelData.id)
                 MouseArea {
@@ -234,7 +236,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 3
                         Label { text: modelData.title; color: textPrimary; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
-                        Label { text: modelData.summary || "Journal event"; color: muted; font.pixelSize: 10; Layout.fillWidth: true; elide: Text.ElideRight }
+                        Label { text: modelData.summary || appWindow.t("logbook.journal_event", "Journal event"); color: muted; font.pixelSize: 10; Layout.fillWidth: true; elide: Text.ElideRight }
                         Label {
                             text: [modelData.system, modelData.station, modelData.ship].filter(function(value) { return !!value }).join(" · ")
                             color: green
@@ -244,7 +246,7 @@ ColumnLayout {
                         }
                         Label {
                             visible: !!modelData.note
-                            text: "NOTE · " + (modelData.note || "")
+                            text: appWindow.tf("logbook.note_label", "NOTE · %1", [modelData.note || ""])
                             color: orange
                             font.pixelSize: 9
                             font.bold: true
@@ -264,7 +266,9 @@ ColumnLayout {
                 anchors.centerIn: parent
                 visible: parent.count === 0
                 symbol: "≣"
-                title: cockpit.commanderKnown ? "NO MATCHING LOGBOOK ENTRIES" : "NO COMMANDER JOURNAL DETECTED"
+                title: cockpit.commanderKnown
+                       ? appWindow.t("logbook.no_matches", "NO MATCHING LOGBOOK ENTRIES")
+                       : appWindow.t("logbook.no_journal", "NO COMMANDER JOURNAL DETECTED")
                 detail: cockpit.commanderKnown
                         ? "Adjust the filter or search text."
                         : "Start Elite Dangerous or configure the Journal path in Settings."

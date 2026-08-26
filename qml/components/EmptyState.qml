@@ -5,7 +5,7 @@ import QtQuick.Layouts
 ColumnLayout {
     id: emptyState
     property string symbol: "◇"
-    property string title: "NOTHING HERE YET"
+    property string title: ""
     property string detail: ""
     property color tone: hostWindow ? hostWindow.accent : "#3bdcff"
     property bool prominent: false

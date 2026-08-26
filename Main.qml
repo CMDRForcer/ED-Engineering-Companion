@@ -192,14 +192,54 @@ ApplicationWindow {
     readonly property color powerplayStronghold: "#8a63df"
     readonly property color powerplayUndermining: "#d3424b"
     readonly property color powerplayReinforcement: "#347bd4"
+    function t(key, fallback) {
+        // Reading the property keeps every binding reactive when the language
+        // changes, while the controller supplies the English/source fallback.
+        var activeLanguage = cockpit.interfaceLanguage
+        return cockpit.translate(key, fallback)
+    }
+    function tf(key, fallback, values) {
+        var result = t(key, fallback)
+        for (var index = 0; index < values.length; ++index)
+            result = result.replace("%" + (index + 1), String(values[index]))
+        return result
+    }
     function countLabel(value, singular, plural) {
         var count = Math.max(0, Number(value) || 0)
         return count + " " + (count === 1 ? singular : plural)
     }
+    function localizedStatus(value) {
+        var source = String(value === undefined || value === null ? "" : value)
+        var key = source.toUpperCase().replace(/[^A-Z0-9]+/g, "_")
+        var known = {
+            "ACTIVE": "status.value.active", "COMPLETE": "status.value.complete",
+            "IN_PROGRESS": "status.value.in_progress", "INVITED": "status.value.invited",
+            "KNOWN": "status.value.known", "LOCKED": "status.value.locked",
+            "MISSING": "status.value.missing", "NONE": "status.value.none",
+            "NOT_NEEDED": "status.value.not_needed", "NOT_STARTED": "status.value.not_started",
+            "PENDING": "status.value.pending", "READY": "status.value.ready",
+            "STOPPED": "status.value.stopped", "SURPLUS": "status.value.surplus",
+            "TRADEABLE": "status.value.tradeable", "UNLOCKED": "status.value.unlocked",
+            "UNRELIABLE": "status.value.unreliable", "UNKNOWN": "status.value.unknown",
+            "UNOCCUPIED": "powerplay.state.unoccupied", "EXPLOITED": "powerplay.state.exploited",
+            "FORTIFIED": "powerplay.state.fortified", "STRONGHOLD": "powerplay.state.stronghold",
+            "HOMESYSTEM": "powerplay.state.home_system",
+            "LIVE": "status.value.live", "RECENT": "status.value.recent",
+            "STALE": "status.value.stale", "EXACT_MATCH": "status.value.exact_match",
+            "FAMILY_MATCH": "status.value.family_match", "UNRESOLVED": "status.unresolved",
+            "EDDN_LIVE": "status.value.eddn_live", "EDDN_SENT": "status.value.eddn_sent",
+            "EDDN_FAILED": "status.value.eddn_failed", "EDDN_QUEUED": "status.value.eddn_queued",
+            "EDDN_RETRY": "status.value.eddn_retry", "EDDN_SENDING": "status.value.eddn_sending",
+            "PARTIAL": "import.partial", "WARNING": "status.value.warning",
+            "SENT": "status.value.sent", "FAILED": "status.value.failed",
+            "QUEUED": "status.value.queued", "SENDING": "status.sending"
+        }
+        return known[key] ? t(known[key], source) : source
+    }
     function materialDisplay(status, value, reliable) {
         var trusted = reliable === true
         return {
-            "status": trusted ? status : "UNRELIABLE",
+            "status": localizedStatus(trusted ? status : "UNRELIABLE"),
             "completion": trusted && status === "READY" ? 1.0 : value
         }
     }
@@ -226,13 +266,14 @@ ApplicationWindow {
             return ""
         var seconds = Math.max(0, Math.floor((sessionClock - parsed) / 1000))
         if (seconds < 60)
-            return "just now"
+            return t("logbook.just_now", "just now")
         if (seconds < 3600)
-            return Math.floor(seconds / 60) + " min ago"
+            return tf("logbook.minutes_ago", "%1 min ago", [Math.floor(seconds / 60)])
         if (seconds < 86400)
-            return Math.floor(seconds / 3600) + " h ago"
+            return tf("logbook.hours_ago", "%1 h ago", [Math.floor(seconds / 3600)])
         var days = Math.floor(seconds / 86400)
-        return days + (days === 1 ? " day ago" : " days ago")
+        return tf(days === 1 ? "logbook.day_ago" : "logbook.days_ago",
+                  days === 1 ? "%1 day ago" : "%1 days ago", [days])
     }
     function powerplayPledgedHours(overview) {
         if (!overview || !overview.timePledgedKnown)
@@ -271,6 +312,8 @@ ApplicationWindow {
     }
     function powerplayLeaderBiography(powerName) {
         var key = String(powerName || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+        if (key === "alavignyduval")
+            key = "arissalavignyduval"
         var biographies = {
             "aislingduval": "Known as the People's Princess, Aisling Duval combines Imperial celebrity with a reformist political programme. The granddaughter of former Emperor Hengist Duval, she has built broad popular support despite being born outside marriage. From her headquarters in Cubeo, she campaigns against Imperial slavery and narcotics while promoting social welfare and a more modern Empire. She also represents the Empire within the anti-xeno organisation Aegis. Her signature module is the Prismatic Shield Generator, prioritised early in her Powerplay 2.0 progression rather than exclusive to her supporters.",
             "arissalavignyduval": "Arissa Lavigny-Duval is the reigning Emperor and the central figure of traditional Imperial authority. The previously unacknowledged daughter of Hengist Duval rose through the succession crisis by presenting herself as the defender of stability, justice and the rule of law. Her power is based in Kamadhenu, and her supporters expose corruption, reinforce Imperial garrisons and punish criminals. Her signature module is the Imperial Hammer railgun, prioritised early in her Powerplay 2.0 progression rather than exclusive to her supporters.",
@@ -286,7 +329,9 @@ ApplicationWindow {
             "yurigrom": "Yuri Grom is the authoritarian leader of the EG Pilots and ruler of an independent power centred on Clayakarma. A former military commander, he built his influence around discipline, nationalism and resistance to Federal expansion. His forces rely on direct military pressure and tightly controlled administration to secure their territory. His signature module is the Containment Missile launcher, prioritised early in his Powerplay 2.0 progression rather than exclusive to his supporters.",
             "liyongrui": "Li Yong-Rui is the chief executive of Sirius Corporation, one of humanity's most powerful technology and industrial conglomerates. From Lembava, he expands influence through investment, research partnerships, commercial incentives and access to Sirius technology. His pragmatic corporate diplomacy reaches across superpower borders, although critics accuse him of turning strategic dependencies into leverage. His signature module is the Pack-Hound Missile Rack, prioritised early in his Powerplay 2.0 progression rather than exclusive to his supporters."
         }
-        return biographies[key] || ""
+        return biographies[key]
+               ? t("powerplay.leader." + key + ".biography", biographies[key])
+               : ""
     }
     property var wishlistMaterialExpansion: ({})
     function wishlistExpansionKey(row, index) {
@@ -304,16 +349,16 @@ ApplicationWindow {
         wishlistMaterialExpansion = updated
     }
     property var primaryNavigation: [
-        {"id": "operations", "label": "OPERATIONS", "icon": "⌂", "page": 0},
-        {"id": "cmdr", "label": "CMDR", "icon": "◆", "page": 10},
-        {"id": "engineering", "label": "ENGINEERING", "icon": "⌁", "page": 3},
-        {"id": "wishlist", "label": "WISHLIST", "icon": "★", "page": 1},
-        {"id": "materials", "label": "MATERIALS", "icon": "◇", "page": 2},
-        {"id": "engineers", "label": "ENGINEERS", "icon": "◎", "page": 4},
-        {"id": "state-finds", "label": "STATE FINDS", "icon": "⌖", "page": 8},
-        {"id": "logbook", "label": "LOGBOOK", "icon": "≣", "page": 9},
-        {"id": "settings", "label": "SETTINGS", "icon": "≡", "page": 5},
-        {"id": "powerplay", "label": "POWERPLAY", "icon": "⚑", "page": 11}
+        {"id": "operations", "label": t("nav.operations", "OPERATIONS"), "icon": "⌂", "page": 0},
+        {"id": "cmdr", "label": t("nav.commander", "CMDR"), "icon": "◆", "page": 10},
+        {"id": "engineering", "label": t("nav.engineering", "ENGINEERING"), "icon": "⌁", "page": 3},
+        {"id": "wishlist", "label": t("nav.wishlist", "WISHLIST"), "icon": "★", "page": 1},
+        {"id": "materials", "label": t("nav.materials", "MATERIALS"), "icon": "◇", "page": 2},
+        {"id": "engineers", "label": t("nav.engineers", "ENGINEERS"), "icon": "◎", "page": 4},
+        {"id": "state-finds", "label": t("nav.state_finds", "STATE FINDS"), "icon": "⌖", "page": 8},
+        {"id": "logbook", "label": t("nav.logbook", "LOGBOOK"), "icon": "≣", "page": 9},
+        {"id": "settings", "label": t("nav.settings", "SETTINGS"), "icon": "≡", "page": 5},
+        {"id": "powerplay", "label": t("nav.powerplay", "POWERPLAY"), "icon": "⚑", "page": 11}
     ]
     property var navigationOrder: cockpit.navigationOrder || []
     function orderedNavigation() {
@@ -579,19 +624,19 @@ ApplicationWindow {
         spacing: 6
         CockpitButton {
             Layout.preferredWidth: 112
-            text: "GENERAL"
+            text: window.t("settings.tab.general", "GENERAL")
             selected: currentPage === 5
             onClicked: currentPage = 5
         }
         CockpitButton {
             Layout.preferredWidth: 142
-            text: "CONNECTIONS"
+            text: window.t("settings.tab.connections", "CONNECTIONS")
             selected: currentPage === 6
             onClicked: currentPage = 6
         }
         CockpitButton {
             Layout.preferredWidth: 134
-            text: "DIAGNOSTICS"
+            text: window.t("settings.tab.diagnostics", "DIAGNOSTICS")
             selected: currentPage === 7
             onClicked: currentPage = 7
         }
@@ -755,9 +800,9 @@ ApplicationWindow {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 6
-                Label { text: "SORT"; color: muted; font.pixelSize: 9; font.bold: true }
+                    Label { text: window.t("common.sort", "SORT"); color: muted; font.pixelSize: 9; font.bold: true }
                 CockpitButton {
-                    text: "NAME " + (materialColumn.sortKey === "name"
+                    text: window.t("common.name", "NAME") + " " + (materialColumn.sortKey === "name"
                                     ? (materialColumn.sortDescending ? "↓" : "↑") : "")
                     selected: materialColumn.sortKey === "name"
                     Layout.fillWidth: true
@@ -772,7 +817,7 @@ ApplicationWindow {
                     }
                 }
                 CockpitButton {
-                    text: "AMOUNT " + (materialColumn.sortKey === "amount"
+                    text: window.t("common.amount", "AMOUNT") + " " + (materialColumn.sortKey === "amount"
                                       ? (materialColumn.sortDescending ? "↓" : "↑") : "")
                     selected: materialColumn.sortKey === "amount"
                     Layout.fillWidth: true
@@ -824,11 +869,11 @@ ApplicationWindow {
                             }
                             Label {
                                 visible: modelData.surplus > 0
-                                text: "+" + modelData.surplus + " SURPLUS"
+                                text: "+" + modelData.surplus + " " + window.t("common.surplus", "SURPLUS")
                                 color: green; font.pixelSize: 9; font.bold: true
                             }
                             Label {
-                                text: modelData.capacityKnown ? "G" + modelData.grade : "UNKNOWN"
+                                text: modelData.capacityKnown ? "G" + modelData.grade : window.t("status.value.unknown", "UNKNOWN")
                                 color: materialColumn.categoryColor
                                 font.pixelSize: 10; font.bold: true
                             }
@@ -837,7 +882,7 @@ ApplicationWindow {
                         RowLayout {
                             Layout.fillWidth: true
                             Label {
-                                text: "STOCK  " + modelData.have + " / "
+                                text: window.t("common.stock", "STOCK") + "  " + modelData.have + " / "
                                       + (modelData.capacityKnown ? modelData.capacity : "CAPACITY UNKNOWN")
                                 color: muted; font.pixelSize: 10
                             }
@@ -865,7 +910,7 @@ ApplicationWindow {
                         }
                         Label {
                             visible: modelData.need > 0
-                            text: "BUILD  " + modelData.have + " / " + modelData.need
+                            text: window.t("common.build", "BUILD") + "  " + modelData.have + " / " + modelData.need
                             color: modelData.missing > 0 ? orange : green
                             font.pixelSize: 10; font.bold: true
                         }
@@ -1006,32 +1051,32 @@ ApplicationWindow {
             Label {
                 visible: cockpit.backgroundMode
                 Layout.fillWidth: true
-                text: window.compactSidebar ? "●" : "●  TRAY MODE"
+                text: window.compactSidebar ? "●" : window.t("common.tray_mode", "●  TRAY MODE")
                 color: green; font.pixelSize: 10; font.bold: true
                 horizontalAlignment: Text.AlignHCenter
                 ToolTip.visible: trayModeMouse.containsMouse
-                ToolTip.text: "Closing the window keeps Journal and EDDN monitoring active"
+                ToolTip.text: window.t("common.close_to_tray_help", "Closing the window keeps Journal and EDDN monitoring active")
                 MouseArea { id: trayModeMouse; anchors.fill: parent; hoverEnabled: true }
             }
             CockpitButton {
-                text: window.compactSidebar ? "⌕" : "SEARCH  Ctrl+K"
+                text: window.compactSidebar ? "⌕" : window.t("common.search_shortcut", "SEARCH  Ctrl+K")
                 Layout.fillWidth: true
                 onClicked: globalSearchDialog.open()
             }
             CockpitButton {
                 objectName: "qa-kofi-support-button"
-                text: window.compactSidebar ? "♥" : "SUPPORT ON KO-FI"
+                text: window.compactSidebar ? "♥" : window.t("common.support", "SUPPORT ON KO-FI")
                 Layout.fillWidth: true
                 ToolTip.visible: hovered
-                ToolTip.text: "Open ko-fi.com/cmdrforcer in your browser"
+                ToolTip.text: window.t("common.support_help", "Open ko-fi.com/cmdrforcer in your browser")
                 onClicked: Qt.openUrlExternally("https://ko-fi.com/cmdrforcer")
             }
             CockpitButton {
                 objectName: "qa-about-button"
-                text: window.compactSidebar ? "ⓘ" : "ABOUT"
+                text: window.compactSidebar ? "ⓘ" : window.t("common.about", "ABOUT")
                 Layout.fillWidth: true
                 ToolTip.visible: hovered
-                ToolTip.text: "About ED Engineering Companion"
+                ToolTip.text: window.t("dialog.about.title", "About ED Engineering Companion")
                 onClicked: aboutDialog.open()
             }
         }
@@ -1062,9 +1107,9 @@ ApplicationWindow {
                 objectName: "qa-header-operations"
                 Layout.fillWidth: true
                 spacing: 2
-                Label { text: "COMMANDER OPERATIONS"; color: textPrimary; font.pixelSize: 24; font.bold: true }
+                Label { text: window.t("operations.title", "COMMANDER OPERATIONS"); color: textPrimary; font.pixelSize: 24; font.bold: true }
                 Label {
-                    text: "WISHLIST · " + cockpit.ship
+                    text: window.tf("status.wishlist_ship", "WISHLIST · %1", [cockpit.ship])
                           + (cockpit.activeShip
                              ? "  ·  FLYING · " + cockpit.activeShip : "")
                           + "  ·  " + cockpit.system
@@ -1101,13 +1146,13 @@ ApplicationWindow {
                     visible: !!cockpit.activeShip
                              && (!cockpit.followActiveShip
                                  || cockpit.ship !== cockpit.activeShip)
-                    text: "FOLLOW CURRENT"
+                    text: window.t("operations.follow_current", "FOLLOW CURRENT")
                     selected: true
                     onClicked: cockpit.followCurrentShip()
                 }
                 Rectangle {
                     width: 82; height: 32; radius: 16; color: successBackground
-                    Label { anchors.centerIn: parent; text: "●  LIVE"; color: green; font.bold: true }
+                        Label { anchors.centerIn: parent; text: window.t("common.live", "●  LIVE"); color: green; font.bold: true }
                     SequentialAnimation on opacity {
                         running: !window.reducedMotion
                         loops: Animation.Infinite
@@ -1139,7 +1184,7 @@ ApplicationWindow {
             MouseArea { id: actionHover; anchors.fill: parent; hoverEnabled: true }
             ColumnLayout {
                 anchors.fill: parent; anchors.margins: 24; spacing: 8
-                Label { text: "NEXT BEST ACTION  ·  WHAT NOW"; color: cyan; font.pixelSize: 12; font.bold: true }
+                    Label { text: window.t("operations.next_action", "NEXT BEST ACTION  ·  WHAT NOW"); color: cyan; font.pixelSize: 12; font.bold: true }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 14
@@ -1183,7 +1228,7 @@ ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     Label {
-                        text: "MATERIAL · " + window.materialDisplay(
+                        text: window.t("common.material_prefix", "MATERIAL · ") + window.materialDisplay(
                                   cockpit.materialStatus, cockpit.completion,
                                   cockpit.completionReliable).status
                               + " · " + Math.round(window.materialDisplay(
@@ -1197,14 +1242,15 @@ ApplicationWindow {
                         font.pixelSize: 13; font.bold: true
                     }
                     Label {
-                        text: "PROGRESS · " + cockpit.planProgressStatus
+                        text: window.tf("status.progress", "PROGRESS · %1", [cockpit.planProgressStatus])
                         color: cockpit.planProgressStatus === "COMPLETE" ? green : cyan
                         font.pixelSize: 13; font.bold: true
                     }
                     Item { Layout.fillWidth: true }
                     Label {
-                        text: cockpit.covered + " / " + cockpit.required + " "
-                              + (cockpit.required === 1 ? "MATERIAL UNIT" : "MATERIAL UNITS")
+                    text: window.tf(cockpit.required === 1 ? "status.material_unit" : "status.material_units",
+                                    cockpit.required === 1 ? "%1 / %2 MATERIAL UNIT" : "%1 / %2 MATERIAL UNITS",
+                                    [cockpit.covered, cockpit.required])
                         color: muted; font.pixelSize: 12
                     }
                 }
@@ -1216,7 +1262,7 @@ ApplicationWindow {
                 }
                 Label {
                     visible: cockpit.missingMaterials.length > 0
-                    text: "MISSING · " + cockpit.missingMaterials.map(function(row) {
+                    text: window.t("common.missing_prefix", "MISSING · ") + cockpit.missingMaterials.map(function(row) {
                         return row.name + " ×" + row.missing
                     }).join("   ·   ")
                     color: orange; font.pixelSize: 12; font.bold: true
@@ -1235,7 +1281,7 @@ ApplicationWindow {
                 }
                 Label {
                     visible: (cockpit.operationAction.engineerOptions || []).length > 0
-                    text: "ENGINEERS FOR TARGET GRADE · ALL CAPABLE OPTIONS"
+                    text: window.t("operations.engineers", "ENGINEERS FOR TARGET GRADE · ALL CAPABLE OPTIONS")
                     color: orange; font.pixelSize: 10; font.bold: true
                 }
                 ListView {
@@ -1280,14 +1326,14 @@ ApplicationWindow {
                                     elide: Text.ElideRight
                                 }
                                 Label {
-                                    text: "MAX G" + modelData.maxGrade + " · " + modelData.statusText
+                                    text: window.tf("status.max_grade", "MAX G%1 · %2", [modelData.maxGrade, modelData.statusText])
                                     color: modelData.craftable ? green
                                          : modelData.status === "rank_too_low" ? orange : muted
                                     font.pixelSize: 9; font.bold: true
                                 }
                             }
                             CockpitButton {
-                                text: "COPY"
+                                text: window.t("common.copy", "COPY")
                                 implicitWidth: 66; implicitHeight: 30
                                 enabled: modelData.system !== "System not stored"
                                 onClicked: cockpit.copySystem(modelData.system)
@@ -1301,7 +1347,7 @@ ApplicationWindow {
                                  || String(cockpit.operationAction.kind).indexOf("TECH_BROKER") >= 0
                                  || cockpit.operationAction.kind === "ENGINEER_UNLOCK"
                                  || cockpit.operationAction.kind === "ENGINEER_PREPARE")
-                    text: "WHY · " + (cockpit.operationAction.reason || "")
+                    text: window.tf("status.why", "WHY · %1", [cockpit.operationAction.reason || ""])
                     color: cyan; font.pixelSize: 11; font.bold: true
                     Layout.fillWidth: true; wrapMode: Text.WordWrap
                     maximumLineCount: 2; elide: Text.ElideRight
@@ -1314,7 +1360,7 @@ ApplicationWindow {
                                  || cockpit.operationAction.kind === "ENGINEER_PREPARE"
                                  || cockpit.operationAction.kind === "TRADE"
                                  || cockpit.operationAction.kind === "COLLECT")
-                    text: "AFTER THIS · " + (cockpit.operationAction.after || "")
+                    text: window.tf("status.after", "AFTER THIS · %1", [cockpit.operationAction.after || ""])
                     color: textSecondary; font.pixelSize: 11
                     Layout.fillWidth: true; wrapMode: Text.WordWrap
                     maximumLineCount: 2; elide: Text.ElideRight
@@ -1322,7 +1368,7 @@ ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     CockpitButton {
-                        text: cockpit.operationAction.buttonLabel || "OPEN ENGINEERING"
+                        text: cockpit.operationAction.buttonLabel || window.t("wishlist.open_engineering", "OPEN ENGINEERING")
                         selected: true
                         enabled: cockpit.operationAction.executable !== false
                         onClicked: {
@@ -1337,12 +1383,12 @@ ApplicationWindow {
                     }
                     CockpitButton {
                         visible: cockpit.operationAction.kind === "ENGINEER_TRAVEL"
-                        text: "ENGINEER STOP LATER"
+                        text: window.t("operations.engineer_later", "ENGINEER STOP LATER")
                         enabled: cockpit.engineerMissionRoute.length > 1
                         onClicked: cockpit.deferNextEngineer()
                     }
                     CockpitButton {
-                        text: "ACTIVITY HISTORY"
+                        text: window.t("operations.activity_history", "ACTIVITY HISTORY")
                         onClicked: window.currentPage = 9
                     }
                     Item { Layout.fillWidth: true }
@@ -1367,11 +1413,11 @@ ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     Label {
-                        text: "TRACKED WORK"
+                        text: window.t("operations.tracked_work", "TRACKED WORK")
                         color: cyan; font.pixelSize: 13; font.bold: true
                     }
                     Label {
-                        text: cockpit.trackedItems.length + " ACTIVE"
+                        text: window.tf("status.active_count", "%1 ACTIVE", [cockpit.trackedItems.length])
                         color: orange; font.pixelSize: 10; font.bold: true
                     }
                     Item { Layout.fillWidth: true }
@@ -1406,7 +1452,7 @@ ApplicationWindow {
                             RowLayout {
                                 Layout.fillWidth: true
                                 CockpitButton {
-                                    text: "DETAILS"
+                                    text: window.t("common.details", "DETAILS")
                                     Layout.fillWidth: true
                                     implicitHeight: 34
                                     onClicked: {
@@ -1418,7 +1464,7 @@ ApplicationWindow {
                                     }
                                 }
                                 CockpitButton {
-                                    text: "UNTRACK"
+                                    text: window.t("common.untrack", "UNTRACK")
                                     implicitWidth: 118
                                     Layout.fillWidth: true; implicitHeight: 34
                                     onClicked: {
@@ -1578,7 +1624,7 @@ ApplicationWindow {
                                     RowLayout {
                                         Layout.fillWidth: true
                                         Label {
-                                            text: isNextTrade ? "NEXT TRADE"
+                                            text: isNextTrade ? window.t("operations.next_trade", "NEXT TRADE")
                                                    : (modelData.remaining <= 0
                                                       ? "PENDING · TRADE"
                                                       : modelData.remaining + " MISSING")
@@ -1588,7 +1634,7 @@ ApplicationWindow {
                                         Item { Layout.fillWidth: true }
                                     }
                                     CockpitButton {
-                                        text: "MATERIAL DETAILS"
+                                        text: window.t("common.material_details", "MATERIAL DETAILS")
                                         Layout.fillWidth: true
                                         implicitHeight: 34
                                         onClicked: cockpit.selectMaterial(modelData.targetKey)
@@ -1646,7 +1692,7 @@ ApplicationWindow {
                                         }
                                     }
                                     Label {
-                                        text: "HAVE " + modelData.have
+                                        text: window.tf("status.have", "HAVE %1", [modelData.have])
                                               + "   ·   NEED " + modelData.need
                                               + "   ·   MISSING " + modelData.missing
                                         color: orange; font.pixelSize: 11; font.bold: true
@@ -1662,7 +1708,7 @@ ApplicationWindow {
                                     }
                                 }
                                 CockpitButton {
-                                    text: "MATERIAL DETAILS"
+                                    text: window.t("common.material_details", "MATERIAL DETAILS")
                                     onClicked: cockpit.selectMaterial(modelData.key)
                                 }
                             }
@@ -1696,7 +1742,7 @@ ApplicationWindow {
                     anchors.fill: parent; anchors.margins: 20; spacing: 12
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "TRADER ROUTE"; color: textPrimary; font.pixelSize: 17; font.bold: true }
+                        Label { text: window.t("operations.trader_route", "TRADER ROUTE"); color: textPrimary; font.pixelSize: 17; font.bold: true }
                         Item { Layout.fillWidth: true }
                         ComboBox {
                             id: traderPreferenceChoice
@@ -1776,7 +1822,7 @@ ApplicationWindow {
                                             }
                                         }
                                         CockpitButton {
-                                            text: "COPY"
+                                            text: window.t("common.copy", "COPY")
                                             onClicked: cockpit.copySystem(modelData.system)
                                         }
                                     }
@@ -1784,11 +1830,11 @@ ApplicationWindow {
                                 Label {
                                     anchors.centerIn: parent
                                     visible: cockpit.traderRoute.length === 0
-                                    text: "NO TRADER FLIGHT REQUIRED"
+                                    text: window.t("operations.no_trader", "NO TRADER FLIGHT REQUIRED")
                                     color: green; font.pixelSize: 12; font.bold: true
                                 }
                             }
-                            Label { width: parent.width; text: "LATEST CONFIRMED TRADE"; color: muted; font.pixelSize: 11; font.bold: true }
+                                Label { width: parent.width; text: window.t("operations.latest_trade", "LATEST CONFIRMED TRADE"); color: muted; font.pixelSize: 11; font.bold: true }
                             Label {
                                 width: parent.width
                                 text: cockpit.tradeHistory.length
@@ -1797,7 +1843,7 @@ ApplicationWindow {
                                 color: cockpit.tradeHistory.length ? green : muted
                                 font.pixelSize: 12; wrapMode: Text.WordWrap
                             }
-                            Label { width: parent.width; text: "LIVE ACTIVITY"; color: muted; font.pixelSize: 11; font.bold: true }
+                                Label { width: parent.width; text: window.t("operations.live_activity", "LIVE ACTIVITY"); color: muted; font.pixelSize: 11; font.bold: true }
                             Rectangle {
                                 width: parent.width; height: 4; radius: 2
                                 color: cyan
@@ -1817,7 +1863,7 @@ ApplicationWindow {
                             Rectangle { width: parent.width; height: 1; color: borderTone }
                             RowLayout {
                                 width: parent.width
-                                Label { text: "LIVE HGE"; color: green; font.pixelSize: 11; font.bold: true }
+                                    Label { text: window.t("operations.live_hge", "LIVE HGE"); color: green; font.pixelSize: 11; font.bold: true }
                                 Item { Layout.fillWidth: true }
                                 Label {
                                     text: window.liveHgeTargets.filter(function(row) { return row.active }).length
@@ -1842,7 +1888,7 @@ ApplicationWindow {
                         }
                     }
                     CockpitButton {
-                        text: "REFRESH NOW"
+                        text: window.t("common.refresh", "REFRESH NOW")
                         selected: true
                         Layout.fillWidth: true
                         Layout.preferredHeight: 42
@@ -1875,9 +1921,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             ColumnLayout {
                 objectName: "qa-header-wishlist"
-                Label { text: "BLUEPRINT WISHLIST"; color: textPrimary; font.pixelSize: 24; font.bold: true }
+                Label { text: window.t("wishlist.title", "BLUEPRINT WISHLIST"); color: textPrimary; font.pixelSize: 24; font.bold: true }
                 Label {
-                    text: "VIEWING · " + cockpit.ship
+                    text: window.tf("status.viewing", "VIEWING · %1", [cockpit.ship])
                           + (cockpit.activeShip
                              ? "  ·  FLYING · " + cockpit.activeShip : "")
                           + "  ·  LIVE INVENTORY COVERAGE"
@@ -1910,7 +1956,7 @@ ApplicationWindow {
                 visible: !!cockpit.activeShip
                          && (!cockpit.followActiveShip
                              || cockpit.ship !== cockpit.activeShip)
-                text: "FOLLOW CURRENT"
+                text: window.t("operations.follow_current", "FOLLOW CURRENT")
                 selected: true
                 onClicked: cockpit.followCurrentShip()
             }
@@ -1918,7 +1964,7 @@ ApplicationWindow {
                 width: 140; height: 36; radius: 18; color: active
                 Label {
                     anchors.centerIn: parent
-                    text: cockpit.blueprints.length + " PINNED"
+                text: window.tf("wishlist.pinned_count", "%1 PINNED", [cockpit.blueprints.length])
                     color: cyan; font.bold: true
                 }
             }
@@ -1939,16 +1985,17 @@ ApplicationWindow {
             spacing: 14
             Repeater {
                 model: [
-                    {"title": "MATERIAL STATUS", "value": window.materialDisplay(
+                            {"title": window.t("wishlist.material_status", "MATERIAL STATUS"), "value": window.materialDisplay(
                          cockpit.materialStatus, cockpit.completion,
                          cockpit.completionReliable).status, "tone": cyan},
-                    {"title": "PROGRESS", "value": cockpit.planProgressStatus, "tone": green},
-                    {"title": "BLUEPRINTS", "value": cockpit.blueprints.length, "tone": green},
-                    {"title": "MISSING TYPES", "value": cockpit.missingKinds, "tone": orange}
+                            {"title": window.t("status.progress", "PROGRESS"), "value": window.localizedStatus(cockpit.planProgressStatus), "tone": green},
+                            {"title": window.t("wishlist.blueprints", "BLUEPRINTS"), "value": cockpit.blueprints.length, "tone": green},
+                            {"title": window.t("wishlist.missing_types", "MISSING TYPES"), "value": cockpit.missingKinds, "tone": orange}
                 ]
                 delegate: ShadowCard {
                     required property var modelData
-                    objectName: modelData.title === "MATERIAL STATUS"
+                    required property int index
+                    objectName: index === 0
                                 ? "qa-card-wishlist" : ""
                     Layout.fillWidth: true
                     Layout.preferredHeight: 104
@@ -1968,9 +2015,9 @@ ApplicationWindow {
                 anchors.fill: parent; anchors.margins: 20; spacing: 12
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: "PINNED BUILDS"; color: textPrimary; font.pixelSize: 17; font.bold: true }
+                        Label { text: window.t("wishlist.pinned_builds", "PINNED BUILDS"); color: textPrimary; font.pixelSize: 17; font.bold: true }
                     Item { Layout.fillWidth: true }
-                    Label { text: "Journal inventory · automatic"; color: green; font.pixelSize: 11; font.bold: true }
+                        Label { text: window.t("wishlist.journal_automatic", "Journal inventory · automatic"); color: green; font.pixelSize: 11; font.bold: true }
                 }
                 Rectangle {
                     visible: cockpit.relevantCraftTrackingIssues.length > 0
@@ -1984,9 +2031,9 @@ ApplicationWindow {
                         anchors.fill: parent; anchors.margins: 6; spacing: 4
                         Label {
                             Layout.fillWidth: true
-                            text: "CRAFT MATCH PENDING · "
+                            text: window.t("wishlist.craft_pending", "CRAFT MATCH PENDING · ")
                                   + cockpit.relevantCraftTrackingIssues.length
-                                  + " RELEVANT CONFLICT(S)"
+                                  + window.t("wishlist.relevant_conflicts_suffix", " RELEVANT CONFLICT(S)")
                             color: error; font.pixelSize: 10; font.bold: true
                         }
                         ListView {
@@ -1999,18 +2046,18 @@ ApplicationWindow {
                                 width: ListView.view.width; height: 27; spacing: 6
                                 Label {
                                     Layout.fillWidth: true
-                                    text: (modelData.displayReasonCode || modelData.reasonCode || "UNMATCHED")
-                                          + " · " + (modelData.timestamp || "TIME UNKNOWN")
-                                          + " · " + (modelData.module || "MODULE UNKNOWN")
-                                          + " / " + (modelData.slot || "SLOT UNKNOWN")
-                                          + " · " + (modelData.blueprintName || "BLUEPRINT UNKNOWN")
-                                          + " · " + (modelData.reason || "No safe match")
+                                    text: (modelData.displayReasonCode || modelData.reasonCode || window.t("status.unmatched", "UNMATCHED"))
+                                          + " · " + (modelData.timestamp || window.t("status.time_unknown", "TIME UNKNOWN"))
+                                          + " · " + (modelData.module || window.t("status.module_unknown", "MODULE UNKNOWN"))
+                                          + " / " + (modelData.slot || window.t("status.slot_unknown", "SLOT UNKNOWN"))
+                                          + " · " + (modelData.blueprintName || window.t("status.blueprint_unknown", "BLUEPRINT UNKNOWN"))
+                                          + " · " + (modelData.reason || window.t("status.no_safe_match", "No safe match"))
                                     color: error; font.pixelSize: 9; font.bold: true
                                     elide: Text.ElideRight
                                 }
                                 CockpitButton {
-                                    text: "DISMISS"; implicitHeight: 24
-                                    helpText: "Quittiert genau diesen unpassenden Journal-Craft"
+                                    text: window.t("common.dismiss", "DISMISS"); implicitHeight: 24
+                                        helpText: window.t("wishlist.dismiss_craft_help", "Dismiss exactly this unmatched Journal craft")
                                     onClicked: cockpit.dismissCraftTrackingIssue(
                                         modelData.fingerprint || ""
                                     )
@@ -2034,12 +2081,12 @@ ApplicationWindow {
                             Label {
                                 Layout.fillWidth: true
                                 text: cockpit.unrelatedCraftTrackingIssues.length
-                                      + " NEW · NO PLAN / UNRELATED CRAFT(S)"
+                                      + window.t("wishlist.unrelated_crafts_suffix", " NEW · NO PLAN / UNRELATED CRAFT(S)")
                                 color: muted; font.pixelSize: 10; font.bold: true
                             }
                             CockpitButton {
-                                text: "DISMISS ALL"; implicitHeight: 24
-                                helpText: "Quittiert nur NO-PLAN oder unpassende Craft-Reste dieses Schiffs"
+                                text: window.t("common.dismiss_all", "DISMISS ALL"); implicitHeight: 24
+                                    helpText: window.t("wishlist.dismiss_ship_crafts_help", "Dismiss only no-plan or unmatched craft remnants for this ship")
                                 onClicked: cockpit.dismissAllUnrelatedCraftIssues()
                             }
                         }
@@ -2052,16 +2099,16 @@ ApplicationWindow {
                                 width: ListView.view.width; height: 25; spacing: 6
                                 Label {
                                     Layout.fillWidth: true
-                                    text: (modelData.displayReasonCode || modelData.relevanceLabel || "UNRELATED")
-                                          + " · " + (modelData.timestamp || "TIME UNKNOWN")
-                                          + " · " + (modelData.module || "MODULE UNKNOWN")
-                                          + " / " + (modelData.slot || "SLOT UNKNOWN")
-                                          + " · " + (modelData.blueprintName || "BLUEPRINT UNKNOWN")
+                                    text: (modelData.displayReasonCode || modelData.relevanceLabel || window.t("status.unrelated", "UNRELATED"))
+                                          + " · " + (modelData.timestamp || window.t("status.time_unknown", "TIME UNKNOWN"))
+                                          + " · " + (modelData.module || window.t("status.module_unknown", "MODULE UNKNOWN"))
+                                          + " / " + (modelData.slot || window.t("status.slot_unknown", "SLOT UNKNOWN"))
+                                          + " · " + (modelData.blueprintName || window.t("status.blueprint_unknown", "BLUEPRINT UNKNOWN"))
                                     color: muted; font.pixelSize: 9
                                     elide: Text.ElideRight
                                 }
                                 CockpitButton {
-                                    text: "DISMISS"; implicitHeight: 23
+                                    text: window.t("common.dismiss", "DISMISS"); implicitHeight: 23
                                     onClicked: cockpit.dismissCraftTrackingIssue(
                                         modelData.fingerprint || ""
                                     )
@@ -2093,9 +2140,9 @@ ApplicationWindow {
                             elide: Text.ElideRight
                         }
                         CockpitButton {
-                            text: "DISMISS ALL HISTORICAL"
+                            text: window.t("wishlist.dismiss_historical", "DISMISS ALL HISTORICAL")
                             implicitHeight: 24
-                            helpText: "Quittiert nur geprüfte historische Craft-Issues dieses Schiffs"
+                                    helpText: window.t("wishlist.dismiss_historical_help", "Dismiss only reviewed historical craft issues for this ship")
                             onClicked: cockpit.dismissAllHistoricalCraftIssues()
                         }
                     }
@@ -2146,8 +2193,8 @@ ApplicationWindow {
                                 spacing: 7
                                 CockpitButton {
                                     visible: modelData.editable
-                                    text: "EDIT"
-                                    helpText: "Edit this pinned engineering plan"
+                                    text: window.t("wishlist.edit", "EDIT")
+                                        helpText: window.t("wishlist.edit_help", "Edit this pinned engineering plan")
                                     implicitHeight: 32
                                     onClicked: {
                                         cockpit.editPinnedPlan(modelData.index)
@@ -2156,8 +2203,8 @@ ApplicationWindow {
                                 }
                                 CockpitButton {
                                     visible: modelData.editable
-                                    text: "DUPLICATE"
-                                    helpText: "Create a separate copy of this plan"
+                                    text: window.t("wishlist.duplicate", "DUPLICATE")
+                                        helpText: window.t("wishlist.duplicate_help", "Create a separate copy of this plan")
                                     implicitHeight: 32
                                     onClicked: cockpit.duplicatePinnedPlan(modelData.index)
                                 }
@@ -2167,7 +2214,7 @@ ApplicationWindow {
                                           ? "✓ TRACK NEXT" : "TRACK NEXT"
                                     selected: cockpit.armedPlanId === modelData.planId
                                     implicitHeight: 32
-                                    helpText: "Apply the next matching Journal craft to this plan"
+                                        helpText: window.t("wishlist.track_help", "Apply the next matching Journal craft to this plan")
                                     onClicked: cockpit.armPlanForNextCraft(modelData.planId)
                                 }
                                 CockpitButton {
@@ -2183,8 +2230,8 @@ ApplicationWindow {
                                     onClicked: cockpit.prioritizePinnedPlan(modelData.planId)
                                 }
                                 CockpitButton {
-                                    text: "REMOVE PLAN"
-                                    helpText: "Remove this plan from the current ship wishlist"
+                                    text: window.t("wishlist.remove", "REMOVE PLAN")
+                                        helpText: window.t("wishlist.remove_help", "Remove this plan from the current ship wishlist")
                                     implicitHeight: 32
                                     onClicked: cockpit.removePinnedPlan(modelData.index)
                                 }
@@ -2196,8 +2243,8 @@ ApplicationWindow {
                                 }
                                 CockpitButton {
                                     visible: cockpit.ships.length > 1
-                                    text: "MOVE"
-                                    helpText: "Move this plan to the selected ship"
+                                    text: window.t("wishlist.move", "MOVE")
+                                        helpText: window.t("wishlist.move_help", "Move this plan to the selected ship")
                                     implicitHeight: 32
                                     onClicked: cockpit.movePinnedPlan(modelData.index, moveTarget.currentText)
                                 }
@@ -2205,12 +2252,12 @@ ApplicationWindow {
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label {
-                                    text: modelData.instance || "Legacy plan"
+                                    text: modelData.instance || window.t("wishlist.legacy_plan", "Legacy plan")
                                     color: cyan; font.pixelSize: 11; font.bold: true
                                 }
                                 Label {
                                     visible: !!modelData.experimental
-                                    text: "Experimental · " + modelData.experimental
+                                    text: window.tf("status.experimental", "EXPERIMENTAL · %1", [modelData.experimental])
                                     color: green; font.pixelSize: 11; font.bold: true
                                 }
                                 Item { Layout.fillWidth: true }
@@ -2220,7 +2267,7 @@ ApplicationWindow {
                                 visible: modelData.craftsPlanned > 0
                                 Layout.fillWidth: true
                                 Label {
-                                    text: "JOURNAL CRAFTS  "
+                                    text: window.t("wishlist.journal_crafts", "JOURNAL CRAFTS") + "  "
                                           + modelData.craftsDone + " / " + modelData.craftsPlanned
                                     color: modelData.craftsDone >= modelData.craftsPlanned
                                            ? green : cyan
@@ -2238,7 +2285,7 @@ ApplicationWindow {
                             }
                             Label {
                                 visible: modelData.bindingRequired
-                                text: "⚠ BINDING REQUIRED · select the physical module slot"
+                                text: window.t("wishlist.binding_required", "⚠ BINDING REQUIRED · select the physical module slot")
                                 color: error; font.pixelSize: 10; font.bold: true
                             }
                             Label {
@@ -2252,7 +2299,7 @@ ApplicationWindow {
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label {
-                                    text: "MATERIAL · " + window.materialDisplay(
+                                    text: window.t("common.material_prefix", "MATERIAL · ") + window.materialDisplay(
                                               modelData.materialStatus,
                                               modelData.completion,
                                               modelData.completionReliable).status
@@ -2264,7 +2311,7 @@ ApplicationWindow {
                                     font.pixelSize: 10; font.bold: true
                                 }
                                 Label {
-                                    text: "PROGRESS · " + modelData.progressStatus
+                                    text: window.tf("status.progress", "PROGRESS · %1", [modelData.progressStatus])
                                     color: modelData.progressStatus === "COMPLETE" ? green : cyan
                                     font.pixelSize: 10; font.bold: true
                                 }
@@ -2274,34 +2321,36 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 Label {
                                     visible: modelData.targetGrade > 0
-                                    text: "GRADE · " + modelData.gradeStatusLabel
+                                    text: window.tf("status.grade", "GRADE · %1", [modelData.gradeStatusLabel])
                                     color: cyan; font.pixelSize: 9
                                 }
                                 Label {
                                     visible: !!modelData.experimental
-                                    text: "EXPERIMENTAL · " + modelData.experimentalStatusLabel
+                                    text: window.tf("status.experimental", "EXPERIMENTAL · %1", [modelData.experimentalStatusLabel])
                                     color: green; font.pixelSize: 9
                                 }
                                 Item { Layout.fillWidth: true }
                             }
                             Label {
                                 visible: !!modelData.craftReason
-                                text: "LAST JOURNAL UPDATE · " + modelData.craftReason
+                                text: window.tf("status.last_journal", "LAST JOURNAL UPDATE · %1", [modelData.craftReason])
                                 color: muted; font.pixelSize: 10
                                 Layout.fillWidth: true; elide: Text.ElideRight
                             }
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label {
-                                    text: "MATERIAL READINESS"
+                                    text: window.t("wishlist.material_readiness", "MATERIAL READINESS")
                                     color: muted; font.pixelSize: 10; font.bold: true
                                 }
                                 Item { Layout.fillWidth: true }
                                 CockpitButton {
-                                    text: materialsExpanded ? "HIDE MATERIALS" : "SHOW MATERIALS"
+                                    text: materialsExpanded
+                                          ? window.t("materials.hide", "HIDE MATERIALS")
+                                          : window.t("materials.show", "SHOW MATERIALS")
                                     helpText: materialsExpanded
-                                              ? "Collapse detailed material rows"
-                                              : "Show detailed material progress"
+                                              ? window.t("materials.collapse_details", "Collapse detailed material rows")
+                                              : window.t("materials.show_progress", "Show detailed material progress")
                                     implicitHeight: 32
                                     onClicked: window.setWishlistMaterialsExpanded(
                                                    modelData, index, !materialsExpanded)
@@ -2329,19 +2378,18 @@ ApplicationWindow {
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label {
-                                    text: modelData.completeMaterialKinds + " of "
-                                          + modelData.totalMaterialKinds
-                                          + " materials complete · "
-                                          + Math.max(0, modelData.totalMaterialKinds
-                                                          - modelData.completeMaterialKinds)
-                                          + " missing"
+                                    text: window.tf("wishlist.materials_complete", "%1 of %2 materials complete · %3 missing",
+                                                    [modelData.completeMaterialKinds,
+                                                     modelData.totalMaterialKinds,
+                                                     Math.max(0, modelData.totalMaterialKinds
+                                                                 - modelData.completeMaterialKinds)])
                                     color: modelData.completeMaterialKinds === modelData.totalMaterialKinds
                                            ? green : textSecondary
                                     font.pixelSize: 11; font.bold: true
                                 }
                                 Item { Layout.fillWidth: true }
                                 Label {
-                                    text: modelData.covered + " / " + modelData.required + " units"
+                                    text: window.tf("status.units", "%1 / %2 units", [modelData.covered, modelData.required])
                                     color: muted; font.pixelSize: 11
                                 }
                             }
@@ -2384,7 +2432,7 @@ ApplicationWindow {
                                                 Label {
                                                     visible: modelData.missing > 0
                                                              && modelData.sharedPlanCount > 1
-                                                    text: "BOTTLENECK · " + modelData.sharedPlanCount + " PLANS"
+                                                    text: window.tf("status.bottleneck", "BOTTLENECK · %1 PLANS", [modelData.sharedPlanCount])
                                                     color: orange; font.pixelSize: 8; font.bold: true
                                                 }
                                             }
@@ -2400,7 +2448,7 @@ ApplicationWindow {
                                             Layout.preferredWidth: 185
                                             spacing: 2
                                             Label {
-                                                text: "HAVE " + modelData.have + " / NEED " + modelData.need
+                                                text: window.tf("status.have_need", "HAVE %1 / NEED %2", [modelData.have, modelData.need])
                                                 color: modelData.status === "ready" ? green
                                                      : modelData.status === "partial" ? orange : error
                                                 font.pixelSize: 10; font.bold: true
@@ -2427,7 +2475,7 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 Item { Layout.fillWidth: true }
                                 Label {
-                                    text: modelData.missingKinds === 0 ? "READY"
+                                    text: modelData.missingKinds === 0 ? window.t("status.value.ready", "READY")
                                           : window.countLabel(modelData.missingKinds,
                                                               "MATERIAL TYPE", "MATERIAL TYPES") + " MISSING"
                                     color: modelData.missingKinds === 0 ? green : orange
@@ -2440,11 +2488,11 @@ ApplicationWindow {
                         anchors.centerIn: parent
                         visible: cockpit.blueprints.length === 0
                         symbol: "★"
-                        title: "NO PLANS PINNED FOR THIS SHIP"
-                        detail: "Open Engineering to choose a blueprint and pin a plan for this ship."
+                        title: window.t("wishlist.no_plans", "NO PLANS PINNED FOR THIS SHIP")
+                        detail: window.t("wishlist.no_plans_help", "Open Engineering to choose a blueprint and pin a plan for this ship.")
                         tone: cyan
                         CockpitButton {
-                            text: "OPEN ENGINEERING"
+                            text: window.t("wishlist.open_engineering", "OPEN ENGINEERING")
                             Layout.alignment: Qt.AlignHCenter
                             onClicked: window.currentPage = 3
                         }
@@ -2468,6 +2516,7 @@ ApplicationWindow {
         property bool neededOnly: window.materialsNeededOnlyState
         property bool farmMissing: window.materialsFarmMissingState
         property string statusFilter: window.materialsStatusFilterState
+        property bool compactFilters: (window.width / Math.max(1.0, cockpit.uiScale)) < 1700
         onNeededOnlyChanged: window.materialsNeededOnlyState = neededOnly
         onFarmMissingChanged: window.materialsFarmMissingState = farmMissing
         onStatusFilterChanged: window.materialsStatusFilterState = statusFilter
@@ -2501,9 +2550,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             ColumnLayout {
                 objectName: "qa-header-materials"
-                Label { text: "MATERIAL INVENTORY"; color: textPrimary; font.pixelSize: 24; font.bold: true }
+                Label { text: window.t("materials.title", "MATERIAL INVENTORY"); color: textPrimary; font.pixelSize: 24; font.bold: true }
                 Label {
-                    text: cockpit.materials.length + " ENGINEERING MATERIALS  ·  LIVE JOURNAL STOCK"
+                text: window.tf("materials.inventory_summary", "%1 ENGINEERING MATERIALS · LIVE JOURNAL STOCK", [cockpit.materials.length])
                     color: muted; font.pixelSize: 13
                 }
             }
@@ -2514,7 +2563,7 @@ ApplicationWindow {
                 onTextChanged: window.materialsSearchState = text
                 Layout.preferredWidth: 340
                 Layout.preferredHeight: 42
-                placeholderText: "Search material or category…"
+                placeholderText: window.t("materials.search", "Search material or category…")
                 color: textPrimary
                 placeholderTextColor: muted
                 leftPadding: 16; rightPadding: 16
@@ -2527,35 +2576,43 @@ ApplicationWindow {
         }
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 44
+            // Translated labels can be substantially wider than English. Give the
+            // filter controls a second line on compact workspaces instead of
+            // clipping them or shrinking their type.
+            Layout.preferredHeight: materialsPage.compactFilters ? 84 : 44
             Label {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                text: "SHOW"; color: muted; font.pixelSize: 10; font.bold: true
+                visible: !materialsPage.compactFilters
+                text: window.t("materials.show", "SHOW"); color: muted; font.pixelSize: 10; font.bold: true
             }
-            RowLayout {
-                anchors.horizontalCenter: parent.horizontalCenter
+            Flow {
+                id: materialFilterFlow
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: materialsPage.compactFilters ? 0 : 64
+                anchors.rightMargin: materialsPage.compactFilters ? 0 : 360
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
                 CockpitButton {
-                    text: "NEEDED FOR BUILD"
+                    text: window.t("materials.needed", "NEEDED FOR BUILD")
                     selected: materialsPage.neededOnly
                     enabled: !materialsPage.farmMissing
                     onClicked: materialsPage.neededOnly = !materialsPage.neededOnly
                 }
                 CockpitButton {
-                    text: "FARM MISSING"
+                    text: window.t("materials.farm_missing", "FARM MISSING")
                     selected: materialsPage.farmMissing
                     onClicked: materialsPage.farmMissing = !materialsPage.farmMissing
                 }
                 Repeater {
                     visible: !materialsPage.farmMissing
                     model: [
-                        {"key": "all", "label": "ALL"},
-                        {"key": "missing", "label": "MISSING"},
-                        {"key": "ready", "label": "READY"},
-                        {"key": "surplus", "label": "SURPLUS"},
-                        {"key": "tradeable", "label": "TRADEABLE"}
+                            {"key": "all", "label": window.t("common.all", "ALL")},
+                            {"key": "missing", "label": window.t("common.missing", "MISSING")},
+                            {"key": "ready", "label": window.t("common.ready", "READY")},
+                            {"key": "surplus", "label": window.t("common.surplus", "SURPLUS")},
+                            {"key": "tradeable", "label": window.t("common.tradeable", "TRADEABLE")}
                     ]
                     delegate: CockpitButton {
                         required property var modelData
@@ -2568,7 +2625,8 @@ ApplicationWindow {
             Label {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Protected build stock is never offered for trade."
+                visible: !materialsPage.compactFilters
+                text: window.t("materials.stock_protected", "Protected build stock is never offered for trade.")
                 color: green; font.pixelSize: 10; font.bold: true
             }
         }
@@ -2607,7 +2665,7 @@ ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     Label {
-                        text: "FARM MISSING · RAW MATERIALS"
+                        text: window.t("materials.raw_missing", "FARM MISSING · RAW MATERIALS")
                         color: accentSecondary; font.pixelSize: 16; font.bold: true
                     }
                     Item { Layout.fillWidth: true }
@@ -2618,7 +2676,7 @@ ApplicationWindow {
                     }
                 }
                 Label {
-                    text: "Only current Wishlist demand · sorted by grade, then missing amount"
+                    text: window.t("materials.raw_order", "Only current Wishlist demand · sorted by grade, then missing amount")
                     color: muted; font.pixelSize: 11
                 }
                 ListView {
@@ -2653,11 +2711,11 @@ ApplicationWindow {
                             ColumnLayout {
                                 Layout.preferredWidth: 220
                                 Label {
-                                    text: "G" + modelData.grade + " · " + modelData.name
+                                    text: window.tf("status.grade_short", "G%1", [modelData.grade]) + " · " + modelData.name
                                     color: textPrimary; font.pixelSize: 14; font.bold: true
                                 }
                                 Label {
-                                    text: "MISSING " + modelData.missing + " · STOCK "
+                                    text: window.tf("status.missing_stock_prefix", "MISSING %1 · STOCK ", [modelData.missing])
                                           + modelData.have + " / " + modelData.need
                                     color: orange; font.pixelSize: 11; font.bold: true
                                 }
@@ -2670,7 +2728,7 @@ ApplicationWindow {
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 Label {
-                                    text: (farmRow.source.system || "NO PRECISE SYSTEM")
+                                    text: (farmRow.source.system || window.t("materials.no_precise_system", "NO PRECISE SYSTEM"))
                                           + (farmRow.source.body ? " · " + farmRow.source.body : "")
                                     color: cyan; font.pixelSize: 13; font.bold: true
                                     Layout.fillWidth: true; elide: Text.ElideRight
@@ -2696,7 +2754,7 @@ ApplicationWindow {
                                 CockpitButton {
                                     Layout.fillWidth: true
                                     visible: !!farmRow.source.system
-                                    text: "COPY SYSTEM"
+                                    text: window.t("common.copy_system", "COPY SYSTEM")
                                     implicitWidth: 154
                                     implicitHeight: 38
                                     onClicked: cockpit.copySystem(farmRow.source.system || "")
@@ -2704,7 +2762,7 @@ ApplicationWindow {
                                 CockpitButton {
                                     Layout.fillWidth: true
                                     visible: !!farmRow.source.coordinates
-                                    text: "COPY COORDS"
+                                    text: window.t("materials.copy_coords", "COPY COORDS")
                                     accentColor: green
                                     implicitWidth: 154
                                     implicitHeight: 38
@@ -2716,7 +2774,7 @@ ApplicationWindow {
                     Label {
                         anchors.centerIn: parent
                         visible: materialsPage.farmMissingRows.length === 0
-                        text: "READY · NO RAW MATERIALS MISSING FOR CURRENT PLANS"
+                        text: window.t("materials.raw_ready", "READY · NO RAW MATERIALS MISSING FOR CURRENT PLANS")
                         color: green; font.pixelSize: 13; font.bold: true
                     }
                 }
@@ -2845,20 +2903,20 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.left: parent.left
                 anchors.top: parent.top
-                Label { text: "SHIP ENGINEERING"; color: textPrimary; font.pixelSize: 24; font.bold: true }
-                Label { text: "Ship → physical module → modification → target"; color: muted; font.pixelSize: 13 }
+                Label { text: window.t("engineering.title", "SHIP ENGINEERING"); color: textPrimary; font.pixelSize: 24; font.bold: true }
+                Label { text: window.t("engineering.subtitle", "Ship → physical module → modification → target"); color: muted; font.pixelSize: 13 }
             }
             RowLayout {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
                 spacing: 8
                 CockpitButton {
-                    text: "EXPORT OUTFITTING"
+                    text: window.t("engineering.export", "EXPORT OUTFITTING")
                     enabled: cockpit.ships.length > 0
                     onClicked: cockpit.exportShipOutfitting()
                 }
                 CockpitButton {
-                    text: "IMPORT BUILD"
+                    text: window.t("engineering.import", "IMPORT BUILD")
                     enabled: cockpit.ships.length > 0
                     onClicked: {
                         buildImportTarget.currentIndex = Math.max(
@@ -2876,7 +2934,7 @@ ApplicationWindow {
                 width: 360
                 height: 42
                 Layout.preferredHeight: 42
-                placeholderText: "Search modification…"
+                placeholderText: window.t("engineering.search", "Search modification…")
                 font.pixelSize: 13
                 color: textPrimary; placeholderTextColor: muted
                 leftPadding: 16; rightPadding: 16
@@ -2898,7 +2956,7 @@ ApplicationWindow {
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 16; spacing: 12
                     Label {
-                        text: "ACTIVE SHIP"
+                        text: window.t("engineering.active_ship", "ACTIVE SHIP")
                         color: cyan; font.pixelSize: 13; font.bold: true
                     }
                     ComboBox {
@@ -2946,7 +3004,7 @@ ApplicationWindow {
                         Label {
                             anchors.centerIn: parent
                             visible: !engineeringPage.selectedShipData.symbol
-                            text: "NO SHIP SCHEMATIC"
+                            text: window.t("engineering.no_schematic", "NO SHIP SCHEMATIC")
                             color: muted; font.pixelSize: 11; font.bold: true
                         }
                     }
@@ -2959,7 +3017,7 @@ ApplicationWindow {
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: (engineeringPage.selectedShipData.manufacturer || "UNKNOWN MANUFACTURER")
+                        text: (engineeringPage.selectedShipData.manufacturer || window.t("engineering.unknown_manufacturer", "UNKNOWN MANUFACTURER"))
                               + " · " + String(engineeringPage.selectedShipData.size || "").toUpperCase()
                         color: muted; font.pixelSize: 10; font.bold: true
                         horizontalAlignment: Text.AlignHCenter
@@ -2970,18 +3028,18 @@ ApplicationWindow {
                         columns: 2; columnSpacing: 8; rowSpacing: 8
                         Repeater {
                             model: [
-                                {label: "MAX SPEED", value: (engineeringPage.selectedShipData.maximumSpeed || "—") + " m/s"},
-                                {label: "BOOST", value: (engineeringPage.selectedShipData.boost || "—") + " m/s"},
-                                {label: "JUMP RANGE", value: cockpit.selectedShipStats.jumpRange !== null
+                                    {label: window.t("engineering.max_speed", "MAX SPEED"), value: (engineeringPage.selectedShipData.maximumSpeed || "—") + " m/s"},
+                                    {label: window.t("engineering.boost", "BOOST"), value: (engineeringPage.selectedShipData.boost || "—") + " m/s"},
+                                    {label: window.t("engineering.jump_range", "JUMP RANGE"), value: cockpit.selectedShipStats.jumpRange !== null
                                         && cockpit.selectedShipStats.jumpRange !== undefined
                                         ? Number(cockpit.selectedShipStats.jumpRange).toFixed(1) + " LY" : "—"},
-                                {label: "UNLADEN MASS", value: cockpit.selectedShipStats.unladenMass !== null
+                                    {label: window.t("engineering.unladen_mass", "UNLADEN MASS"), value: cockpit.selectedShipStats.unladenMass !== null
                                         && cockpit.selectedShipStats.unladenMass !== undefined
                                         ? Number(cockpit.selectedShipStats.unladenMass).toFixed(1) + " t" : "—"},
-                                {label: "CARGO", value: cockpit.selectedShipStats.cargoCapacity !== null
+                                    {label: window.t("engineering.cargo", "CARGO"), value: cockpit.selectedShipStats.cargoCapacity !== null
                                         && cockpit.selectedShipStats.cargoCapacity !== undefined
                                         ? cockpit.selectedShipStats.cargoCapacity + " t" : "—"},
-                                {label: "ENGINEERABLE", value: cockpit.engineeringInstalledModules.length}
+                                    {label: window.t("engineering.engineerable", "ENGINEERABLE"), value: cockpit.engineeringInstalledModules.length}
                             ]
                             delegate: Rectangle {
                                 required property var modelData
@@ -2997,7 +3055,7 @@ ApplicationWindow {
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: "Select any ship in your fleet to plan without switching ships in-game."
+                        text: window.t("engineering.ship_help", "Select any ship in your fleet to plan without switching ships in-game.")
                         color: muted; font.pixelSize: 10; wrapMode: Text.WordWrap
                     }
                     Item { Layout.fillHeight: true }
@@ -3101,7 +3159,7 @@ ApplicationWindow {
                     anchors.fill: parent; anchors.margins: 14; spacing: 9
                     Label {
                         visible: !cockpit.selectedBlueprint.id
-                        text: "SELECT A BLUEPRINT FROM THE CATALOG"
+                        text: window.t("engineering.select_blueprint", "SELECT A BLUEPRINT FROM THE CATALOG")
                         color: muted; font.pixelSize: 15; font.bold: true
                         Layout.alignment: Qt.AlignHCenter
                     }
@@ -3110,7 +3168,7 @@ ApplicationWindow {
                                  && engineeringPage.selectedBlueprintChoices.length > 0
                         Layout.fillWidth: true
                         Label {
-                            text: "MODIFICATION"
+                            text: window.t("engineering.modification", "MODIFICATION")
                             color: orange; font.pixelSize: 11; font.bold: true
                         }
                         ComboBox {
@@ -3192,7 +3250,7 @@ ApplicationWindow {
                                 anchors.left: parent.left; anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.margins: 12
-                                text: "🔧 INSTALLED · "
+                                text: window.t("status.installed_prefix", "🔧 INSTALLED · ")
                                       + cockpit.selectedBlueprint.installedBlueprint
                                       + " · G" + cockpit.selectedBlueprint.installedGrade
                                       + (cockpit.selectedBlueprint.installedExperimentalEffect
@@ -3215,7 +3273,7 @@ ApplicationWindow {
                                 anchors.left: parent.left; anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
                                 anchors.margins: 14
-                                text: "WHAT IT DOES · " + (blueprintDetail.guideData.description || "")
+                                text: window.tf("status.what_it_does", "WHAT IT DOES · %1", [blueprintDetail.guideData.description || ""])
                                 color: textSecondary; font.pixelSize: 13
                                 wrapMode: Text.WordWrap
                             }
@@ -3245,16 +3303,16 @@ ApplicationWindow {
                             CockpitButton {
                                 visible: cockpit.editingPlanIndex >= 0
                                 Layout.preferredWidth: 104
-                                text: "CANCEL EDIT"
+                                text: window.t("engineering.cancel_edit", "CANCEL EDIT")
                                 onClicked: cockpit.cancelPlanEdit()
                             }
                         }
-                        Label { text: "PLAN MODE"; color: cyan; font.pixelSize: 12; font.bold: true }
+                        Label { text: window.t("engineering.plan_mode", "PLAN MODE"); color: cyan; font.pixelSize: 12; font.bold: true }
                         RowLayout {
                             Layout.fillWidth: true; spacing: 6
-                            CockpitButton { Layout.fillWidth: true; font.pixelSize: 10; text: "GRADE ONLY"; selected: cockpit.planMode === "grade_only"; onClicked: cockpit.setPlanMode("grade_only") }
-                            CockpitButton { Layout.fillWidth: true; font.pixelSize: 10; text: "EXPERIMENTAL ONLY"; selected: cockpit.planMode === "experimental_only"; onClicked: cockpit.setPlanMode("experimental_only") }
-                            CockpitButton { Layout.fillWidth: true; font.pixelSize: 10; text: "GRADE + EXPERIMENTAL"; selected: cockpit.planMode === "combined"; onClicked: cockpit.setPlanMode("combined") }
+                            CockpitButton { Layout.fillWidth: true; font.pixelSize: 10; text: window.t("engineering.grade_only", "GRADE ONLY"); selected: cockpit.planMode === "grade_only"; onClicked: cockpit.setPlanMode("grade_only") }
+                            CockpitButton { Layout.fillWidth: true; font.pixelSize: 10; text: window.t("engineering.experimental_only", "EXPERIMENTAL ONLY"); selected: cockpit.planMode === "experimental_only"; onClicked: cockpit.setPlanMode("experimental_only") }
+                            CockpitButton { Layout.fillWidth: true; font.pixelSize: 10; text: window.t("engineering.combined", "GRADE + EXPERIMENTAL"); selected: cockpit.planMode === "combined"; onClicked: cockpit.setPlanMode("combined") }
                         }
                         GridLayout {
                             visible: cockpit.planMode !== "experimental_only"
@@ -3264,7 +3322,7 @@ ApplicationWindow {
                             ColumnLayout {
                                 Layout.fillWidth: true; spacing: 6
                                 Label {
-                                    text: "GRADE · CURRENT GRADE"
+                                    text: window.t("engineering.current_grade", "GRADE · CURRENT GRADE")
                                     color: cyan; font.pixelSize: 12; font.bold: true
                                 }
                                 RowLayout {
@@ -3274,7 +3332,7 @@ ApplicationWindow {
                                         delegate: CockpitButton {
                                             required property int index
                                             Layout.fillWidth: true
-                                            text: index === 0 ? "NONE" : "G" + index
+                                text: index === 0 ? window.t("status.value.none", "NONE") : "G" + index
                                             selected: cockpit.currentGrade === index
                                             enabled: !cockpit.editingGradeComplete
                                             implicitWidth: index === 0 ? 62 : 48
@@ -3287,7 +3345,7 @@ ApplicationWindow {
                             ColumnLayout {
                                 Layout.fillWidth: true; spacing: 6
                                 Label {
-                                    text: "TARGET GRADE"
+                                    text: window.t("engineering.target_grade", "TARGET GRADE")
                                     color: cyan; font.pixelSize: 12; font.bold: true
                                 }
                                 RowLayout {
@@ -3298,7 +3356,7 @@ ApplicationWindow {
                                             required property int index
                                             property int gradeValue: index + 1
                                             Layout.fillWidth: true
-                                            text: "G" + gradeValue
+                                            text: window.tf("status.grade_short", "G%1", [gradeValue])
                                             selected: cockpit.targetGrade === gradeValue
                                             enabled: !cockpit.editingGradeComplete
                                             implicitWidth: 48; implicitHeight: 38
@@ -3309,7 +3367,7 @@ ApplicationWindow {
                             }
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
-                        Label { visible: cockpit.planMode !== "experimental_only"; text: "TARGET-GRADE INGREDIENTS"; color: orange; font.pixelSize: 12; font.bold: true }
+                        Label { visible: cockpit.planMode !== "experimental_only"; text: window.t("engineering.target_ingredients", "TARGET-GRADE INGREDIENTS"); color: orange; font.pixelSize: 12; font.bold: true }
                         Flow {
                             visible: cockpit.planMode !== "experimental_only"
                             Layout.fillWidth: true
@@ -3335,7 +3393,7 @@ ApplicationWindow {
                         RowLayout {
                             Layout.fillWidth: true; spacing: 8
                             Label {
-                                text: "ENGINEER"
+                                text: window.t("engineering.engineer", "ENGINEER")
                                 color: cyan; font.pixelSize: 11; font.bold: true
                             }
                             ComboBox {
@@ -3374,7 +3432,7 @@ ApplicationWindow {
                         Label {
                             visible: cockpit.planMode !== "grade_only"
                                      && (cockpit.selectedBlueprint.experimentals || []).length > 0
-                            text: "AVAILABLE EXPERIMENTALS · SELECT DIRECTLY"
+                            text: window.t("engineering.available_experimentals", "AVAILABLE EXPERIMENTALS · SELECT DIRECTLY")
                             color: green; font.pixelSize: 11; font.bold: true
                         }
                         GridLayout {
@@ -3401,20 +3459,20 @@ ApplicationWindow {
                                         anchors.margins: 9; spacing: 2
                                         Label {
                                             Layout.fillWidth: true
-                                            text: modelData.name || "EXPERIMENTAL"
+                                            text: modelData.name || window.t("status.experimental", "EXPERIMENTAL")
                                             color: parent.parent.selectedEffect ? green : textPrimary
                                             font.pixelSize: 11; font.bold: true
                                             elide: Text.ElideRight
                                         }
                                         Label {
                                             Layout.fillWidth: true
-                                            text: "BENEFIT · " + (modelData.benefits || "No listed benefit")
+                                            text: window.tf("status.benefit", "BENEFIT · %1", [modelData.benefits || window.t("engineering.no_benefit", "No listed benefit")])
                                             color: green; font.pixelSize: 9
                                             elide: Text.ElideRight
                                         }
                                         Label {
                                             Layout.fillWidth: true
-                                            text: "TRADE-OFF · " + (modelData.tradeoffs || "No listed drawback")
+                                            text: window.tf("status.tradeoff", "TRADE-OFF · %1", [modelData.tradeoffs || window.t("engineering.no_drawback", "No listed drawback")])
                                             color: orange; font.pixelSize: 9
                                             elide: Text.ElideRight
                                         }
@@ -3435,7 +3493,7 @@ ApplicationWindow {
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 11; spacing: 3
                                 Label {
-                                    text: "✓ LAST JOURNAL CRAFT CONFIRMED"
+                                    text: window.t("engineering.craft_confirmed", "✓ LAST JOURNAL CRAFT CONFIRMED")
                                     color: green; font.pixelSize: 10; font.bold: true
                                 }
                                 Label {
@@ -3449,10 +3507,10 @@ ApplicationWindow {
                         }
                         Label {
                             text: cockpit.planMode === "combined"
-                                  ? "SEQUENCE · EXPERIMENTAL AFTER GRADE COMPLETION"
+                                  ? window.t("engineering.sequence_combined", "SEQUENCE · EXPERIMENTAL AFTER GRADE COMPLETION")
                                   : cockpit.planMode === "experimental_only"
-                                  ? "EXPERIMENTAL IS TRACKED INDEPENDENTLY"
-                                  : "GRADE IS TRACKED WITHOUT EXPERIMENTAL"
+                                  ? window.t("engineering.sequence_experimental", "EXPERIMENTAL IS TRACKED INDEPENDENTLY")
+                                  : window.t("engineering.sequence_grade", "GRADE IS TRACKED WITHOUT EXPERIMENTAL")
                             color: cyan; font.pixelSize: 12; font.bold: true
                         }
                         Label {
@@ -3465,12 +3523,12 @@ ApplicationWindow {
                     CockpitButton {
                         visible: !!cockpit.selectedBlueprint.id
                         text: cockpit.editingPlanIndex >= 0
-                              ? "SAVE MODULE PLAN"
+                              ? window.t("engineering.save_plan", "SAVE MODULE PLAN")
                               : cockpit.planMode === "experimental_only"
-                              ? "PIN EXPERIMENTAL EFFECT"
+                              ? window.t("engineering.pin_experimental", "PIN EXPERIMENTAL EFFECT")
                               : cockpit.planMode === "combined"
-                              ? "PIN GRADE + EXPERIMENTAL PLAN"
-                              : "PIN GRADE PLAN"
+                              ? window.t("engineering.pin_combined", "PIN GRADE + EXPERIMENTAL PLAN")
+                              : window.t("engineering.pin_grade", "PIN GRADE PLAN")
                         enabled: cockpit.canPinEngineeringPlan
                         selected: enabled
                         Layout.fillWidth: true
@@ -3573,9 +3631,9 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.left: parent.left
                 anchors.top: parent.top
-                Label { text: "ENGINEER NAVIGATION"; color: textPrimary; font.pixelSize: 24; font.bold: true }
+                Label { text: window.t("engineers.title", "ENGINEER NAVIGATION"); color: textPrimary; font.pixelSize: 24; font.bold: true }
                 Label {
-                    text: cockpit.system + "  ·  JOURNAL UNLOCK STATE  ·  OFFLINE SYSTEM COORDINATES"
+                text: window.tf("engineers.subtitle", "%1 · JOURNAL UNLOCK STATE · OFFLINE SYSTEM COORDINATES", [cockpit.system])
                     color: muted; font.pixelSize: 13
                 }
             }
@@ -3584,7 +3642,7 @@ ApplicationWindow {
                 anchors.bottom: parent.bottom
                 spacing: 8
                 CockpitButton {
-                    text: "OVERVIEW"
+                    text: window.t("engineers.overview", "OVERVIEW")
                     selected: !engineersPage.unlockMode && !engineersPage.guardianMode
                     onClicked: {
                         engineersPage.unlockMode = false
@@ -3593,7 +3651,7 @@ ApplicationWindow {
                     }
                 }
                 CockpitButton {
-                    text: "UNLOCK GUIDE"
+                    text: window.t("engineers.unlock_guide", "UNLOCK GUIDE")
                     selected: engineersPage.unlockMode
                     onClicked: {
                         engineersPage.unlockMode = true
@@ -3602,7 +3660,7 @@ ApplicationWindow {
                     }
                 }
                 CockpitButton {
-                    text: "TECH BROKERS"
+                    text: window.t("engineers.tech_brokers", "TECH BROKERS")
                     selected: engineersPage.guardianMode
                     onClicked: {
                         engineersPage.unlockMode = false
@@ -3621,7 +3679,7 @@ ApplicationWindow {
                     onTextChanged: window.engineersSearchState = text
                     Layout.preferredWidth: 330
                     Layout.preferredHeight: 42
-                    placeholderText: "Engineer, system, module or blueprint…"
+                    placeholderText: window.t("engineers.search", "Engineer, system, module or blueprint…")
                 }
                 ComboBox {
                     id: engineerStatus
@@ -3648,9 +3706,9 @@ ApplicationWindow {
             spacing: 12
             Repeater {
                 model: [
-                    {"label": "ENGINEERS", "value": cockpit.engineers.length, "tone": cyan},
-                    {"label": "UNLOCKED", "value": cockpit.engineers.filter(function(r) { return r.statusGroup === "unlocked" }).length, "tone": green},
-                    {"label": "PENDING", "value": cockpit.engineers.filter(function(r) { return r.statusGroup === "invited" || r.statusGroup === "known" }).length, "tone": orange}
+                        {"label": window.t("nav.engineers", "ENGINEERS"), "value": cockpit.engineers.length, "tone": cyan},
+                        {"label": window.t("common.unlocked", "UNLOCKED"), "value": cockpit.engineers.filter(function(r) { return r.statusGroup === "unlocked" }).length, "tone": green},
+                        {"label": window.t("status.value.pending", "PENDING"), "value": cockpit.engineers.filter(function(r) { return r.statusGroup === "invited" || r.statusGroup === "known" }).length, "tone": orange}
                 ]
                 delegate: ShadowCard {
                     required property var modelData
@@ -3671,9 +3729,9 @@ ApplicationWindow {
                 anchors.fill: parent; anchors.margins: 18; spacing: 10
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: "ENGINEER INDEX"; color: textPrimary; font.pixelSize: 16; font.bold: true }
+                        Label { text: window.t("engineers.index", "ENGINEER INDEX"); color: textPrimary; font.pixelSize: 16; font.bold: true }
                     Item { Layout.fillWidth: true }
-                    Label { text: "STATUS → DISTANCE → NAME"; color: muted; font.pixelSize: 10; font.bold: true }
+                        Label { text: window.t("engineers.sort_order", "STATUS → DISTANCE → NAME"); color: muted; font.pixelSize: 10; font.bold: true }
                 }
                 ListView {
                     id: engineerList
@@ -3733,22 +3791,23 @@ ApplicationWindow {
                                     Layout.fillWidth: true
                                     Label { text: modelData.name; color: textPrimary; font.pixelSize: 16; font.bold: true }
                                     Label {
-                                        text: modelData.statusGroup === "unlocked" ? "UNLOCKED"
+                                        text: modelData.statusGroup === "unlocked" ? window.t("status.value.unlocked", "UNLOCKED")
                                               : modelData.statusGroup === "invited" || modelData.statusGroup === "known"
-                                                ? "PENDING" : "MISSING"
+                                                ? window.t("status.value.pending", "PENDING")
+                                                : window.t("status.value.missing", "MISSING")
                                         color: modelData.statusGroup === "unlocked" ? green : orange
                                         font.pixelSize: 10; font.bold: true
                                     }
-                                    Label { text: modelData.rank > 0 ? "RANK " + modelData.rank : ""; color: cyan; font.pixelSize: 10; font.bold: true }
+                                    Label { text: modelData.rank > 0 ? window.tf("powerplay.rank_value", "RANK %1", [modelData.rank]) : ""; color: cyan; font.pixelSize: 10; font.bold: true }
                                 }
                                 Label {
                                     text: modelData.system
-                                          + (modelData.distance >= 0 ? " · " + modelData.distance.toFixed(1) + " ly" : " · distance unknown")
+                                          + (modelData.distance >= 0 ? " · " + modelData.distance.toFixed(1) + " ly" : window.t("status.distance_unknown_suffix", " · distance unknown"))
                                     color: cyan; font.pixelSize: 12; font.bold: true
                                 }
                                 Label {
-                                    text: modelData.moduleCount + " module types · "
-                                          + modelData.blueprintCount + " modifications · up to G" + modelData.maxGrade
+                                    text: window.tf("engineers.capabilities", "%1 module types · %2 modifications · up to G%3",
+                                                    [modelData.moduleCount, modelData.blueprintCount, modelData.maxGrade])
                                           + " · " + modelData.openJobs + " open jobs"
                                     color: muted; font.pixelSize: 11
                                 }
@@ -3759,7 +3818,7 @@ ApplicationWindow {
                                 }
                             }
                             CockpitButton {
-                                text: "COPY SYSTEM"
+                                text: window.t("common.copy_system", "COPY SYSTEM")
                                 selected: true
                                 onClicked: cockpit.copySystem(modelData.system)
                             }
@@ -3802,11 +3861,11 @@ ApplicationWindow {
                     ColumnLayout {
                         Layout.fillWidth: true
                         Label {
-                            text: engineersPage.selectedRow.name || "SELECT ENGINEER"
+                            text: engineersPage.selectedRow.name || window.t("engineers.select", "SELECT ENGINEER")
                             color: textPrimary; font.pixelSize: 22; font.bold: true
                         }
                         Label {
-                            text: (engineersPage.selectedRow.system || "Unknown system")
+                            text: (engineersPage.selectedRow.system || window.t("status.unknown_system", "Unknown system"))
                                   + " · " + (engineersPage.selectedRow.unlockGuide
                                              ? engineersPage.selectedRow.unlockGuide.source : "")
                             color: muted; font.pixelSize: 11
@@ -3822,7 +3881,7 @@ ApplicationWindow {
                         }
                     }
                     CockpitButton {
-                        text: "COPY SYSTEM"
+                        text: window.t("common.copy_system", "COPY SYSTEM")
                         selected: true
                         enabled: (
                             (engineersPage.selectedRow.unlockGuide
@@ -3850,7 +3909,7 @@ ApplicationWindow {
                         anchors.fill: parent; anchors.margins: 15; spacing: 6
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "PREREQUISITE → STATUS → NEXT STEP"; color: cyan; font.pixelSize: 10; font.bold: true }
+                            Label { text: window.t("engineers.chain_columns", "PREREQUISITE → STATUS → NEXT STEP"); color: cyan; font.pixelSize: 10; font.bold: true }
                             Item { Layout.fillWidth: true }
                             Label {
                                 text: engineersPage.selectedRow.unlockGuide
@@ -3861,29 +3920,30 @@ ApplicationWindow {
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "PREREQUISITE"; color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 118 }
+                                                Label { text: window.t("engineers.prerequisite", "PREREQUISITE"); color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 118 }
                             Label {
                                 Layout.fillWidth: true
                                 text: (engineersPage.selectedRow.unlockGuide
                                        && engineersPage.selectedRow.unlockGuide.prerequisite)
                                       ? engineersPage.selectedRow.unlockGuide.prerequisite
-                                      : "No external prerequisite"
+                                      : window.t("engineers.no_prerequisite", "No external prerequisite")
                                 color: textSecondary; font.pixelSize: 11; elide: Text.ElideRight
                             }
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "STATUS"; color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 118 }
+                                                Label { text: window.t("common.status", "STATUS"); color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 118 }
                             Label {
                                 text: engineersPage.selectedRow.statusGroup === "unlocked"
-                                      ? "UNLOCKED" : "PENDING"
+                                      ? window.t("status.value.unlocked", "UNLOCKED")
+                                      : window.t("status.value.pending", "PENDING")
                                 color: engineersPage.selectedRow.statusGroup === "unlocked" ? green : orange
                                 font.pixelSize: 11; font.bold: true
                             }
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "NEXT STEP"; color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 118 }
+                                                Label { text: window.t("engineers.next_step", "NEXT STEP"); color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 118 }
                             Label {
                                 Layout.fillWidth: true
                                 text: engineersPage.selectedRow.unlockGuide
@@ -3930,7 +3990,7 @@ ApplicationWindow {
                     }
                 }
 
-                Label { text: "GUIDED UNLOCK CHAIN"; color: orange; font.pixelSize: 12; font.bold: true }
+                            Label { text: window.t("engineers.guided_chain", "GUIDED UNLOCK CHAIN"); color: orange; font.pixelSize: 12; font.bold: true }
                 ListView {
                     id: unlockStepList
                     Layout.fillWidth: true
@@ -3976,9 +4036,9 @@ ApplicationWindow {
                                 }
                             }
                             Label {
-                                text: modelData.state === "complete" ? "READY"
-                                      : modelData.state === "active" ? "PENDING"
-                                      : "MISSING"
+                                text: modelData.state === "complete" ? window.t("status.value.ready", "READY")
+                                      : modelData.state === "active" ? window.t("status.value.pending", "PENDING")
+                                      : window.t("status.value.missing", "MISSING")
                                 color: modelData.state === "complete" ? green
                                      : modelData.state === "active" ? orange : muted
                                 font.pixelSize: 10; font.bold: true
@@ -3988,7 +4048,7 @@ ApplicationWindow {
                 }
                 Label {
                     Layout.fillWidth: true
-                    text: "Journal evidence updates unlock progress. Unknown history remains PENDING."
+                    text: window.t("engineers.unlock_evidence", "Journal evidence updates unlock progress. Unknown history remains PENDING.")
                     color: muted; font.pixelSize: 10; wrapMode: Text.WordWrap
                 }
             }
@@ -4007,7 +4067,7 @@ ApplicationWindow {
                     anchors.fill: parent; anchors.margins: 16; spacing: 10
                     ColumnLayout {
                         Layout.fillWidth: true
-                        Label { text: "TECH BROKER UNLOCKS"; color: textPrimary; font.pixelSize: 16; font.bold: true }
+                            Label { text: window.t("engineers.tech_unlocks", "TECH BROKER UNLOCKS"); color: textPrimary; font.pixelSize: 16; font.bold: true }
                         Label {
                             Layout.fillWidth: true
                             text: cockpit.techBrokerGuide.filter(function(row) { return row.broker === "HUMAN" }).length
@@ -4024,7 +4084,7 @@ ApplicationWindow {
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: "One-time Human and Guardian Technology Broker unlocks"
+                        text: window.t("engineers.broker_intro", "One-time Human and Guardian Technology Broker unlocks")
                         color: muted; font.pixelSize: 10; wrapMode: Text.WordWrap
                     }
                     Flow {
@@ -4068,14 +4128,14 @@ ApplicationWindow {
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label {
-                                        text: (modelData.isTracked ? "★ TRACKED · " : "")
+                                        text: (modelData.isTracked ? window.t("engineers.tracked_prefix", "★ TRACKED · ") : "")
                                               + modelData.broker + " · #" + modelData.sequence
                                         color: modelData.isTracked ? cyan : muted
                                         font.pixelSize: 9; font.bold: true
                                     }
                                     Label { Layout.fillWidth: true; text: modelData.name; color: textPrimary; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight }
                                     Label {
-                                        text: modelData.statusText
+                                        text: window.localizedStatus(modelData.statusText)
                                         color: modelData.status === "unlocked" ? green
                                              : modelData.status === "ready" ? cyan
                                              : modelData.status === "pending" ? orange : muted
@@ -4088,7 +4148,7 @@ ApplicationWindow {
                                           + (modelData.totalMaterials === 1 ? "MATERIAL" : "MATERIALS") + " READY"
                                     color: muted; font.pixelSize: 9
                                 }
-                                Label { text: "NEXT STEP · " + modelData.nextAction; color: cyan; font.pixelSize: 9; font.bold: true }
+                                            Label { text: window.tf("engineers.next_step_value", "NEXT STEP · %1", [modelData.nextAction]); color: cyan; font.pixelSize: 9; font.bold: true }
                             }
                         }
                     }
@@ -4106,7 +4166,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Label {
                                 Layout.fillWidth: true
-                                text: engineersPage.selectedGuardian.name || "SELECT TECH BROKER UNLOCK"
+                                text: engineersPage.selectedGuardian.name || window.t("engineers.select_broker_unlock", "SELECT TECH BROKER UNLOCK")
                                 color: textPrimary; font.pixelSize: 20; font.bold: true
                                 elide: Text.ElideRight
                             }
@@ -4118,7 +4178,7 @@ ApplicationWindow {
                             }
                         }
                         Label {
-                            text: engineersPage.selectedGuardian.statusText || "LOCKED"
+                            text: window.localizedStatus(engineersPage.selectedGuardian.statusText || "LOCKED")
                             color: engineersPage.selectedGuardian.status === "unlocked" ? green
                                  : engineersPage.selectedGuardian.status === "ready" ? cyan
                                  : engineersPage.selectedGuardian.status === "pending" ? orange : muted
@@ -4135,7 +4195,7 @@ ApplicationWindow {
                         }
                         CockpitButton {
                             visible: !!engineersPage.selectedGuardian.destinationSystem
-                            text: "COPY SYSTEM"
+                            text: window.t("common.copy_system", "COPY SYSTEM")
                             selected: true
                             onClicked: cockpit.copySystem(
                                 engineersPage.selectedGuardian.destinationSystem
@@ -4151,13 +4211,13 @@ ApplicationWindow {
                             anchors.fill: parent; anchors.margins: 5
                             Label {
                                 Layout.fillWidth: true
-                                text: "★ ACTIVE TRACK · MATERIAL PRIORITY · NEXT: "
+                                text: window.t("engineers.active_track", "★ ACTIVE TRACK · MATERIAL PRIORITY · NEXT: ")
                                       + (engineersPage.selectedGuardian.nextAction || "PENDING")
                                 color: cyan; font.pixelSize: 10; font.bold: true
                                 elide: Text.ElideRight
                             }
                             CockpitButton {
-                                text: "OPEN FARM MISSING"
+                                text: window.t("engineers.open_missing", "OPEN FARM MISSING")
                                 implicitHeight: 28
                                 onClicked: engineersPage.openTrackedFarmMissing()
                             }
@@ -4168,14 +4228,14 @@ ApplicationWindow {
                         Layout.fillWidth: true; spacing: 4
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "PREREQUISITE"; color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 128 }
+                                        Label { text: window.t("engineers.prerequisite", "PREREQUISITE"); color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 128 }
                             Label { Layout.fillWidth: true; text: engineersPage.selectedGuardian.prerequisite || "Guardian Blueprint Segment"; color: textSecondary; font.pixelSize: 10 }
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "STATUS"; color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 128 }
+                                        Label { text: window.t("common.status", "STATUS"); color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 128 }
                             Label {
-                                text: engineersPage.selectedGuardian.statusText || "LOCKED"
+                                text: window.localizedStatus(engineersPage.selectedGuardian.statusText || "LOCKED")
                                 color: engineersPage.selectedGuardian.status === "unlocked" ? green
                                      : engineersPage.selectedGuardian.status === "ready" ? cyan
                                      : engineersPage.selectedGuardian.status === "pending" ? orange : muted
@@ -4184,8 +4244,8 @@ ApplicationWindow {
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "NEXT STEP"; color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 128 }
-                            Label { Layout.fillWidth: true; text: engineersPage.selectedGuardian.nextAction || "PENDING"; color: cyan; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight }
+                                        Label { text: window.t("engineers.next_step", "NEXT STEP"); color: muted; font.pixelSize: 9; font.bold: true; Layout.preferredWidth: 128 }
+                            Label { Layout.fillWidth: true; text: engineersPage.selectedGuardian.nextAction || window.t("status.value.pending", "PENDING"); color: cyan; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight }
                         }
                     }
                     Label {
@@ -4214,7 +4274,7 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         Label {
-                            text: "BROKER CATALOG · "
+                            text: window.t("engineers.broker_catalog", "BROKER CATALOG · ")
                                   + (engineersPage.selectedGuardian.brokerSubtype || "")
                             color: orange; font.pixelSize: 10; font.bold: true
                         }
@@ -4256,7 +4316,7 @@ ApplicationWindow {
                                     }
                                 }
                                 CockpitButton {
-                                    text: "COPY SYSTEM"
+                                    text: window.t("common.copy_system", "COPY SYSTEM")
                                     onClicked: cockpit.copySystem(modelData.system)
                                 }
                             }
@@ -4266,7 +4326,7 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         Label {
-                            text: "INVENTORY PROGRESS"
+                            text: window.t("engineers.inventory_progress", "INVENTORY PROGRESS")
                             color: muted; font.pixelSize: 9; font.bold: true
                         }
                         Item { Layout.fillWidth: true }
@@ -4294,7 +4354,7 @@ ApplicationWindow {
                         }
                     }
 
-                    Label { text: "REQUIRED MATERIALS"; color: orange; font.pixelSize: 11; font.bold: true }
+                                    Label { text: window.t("engineers.required_materials", "REQUIRED MATERIALS"); color: orange; font.pixelSize: 11; font.bold: true }
                     GridView {
                         id: guardianMaterialGrid
                         Layout.fillWidth: true
@@ -4313,11 +4373,11 @@ ApplicationWindow {
                                 ColumnLayout {
                                     Layout.fillWidth: true; spacing: 2
                                     Label { Layout.fillWidth: true; text: modelData.name; color: textPrimary; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight }
-                                    Label { text: modelData.blueprint ? "GUARDIAN BLUEPRINT" : "MATERIAL"; color: muted; font.pixelSize: 8 }
+                                    Label { text: modelData.blueprint ? window.t("engineers.guardian_blueprint", "GUARDIAN BLUEPRINT") : window.t("common.material", "MATERIAL"); color: muted; font.pixelSize: 8 }
                                     Label { Layout.fillWidth: true; text: modelData.origin; color: muted; font.pixelSize: 8; elide: Text.ElideRight }
                                 }
                                 Label {
-                                    text: "HAVE " + modelData.have + " · NEED " + modelData.need
+                                    text: window.tf("status.have_need_dot", "HAVE %1 · NEED %2", [modelData.have, modelData.need])
                                     color: modelData.ready ? green : orange
                                     font.pixelSize: 11; font.bold: true
                                 }
@@ -4325,7 +4385,7 @@ ApplicationWindow {
                         }
                     }
 
-                    Label { text: "GUIDED UNLOCK CHAIN"; color: orange; font.pixelSize: 11; font.bold: true }
+                                    Label { text: window.t("engineers.guided_chain", "GUIDED UNLOCK CHAIN"); color: orange; font.pixelSize: 11; font.bold: true }
                     ListView {
                         id: guardianStepList
                         Layout.fillWidth: true; Layout.fillHeight: true
@@ -4354,8 +4414,9 @@ ApplicationWindow {
                                     Label { Layout.fillWidth: true; text: modelData.detail; color: textSecondary; font.pixelSize: 10; wrapMode: Text.WordWrap }
                                 }
                                 Label {
-                                    text: modelData.state === "complete" ? "READY"
-                                          : modelData.state === "active" ? "PENDING" : "LOCKED"
+                                    text: modelData.state === "complete" ? window.t("status.value.ready", "READY")
+                                          : modelData.state === "active" ? window.t("status.value.pending", "PENDING")
+                                          : window.t("status.value.locked", "LOCKED")
                                     color: modelData.state === "complete" ? green
                                          : modelData.state === "active" ? orange : muted
                                     font.pixelSize: 9; font.bold: true
@@ -4365,7 +4426,7 @@ ApplicationWindow {
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: "Journal and inventory evidence update this chain; unknown unlock history remains LOCKED."
+                        text: window.t("engineers.chain_note", "Journal and inventory evidence update this chain; unknown unlock history remains LOCKED.")
                         color: muted; font.pixelSize: 9; wrapMode: Text.WordWrap
                     }
                 }
@@ -4401,20 +4462,20 @@ ApplicationWindow {
         onNearbyRadiusChanged: window.hgeNearbyRadiusState = hgeFinderPage.nearbyRadius
         onVisibleCandidateLimitChanged: window.hgeVisibleLimitState = hgeFinderPage.visibleCandidateLimit
         readonly property var findTypeOptions: [
-            {"label": "All Find Types", "key": "ALL FIND TYPES"},
-            {"label": "High Grade Emissions", "key": "HGE"},
-            {"label": "Conflict Zone", "key": "CONFLICT_ZONE"},
-            {"label": "Seeking Meds", "key": "SEEKING_MEDS"},
-            {"label": "Seeking Foods", "key": "SEEKING_FOODS"}
+            {"label": window.t("state.type_all", "All Find Types"), "key": "ALL FIND TYPES"},
+            {"label": window.t("state.type_hge", "High Grade Emissions"), "key": "HGE"},
+            {"label": window.t("state.type_conflict", "Conflict Zone"), "key": "CONFLICT_ZONE"},
+            {"label": window.t("state.type_meds", "Seeking Meds"), "key": "SEEKING_MEDS"},
+            {"label": window.t("state.type_foods", "Seeking Foods"), "key": "SEEKING_FOODS"}
         ]
         function evidenceLabel(key) {
             const labels = {
-                "BGS_PREDICTION": "BGS Prediction",
-                "EDDN_SIGNAL": "EDDN Signal",
-                "LOCAL_JOURNAL": "Local Journal",
-                "ENTERED": "Local Journal · Entered"
+                "BGS_PREDICTION": window.t("state.source_bgs", "BGS Prediction"),
+                "EDDN_SIGNAL": window.t("state.source_eddn", "EDDN Signal"),
+                "LOCAL_JOURNAL": window.t("state.source_journal", "Local Journal"),
+                "ENTERED": window.t("state.source_entered", "Local Journal · Entered")
             }
-            return labels[key] || "Evidence unavailable"
+            return labels[key] || window.t("state.evidence_unavailable", "Evidence unavailable")
         }
         visible: true
         anchors.fill: parent
@@ -4428,9 +4489,9 @@ ApplicationWindow {
             Layout.fillWidth: true
             ColumnLayout {
                 spacing: 2
-                Label { text: "STATE FINDS FINDER"; color: textPrimary; font.pixelSize: 24; font.bold: true }
+                Label { text: window.t("state.title", "STATE FINDS FINDER"); color: textPrimary; font.pixelSize: 24; font.bold: true }
                 Label {
-                    text: "State-dependent signal intelligence · " + cockpit.system
+                    text: window.tf("status.state_system", "State-dependent signal intelligence · %1", [cockpit.system])
                     color: muted; font.pixelSize: 13
                 }
             }
@@ -4450,8 +4511,8 @@ ApplicationWindow {
                 }
             }
             CockpitButton {
-                text: "REFRESH NOW"
-                helpText: "Read new Journal evidence, flush live EDDN reports and remove expired finds"
+                text: window.t("state.refresh", "REFRESH NOW")
+                        helpText: window.t("state.refresh_help", "Read new Journal evidence, flush live EDDN reports and remove expired finds")
                 onClicked: cockpit.refreshStateFinds()
             }
         }
@@ -4479,7 +4540,7 @@ ApplicationWindow {
                     }
                     Item { Layout.fillWidth: true }
                     Label {
-                        text: "FRESHEST FIRST · THEN DISTANCE"
+                        text: window.t("state.sort", "FRESHEST FIRST · THEN DISTANCE")
                         color: muted; font.pixelSize: 10; font.bold: true
                     }
                 }
@@ -4487,7 +4548,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 10
                     Label {
-                        text: "FILTER MATERIAL"
+                        text: window.t("state.filter_material", "FILTER MATERIAL")
                         color: muted; font.pixelSize: 10; font.bold: true
                     }
                     ComboBox {
@@ -4495,7 +4556,7 @@ ApplicationWindow {
                         Layout.preferredWidth: 280
                         implicitHeight: 44
                         model: cockpit.hgeMaterialFilters
-                        Accessible.name: "Filter finds by predicted HGE material"
+                        Accessible.name: window.t("state.filter_material_accessible", "Filter finds by predicted HGE material")
                         onCurrentTextChanged: {
                             hgeFinderPage.materialFilter = currentText
                             hgeFinderPage.visibleCandidateLimit = 250
@@ -4563,8 +4624,8 @@ ApplicationWindow {
                     }
                     Label {
                         text: hgeFinderPage.materialFilter === "ALL HGE MATERIALS"
-                              ? "SHOWING ALL FINDS"
-                              : "PREDICTION MATCHES ONLY"
+                              ? window.t("state.showing_all", "SHOWING ALL FINDS")
+                              : window.t("state.prediction_matches", "PREDICTION MATCHES ONLY")
                         color: orange; font.pixelSize: 9; font.bold: true
                     }
                     Item { Layout.fillWidth: true }
@@ -4573,14 +4634,19 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 10
                     Label {
-                        text: "RANGE & QUALITY"
+                        text: window.t("state.range_quality", "RANGE & QUALITY")
                         color: muted; font.pixelSize: 10; font.bold: true
                     }
                     ComboBox {
                         id: nearbyFilter
                         Layout.preferredWidth: 150; implicitHeight: 44
-                        model: ["ALL DISTANCES", "NEARBY · 25 LY", "NEARBY · 50 LY", "NEARBY · 100 LY"]
-                        Accessible.name: "Filter finds by distance"
+                        model: [
+                            window.t("state.all_distances", "ALL DISTANCES"),
+                            window.t("state.nearby_25", "NEARBY · 25 LY"),
+                            window.t("state.nearby_50", "NEARBY · 50 LY"),
+                            window.t("state.nearby_100", "NEARBY · 100 LY")
+                        ]
+                        Accessible.name: window.t("state.filter_distance", "Filter finds by distance")
                         onCurrentIndexChanged: {
                             hgeFinderPage.nearbyRadius = [0, 25, 50, 100][currentIndex]
                             hgeFinderPage.visibleCandidateLimit = 250
@@ -4590,13 +4656,13 @@ ApplicationWindow {
                         id: evidenceFilter
                         Layout.preferredWidth: 145; implicitHeight: 44
                         model: [
-                            {"label": "BEST", "key": "ALL EVIDENCE"},
-                            {"label": "LIVE", "key": "LIVE ONLY"},
-                            {"label": "PREDICTIONS", "key": "BGS CANDIDATES"}
+                            {"label": window.t("state.evidence_best", "BEST"), "key": "ALL EVIDENCE"},
+                            {"label": window.t("state.evidence_live", "LIVE"), "key": "LIVE ONLY"},
+                            {"label": window.t("state.evidence_predictions", "PREDICTIONS"), "key": "BGS CANDIDATES"}
                         ]
                         textRole: "label"
                         valueRole: "key"
-                        Accessible.name: "Filter finds by evidence quality"
+                        Accessible.name: window.t("state.filter_evidence", "Filter finds by evidence quality")
                         onActivated: {
                             hgeFinderPage.evidenceFilter = currentValue
                             hgeFinderPage.visibleCandidateLimit = 250
@@ -4604,8 +4670,9 @@ ApplicationWindow {
                     }
                     CockpitButton {
                         text: hgeFinderPage.advancedFiltersOpen
-                              ? "HIDE ADVANCED" : "ADVANCED FILTERS"
-                        helpText: "Show optional find type, state and allegiance filters"
+                              ? window.t("settings.hide_advanced", "HIDE ADVANCED")
+                              : window.t("state.advanced_filters", "ADVANCED FILTERS")
+                        helpText: window.t("state.advanced_help", "Show optional find type, state and allegiance filters")
                         onClicked: hgeFinderPage.advancedFiltersOpen =
                                    !hgeFinderPage.advancedFiltersOpen
                     }
@@ -4621,7 +4688,7 @@ ApplicationWindow {
                         model: hgeFinderPage.findTypeOptions
                         textRole: "label"
                         valueRole: "key"
-                        Accessible.name: "Filter finds by type"
+                            Accessible.name: window.t("state.filter_type", "Filter finds by type")
                         onActivated: {
                             hgeFinderPage.findTypeFilter = currentValue
                             hgeFinderPage.visibleCandidateLimit = 250
@@ -4631,7 +4698,7 @@ ApplicationWindow {
                         id: stateFilter
                         width: 190; height: 40
                         model: cockpit.stateFindStateFilters
-                        Accessible.name: "Filter finds by system state"
+                            Accessible.name: window.t("state.filter_state", "Filter finds by system state")
                         onCurrentTextChanged: {
                             hgeFinderPage.stateFilter = currentText
                             hgeFinderPage.visibleCandidateLimit = 250
@@ -4641,15 +4708,15 @@ ApplicationWindow {
                         id: allegianceFilter
                         width: 210; height: 40
                         model: cockpit.stateFindAllegianceFilters
-                        Accessible.name: "Filter finds by allegiance"
+                            Accessible.name: window.t("state.filter_allegiance", "Filter finds by allegiance")
                         onCurrentTextChanged: {
                             hgeFinderPage.allegianceFilter = currentText
                             hgeFinderPage.visibleCandidateLimit = 250
                         }
                     }
                     CockpitButton {
-                        text: "RESET FILTERS"
-                        helpText: "Show every cached find and restore all filter defaults"
+                        text: window.t("state.reset", "RESET FILTERS")
+                            helpText: window.t("state.reset_help", "Show every cached find and restore all filter defaults")
                         implicitHeight: 40
                         onClicked: {
                             findTypeFilter.currentIndex = 0
@@ -4670,7 +4737,7 @@ ApplicationWindow {
                 }
                 Label {
                     Layout.fillWidth: true
-                    text: "Local Journal evidence updates matching finds: LOCAL LIVE and LOCAL ENTERED are direct evidence. EDDN LIVE has verified remaining lifetime; RECENT REPORT and BGS CANDIDATE are weaker."
+                    text: window.t("state.evidence_help", "Local Journal evidence updates matching finds: LOCAL LIVE and LOCAL ENTERED are direct evidence. EDDN LIVE has verified remaining lifetime; RECENT REPORT and BGS CANDIDATE are weaker.")
                     color: muted; font.pixelSize: 10; wrapMode: Text.WordWrap
                 }
                 ListView {
@@ -4700,7 +4767,7 @@ ApplicationWindow {
                                        hgeFinderPage.nearbyRadius,
                                        hgeFinderPage.materialFilter,
                                        hgeFinderPage.evidenceFilter)
-                        text: "LOAD 250 MORE FINDS"
+                        text: window.t("state.load_more", "LOAD 250 MORE FINDS")
                         onClicked: hgeFinderPage.visibleCandidateLimit += 250
                     }
                     delegate: Rectangle {
@@ -4735,7 +4802,9 @@ ApplicationWindow {
                                         color: textPrimary; font.pixelSize: 15; font.bold: true
                                     }
                                     Label {
-                                        text: modelData.matchClass || "UNRESOLVED"
+                                        text: modelData.matchClass
+                                              ? window.localizedStatus(modelData.matchClass)
+                                              : window.t("status.unresolved", "UNRESOLVED")
                                         color: modelData.matchClass === "EXACT MATCH" ? green
                                                : modelData.matchClass === "FAMILY MATCH" ? orange : muted
                                         font.pixelSize: 9; font.bold: true
@@ -4743,20 +4812,20 @@ ApplicationWindow {
                                     Item { Layout.fillWidth: true }
                                     Label {
                                         text: modelData.freshness === "LIVE"
-                                              ? Math.max(1, Math.floor(modelData.remainingSeconds / 60)) + " MIN LEFT"
-                                              : "REPORTED " + modelData.lastReportedMinutes + " MIN AGO"
+                                              ? window.tf("state.minutes_left", "%1 MIN LEFT", [Math.max(1, Math.floor(modelData.remainingSeconds / 60))])
+                                              : window.tf("state.reported_ago", "REPORTED %1 MIN AGO", [modelData.lastReportedMinutes])
                                         color: modelData.freshness === "LIVE" ? green
                                                : modelData.freshness === "RECENT" ? orange : muted
                                         font.pixelSize: 11; font.bold: true
                                     }
                                     Label {
-                                        text: modelData.freshness || "STALE"
+                                        text: window.localizedStatus(modelData.freshness || "STALE")
                                         color: modelData.freshness === "LIVE" ? green
                                                : modelData.freshness === "RECENT" ? orange : muted
                                         font.pixelSize: 10; font.bold: true
                                     }
                                     Label {
-                                        text: modelData.status || "UNKNOWN"
+                                        text: window.localizedStatus(modelData.status || "UNKNOWN")
                                         color: modelData.localNotConfirmed ? error
                                                : (modelData.evidenceKind === "LOCAL_JOURNAL"
                                                   || modelData.evidenceKind === "ENTERED") ? green
@@ -4765,7 +4834,7 @@ ApplicationWindow {
                                     }
                                     Label {
                                         visible: Boolean(modelData.eddnDelivery)
-                                        text: modelData.eddnDelivery || ""
+                                        text: window.localizedStatus(modelData.eddnDelivery || "")
                                         color: modelData.eddnDelivery === "EDDN SENT" ? green
                                                : modelData.eddnDelivery === "EDDN FAILED" ? error
                                                : (modelData.eddnDelivery === "EDDN QUEUED"
@@ -4778,31 +4847,30 @@ ApplicationWindow {
                                 Label {
                                     text: (modelData.distance >= 0
                                            ? modelData.distance.toFixed(1) + " ly"
-                                           : "Distance unknown")
-                                          + " · " + modelData.reportCount
-                                          + " reports · STATE: " + modelData.state
+                                           : window.t("status.distance_unknown", "Distance unknown"))
+                                          + window.tf("state.reports_state", " · %1 reports · STATE: %2", [modelData.reportCount, modelData.state])
                                     color: cyan; font.pixelSize: 11
                                     elide: Text.ElideRight; Layout.fillWidth: true
                                 }
                                 Label {
-                                    text: "ALLEGIANCE: " + modelData.allegiance
-                                          + " · FACTION: " + modelData.faction
+                                    text: window.tf("status.allegiance", "ALLEGIANCE: %1", [modelData.allegiance])
+                                          + window.tf("state.faction", " · FACTION: %1", [modelData.faction])
                                           + (modelData.intensity !== "UNKNOWN"
-                                             ? " · INTENSITY: " + modelData.intensity : "")
+                                             ? window.tf("state.intensity", " · INTENSITY: %1", [modelData.intensity]) : "")
                                     color: orange
                                     font.pixelSize: 10; font.bold: true
                                     elide: Text.ElideRight; Layout.fillWidth: true
                                 }
                                 Label {
                                     text: modelData.findType === "HGE"
-                                          ? "HGE MATERIALS: " + (modelData.materials || "No reliable material prediction")
-                                          : "EVIDENCE: " + hgeFinderPage.evidenceLabel(modelData.evidenceKind)
+                                          ? window.tf("state.hge_materials", "HGE MATERIALS: %1", [modelData.materials || window.t("state.no_prediction", "No reliable material prediction")])
+                                          : window.tf("state.evidence", "EVIDENCE: %1", [hgeFinderPage.evidenceLabel(modelData.evidenceKind)])
                                     color: muted; font.pixelSize: 9
                                     elide: Text.ElideRight; Layout.fillWidth: true
                                 }
                             }
                             CockpitButton {
-                                text: "COPY SYSTEM"
+                                text: window.t("common.copy_system", "COPY SYSTEM")
                                 onClicked: cockpit.copySystem(modelData.system)
                             }
                         }
@@ -4813,23 +4881,23 @@ ApplicationWindow {
                         symbol: "⌖"
                         title: hgeFinderPage.nearbyRadius > 0
                                && cockpit.system === "Unknown system"
-                               ? "CURRENT POSITION UNKNOWN"
+                               ? window.t("state.position_unknown", "CURRENT POSITION UNKNOWN")
                                : cockpit.stateFindCount(
                                      "ALL FIND TYPES", "ALL STATES",
                                      "ALL ALLEGIANCES", 0,
                                      "ALL HGE MATERIALS", "ALL EVIDENCE") === 0
-                                 ? "NO STATE FINDS DATA YET"
-                                 : "NO FINDS MATCH THESE FILTERS"
+                                 ? window.t("state.no_data", "NO STATE FINDS DATA YET")
+                                 : window.t("state.no_matches", "NO FINDS MATCH THESE FILTERS")
                         detail: hgeFinderPage.nearbyRadius > 0 && cockpit.system === "Unknown system"
-                                ? "Nearby filtering needs a current three-dimensional Journal position. Jump or reload the Journal, then try again."
+                                ? window.t("state.position_help", "Nearby filtering needs a current three-dimensional Journal position. Jump or reload the Journal, then try again.")
                                 : cockpit.stateFindCount(
                                       "ALL FIND TYPES", "ALL STATES",
                                       "ALL ALLEGIANCES", 0,
                                       "ALL HGE MATERIALS", "ALL EVIDENCE") > 0
-                                  ? "Cached finds exist, but none match the active filters. Use Reset Filters to show everything."
+                                  ? window.t("state.no_matches_help", "Cached finds exist, but none match the active filters. Use Reset Filters to show everything.")
                                   : cockpit.eddnListenerEnabled
-                                    ? "Listening for EDDN BGS and signal reports. Findings appear when relevant data arrives."
-                                    : "Enable live State Finds intelligence under Settings → Connections."
+                                    ? window.t("state.listening_help", "Listening for EDDN BGS and signal reports. Findings appear when relevant data arrives.")
+                                    : window.t("state.enable_help", "Enable live State Finds intelligence under Settings → Connections.")
                         tone: cyan
                     }
                 }
@@ -4908,7 +4976,7 @@ ApplicationWindow {
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 2
                 Label {
-                    text: cockpit.commanderKnown ? "CMDR " + cockpit.commander : "CMDR OVERVIEW"
+                text: cockpit.commanderKnown ? "CMDR " + cockpit.commander : window.t("commander.overview", "CMDR OVERVIEW")
                     color: textPrimary; font.pixelSize: 24; font.bold: true
                 }
                 Label {
@@ -4919,7 +4987,9 @@ ApplicationWindow {
                 }
             }
             Label {
-                text: cockpit.journalAuto ? "● JOURNAL LIVE" : "Ⅱ JOURNAL PAUSED"
+                text: cockpit.journalAuto
+                      ? window.t("common.journal_live", "● JOURNAL LIVE")
+                      : window.t("common.journal_paused", "Ⅱ JOURNAL PAUSED")
                 color: cockpit.journalAuto ? green : orange
                 font.pixelSize: 10; font.bold: true
             }
@@ -4965,12 +5035,12 @@ ApplicationWindow {
                             Layout.fillWidth: true; Layout.preferredHeight: 26
                             Label {
                                 Layout.fillWidth: true
-                                text: commanderTile.cardData.title || "CMDR DATA"
+                                text: commanderTile.cardData.title || window.t("commander.data", "CMDR DATA")
                                 color: commanderTile.toneColor
                                 font.pixelSize: 11; font.bold: true
                                 elide: Text.ElideRight
                             }
-                            Label { text: "⠿ DRAG"; color: muted; font.pixelSize: 9; font.bold: true }
+                                Label { text: window.t("common.drag", "⠿ DRAG"); color: muted; font.pixelSize: 9; font.bold: true }
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
                         GridLayout {
@@ -4995,7 +5065,7 @@ ApplicationWindow {
                                         ColumnLayout {
                                             Layout.fillWidth: true; spacing: 2
                                             Label { Layout.fillWidth: true; text: modelData.label || "RANK"; color: cyan; font.pixelSize: 7; font.bold: true; elide: Text.ElideRight }
-                                            Label { Layout.fillWidth: true; text: modelData.known ? "RANK " + modelData.rank : "UNKNOWN"; color: textPrimary; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight }
+                                            Label { Layout.fillWidth: true; text: modelData.known ? window.tf("powerplay.rank_value", "RANK %1", [modelData.rank]) : window.t("status.value.unknown", "UNKNOWN"); color: textPrimary; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight }
                                             Label { Layout.fillWidth: true; text: modelData.progressKnown ? modelData.progress + "%" : "—"; color: muted; font.pixelSize: 7 }
                                             ModernProgress {
                                                 Layout.fillWidth: true; implicitHeight: 5
@@ -5022,7 +5092,7 @@ ApplicationWindow {
                                         RowLayout {
                                             Layout.fillWidth: true; spacing: 6
                                             Label { Layout.fillWidth: true; text: modelData.label || "FACTION"; color: textSecondary; font.pixelSize: 9; font.bold: true; elide: Text.ElideRight }
-                                            Label { text: modelData.value || "UNKNOWN"; color: textPrimary; font.pixelSize: 10; font.bold: true }
+                                            Label { text: modelData.value || window.t("status.value.unknown", "UNKNOWN"); color: textPrimary; font.pixelSize: 10; font.bold: true }
                                         }
                                         ModernProgress {
                                             Layout.fillWidth: true; implicitHeight: 7
@@ -5046,7 +5116,7 @@ ApplicationWindow {
                                     ColumnLayout {
                                         anchors.fill: parent; anchors.margins: 10; spacing: 3
                                         Label { text: modelData.label || "SNAPSHOT"; color: textSecondary; font.pixelSize: 9; font.bold: true }
-                                        Label { Layout.fillWidth: true; text: modelData.value || "UNKNOWN"; color: textPrimary; font.pixelSize: 16; font.bold: true; elide: Text.ElideRight }
+                                        Label { Layout.fillWidth: true; text: modelData.value || window.t("status.value.unknown", "UNKNOWN"); color: textPrimary; font.pixelSize: 16; font.bold: true; elide: Text.ElideRight }
                                         Label { Layout.fillWidth: true; text: modelData.detail || ""; color: muted; font.pixelSize: 8; elide: Text.ElideRight }
                                     }
                                 }
@@ -5056,23 +5126,23 @@ ApplicationWindow {
                             Layout.fillWidth: true; Layout.fillHeight: true; spacing: 8
                             visible: modelData === "current-ship"
                             Label { Layout.fillWidth: true; text: commanderTile.firstRow.label || commanderTile.cardData.empty; color: textSecondary; font.pixelSize: 11; font.bold: true; elide: Text.ElideRight }
-                            Label { Layout.fillWidth: true; text: commanderTile.firstRow.value || "UNKNOWN"; color: textPrimary; font.pixelSize: 20; font.bold: true; elide: Text.ElideRight }
-                            Label { Layout.fillWidth: true; text: commanderTile.firstRow.detail || "LOCATION UNKNOWN"; color: cyan; font.pixelSize: 10; elide: Text.ElideRight }
+                            Label { Layout.fillWidth: true; text: commanderTile.firstRow.value || window.t("status.value.unknown", "UNKNOWN"); color: textPrimary; font.pixelSize: 20; font.bold: true; elide: Text.ElideRight }
+                            Label { Layout.fillWidth: true; text: commanderTile.firstRow.detail || window.t("commander.location_unknown", "LOCATION UNKNOWN"); color: cyan; font.pixelSize: 10; elide: Text.ElideRight }
                             Item { Layout.fillHeight: true }
                         }
                         ColumnLayout {
                             Layout.fillWidth: true; Layout.fillHeight: true; spacing: 8
                             visible: modelData === "minor-reputation"
                             Label { text: commanderTile.cardRows.length ? commanderTile.cardRows.length : "—"; color: textPrimary; font.pixelSize: 34; font.bold: true }
-                            Label { text: commanderTile.cardRows.length ? "KNOWN MINOR FACTIONS" : commanderTile.cardData.empty; color: green; font.pixelSize: 10; font.bold: true }
-                            Label { text: "No aggregate reputation bar: faction values are independent."; color: muted; font.pixelSize: 8; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                            Label { text: commanderTile.cardRows.length ? window.t("commander.known_factions", "KNOWN MINOR FACTIONS") : commanderTile.cardData.empty; color: green; font.pixelSize: 10; font.bold: true }
+                                Label { text: window.t("commander.reputation_note", "No aggregate reputation bar: faction values are independent."); color: muted; font.pixelSize: 8; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                             Item { Layout.fillHeight: true }
                         }
                         ColumnLayout {
                             Layout.fillWidth: true; Layout.fillHeight: true; spacing: 8
                             visible: modelData === "squadron"
                             Label { Layout.fillWidth: true; text: commanderTile.firstRow.value || commanderTile.cardData.empty; color: textPrimary; font.pixelSize: 20; font.bold: true; elide: Text.ElideRight }
-                            Label { Layout.fillWidth: true; text: commanderTile.firstRow.detail || "ROLE UNKNOWN"; color: cyan; font.pixelSize: 11; font.bold: true; elide: Text.ElideRight }
+                            Label { Layout.fillWidth: true; text: commanderTile.firstRow.detail || window.t("commander.role_unknown", "ROLE UNKNOWN"); color: cyan; font.pixelSize: 11; font.bold: true; elide: Text.ElideRight }
                             Item { Layout.fillHeight: true }
                         }
                     }
@@ -5137,8 +5207,8 @@ ApplicationWindow {
 
         SettingsHeader {
             qaName: "qa-header-settings"
-            heading: "SETTINGS"
-            subheading: "Appearance, Journal and app behavior"
+            heading: window.t("settings.title", "SETTINGS")
+            subheading: window.t("settings.subtitle", "Appearance, Journal and app behavior")
         }
 
         ScrollView {
@@ -5163,10 +5233,12 @@ ApplicationWindow {
                     anchors.fill: parent; anchors.margins: 22; spacing: 14
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "APPEARANCE"; color: cyan; font.pixelSize: 13; font.bold: true }
+                        Label { text: window.t("settings.appearance", "APPEARANCE"); color: cyan; font.pixelSize: 13; font.bold: true }
                         Item { Layout.fillWidth: true }
                         CockpitButton {
-                            text: settingsPage.advancedOpen ? "HIDE ADVANCED" : "ADVANCED"
+                        text: settingsPage.advancedOpen
+                              ? window.t("settings.hide_advanced", "HIDE ADVANCED")
+                              : window.t("settings.advanced", "ADVANCED")
                             onClicked: settingsPage.advancedOpen = !settingsPage.advancedOpen
                         }
                     }
@@ -5175,7 +5247,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         spacing: 8
                         Label {
-                            text: "GRAPHICS RENDERER · ACTIVE " + cockpit.rendererActive
+                            text: window.tf("status.renderer", "GRAPHICS RENDERER · ACTIVE %1", [cockpit.rendererActive])
                             color: muted; font.pixelSize: 10; font.bold: true
                         }
                         ComboBox {
@@ -5202,21 +5274,62 @@ ApplicationWindow {
                             }
                         }
                         Label {
-                            text: "AUTO is recommended. Change only for GPU or compatibility troubleshooting."
+                            text: window.t("settings.renderer_help", "AUTO is recommended. Change only for GPU or compatibility troubleshooting.")
                             color: muted; font.pixelSize: 10; wrapMode: Text.WordWrap
                             Layout.fillWidth: true
                         }
                     }
                     Label {
                         visible: cockpit.restartRequired
-                        text: "RESTART REQUIRED TO APPLY THE NEW MODE"
+                        text: window.t("settings.restart_required", "RESTART REQUIRED TO APPLY THE NEW MODE")
                         color: orange; font.pixelSize: 11; font.bold: true
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
-                    Label { text: "INTERFACE"; color: muted; font.pixelSize: 10; font.bold: true }
+                    Label { text: window.t("settings.interface", "INTERFACE"); color: muted; font.pixelSize: 10; font.bold: true }
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "UI SCALE"; color: muted; font.pixelSize: 10; font.bold: true }
+                        spacing: 12
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Label { text: window.t("settings.language", "LANGUAGE"); color: muted; font.pixelSize: 10; font.bold: true }
+                            Label {
+                                text: window.t("settings.language_help", "Applies immediately and is saved locally")
+                                color: muted; font.pixelSize: 9
+                            }
+                        }
+                        ComboBox {
+                            id: languageSelector
+                            Layout.preferredWidth: 190
+                            Layout.preferredHeight: 42
+                            model: cockpit.interfaceLanguages
+                            textRole: "label"
+                            valueRole: "id"
+                            currentIndex: {
+                                for (var index = 0; index < count; ++index) {
+                                    if (valueAt(index) === cockpit.interfaceLanguage)
+                                        return index
+                                }
+                                return 0
+                            }
+                            onActivated: cockpit.setInterfaceLanguage(currentValue)
+                            contentItem: Label {
+                                leftPadding: 14
+                                text: languageSelector.displayText
+                                color: textPrimary
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                radius: 10; color: inputBackground
+                                border.width: languageSelector.activeFocus ? 2 : 1
+                                border.color: languageSelector.activeFocus ? cyan : borderTone
+                            }
+                        }
+                    }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: divider }
+                    RowLayout {
+                        Layout.fillWidth: true
+                            Label { text: window.t("settings.ui_scale", "UI SCALE"); color: muted; font.pixelSize: 10; font.bold: true }
                         Slider {
                             Layout.fillWidth: true
                             from: 1.00; to: 1.50; stepSize: 0.05
@@ -5230,9 +5343,9 @@ ApplicationWindow {
                     }
                     ColumnLayout {
                         Layout.fillWidth: true
-                        Label { text: "DESIGN SKIN"; color: muted; font.pixelSize: 10; font.bold: true }
+                        Label { text: window.t("settings.design_skin", "DESIGN SKIN"); color: muted; font.pixelSize: 10; font.bold: true }
                         Label {
-                            text: "Color and accent preview · applies immediately and is saved locally"
+                            text: window.t("settings.design_help", "Color and accent preview · applies immediately and is saved locally")
                             color: muted; font.pixelSize: 9
                         }
                         Flow {
@@ -5278,30 +5391,30 @@ ApplicationWindow {
                         }
                     }
                     CheckBox {
-                        text: "Reduce interface motion"
+                        text: window.t("settings.reduce_motion", "Reduce interface motion")
                         checked: cockpit.reducedMotion
                         onToggled: cockpit.setReducedMotion(checked)
                     }
                     CheckBox {
-                        text: "Show Commander update popups"
+                        text: window.t("settings.commander_popups", "Show Commander update popups")
                         checked: cockpit.commanderUpdatePopups
                         onToggled: cockpit.setCommanderUpdatePopups(checked)
                     }
                     CheckBox {
-                        text: "Enhanced GPU atmosphere and depth"
+                        text: window.t("settings.enhanced_visuals", "Enhanced GPU atmosphere and depth")
                         checked: cockpit.enhancedVisuals
                         onToggled: cockpit.setEnhancedVisuals(checked)
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
-                    Label { text: "WINDOWS BEHAVIOR"; color: green; font.pixelSize: 11; font.bold: true }
+                        Label { text: window.t("settings.windows_behavior", "WINDOWS BEHAVIOR"); color: green; font.pixelSize: 11; font.bold: true }
                     CheckBox {
-                        text: "Keep EDEC running in the system tray when the window closes"
+                        text: window.t("settings.tray_keep", "Keep EDEC running in the system tray when the window closes")
                         checked: cockpit.backgroundMode
                         enabled: cockpit.systemTrayAvailable
                         onToggled: cockpit.setBackgroundMode(checked)
                     }
                     CheckBox {
-                        text: "Start EDEC with Windows in background mode"
+                        text: window.t("settings.autostart", "Start EDEC with Windows in background mode")
                         checked: cockpit.autostartEnabled
                         enabled: cockpit.backgroundMode
                         onToggled: cockpit.setAutostartEnabled(checked)
@@ -5318,14 +5431,14 @@ ApplicationWindow {
                     RowLayout {
                         Layout.fillWidth: true
                         Label {
-                            text: "RUNTIME · " + cockpit.backgroundRuntimeStatus
+                            text: window.tf("status.runtime", "RUNTIME · %1", [cockpit.backgroundRuntimeStatus])
                             color: cockpit.backgroundRuntimeStatus === "RUNNING IN BACKGROUND"
                                    ? green : cyan
                             font.pixelSize: 10; font.bold: true
                         }
                         Item { Layout.fillWidth: true }
                         Label {
-                            text: "ONE INSTANCE ONLY"
+                            text: window.t("settings.single_instance", "ONE INSTANCE ONLY")
                             color: muted; font.pixelSize: 10; font.bold: true
                         }
                     }
@@ -5334,18 +5447,20 @@ ApplicationWindow {
                         spacing: 8
                         CockpitButton {
                             Layout.fillWidth: true
-                            text: cockpit.restartRequired ? "RESTART · APPLY CHANGES" : "RESTART EDEC"
+                        text: cockpit.restartRequired
+                              ? window.t("settings.restart_apply", "RESTART · APPLY CHANGES")
+                              : window.t("settings.restart", "RESTART EDEC")
                             selected: cockpit.restartRequired
                             onClicked: cockpit.requestRestart()
                         }
                         CockpitButton {
                             Layout.fillWidth: true
-                            text: "EXIT EDEC"
+                            text: window.t("settings.exit", "EXIT EDEC")
                             onClicked: cockpit.requestExit()
                         }
                     }
                     CockpitButton {
-                        text: "OPEN ONBOARDING"
+                        text: window.t("settings.onboarding", "OPEN ONBOARDING")
                         onClicked: cockpit.reopenOnboarding()
                     }
                     Item { Layout.fillHeight: true }
@@ -5358,34 +5473,34 @@ ApplicationWindow {
                                         ? 650 : Math.max(620, settingsScroll.availableHeight)
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 22; spacing: 14
-                    Label { text: "LIVE DATA"; color: green; font.pixelSize: 13; font.bold: true }
-                    Label { text: "JOURNAL DIRECTORY"; color: muted; font.pixelSize: 10; font.bold: true }
+                            Label { text: window.t("settings.live_data", "LIVE DATA"); color: green; font.pixelSize: 13; font.bold: true }
+                            Label { text: window.t("settings.journal_directory", "JOURNAL DIRECTORY"); color: muted; font.pixelSize: 10; font.bold: true }
                     TextField {
                         id: journalPathField
                         text: cockpit.journalPath
                         Layout.fillWidth: true
                         selectByMouse: true
-                        placeholderText: "Elite Dangerous Journal directory"
+                        placeholderText: window.t("connections.journal_path", "Elite Dangerous Journal directory")
                     }
                     CockpitButton {
-                        text: "USE JOURNAL DIRECTORY"
+                        text: window.t("connections.use_journal", "USE JOURNAL DIRECTORY")
                         Layout.fillWidth: true
                         onClicked: cockpit.setJournalPath(journalPathField.text)
                     }
                     CheckBox {
-                        text: "Automatically process Elite Journal updates"
+                        text: window.t("connections.journal_auto", "Automatically process Elite Journal updates")
                         checked: cockpit.journalAuto
                         onToggled: cockpit.setJournalAuto(checked)
                     }
                     CockpitButton {
-                        text: "RELOAD JOURNAL & FLEET NOW"
+                        text: window.t("connections.reload", "RELOAD JOURNAL & FLEET NOW")
                         Layout.fillWidth: true
                         onClicked: cockpit.reloadJournalNow()
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: borderTone; Layout.topMargin: 8 }
-                    Label { text: "APPLICATION"; color: cyan; font.pixelSize: 10; font.bold: true }
+                            Label { text: window.t("settings.application", "APPLICATION"); color: cyan; font.pixelSize: 10; font.bold: true }
                     Label { text: "GPU Cockpit " + cockpit.appVersion; color: textPrimary; font.pixelSize: 16; font.bold: true }
-                    Label { text: "Project data is bundled with this release."; color: muted; font.pixelSize: 10 }
+                            Label { text: window.t("settings.bundled_data", "Project data is bundled with this release."); color: muted; font.pixelSize: 10 }
                     Item { Layout.fillHeight: true }
                 }
             }
@@ -5428,7 +5543,7 @@ ApplicationWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
                 CockpitButton { text: "INARA"; selected: connectionsPage.connectionMode === 0; onClicked: connectionsPage.connectionMode = 0 }
-                CockpitButton { text: "EDDN & STATE FINDS"; selected: connectionsPage.connectionMode === 1; accentColor: green; onClicked: connectionsPage.connectionMode = 1 }
+                    CockpitButton { text: window.t("connections.eddn_tab", "EDDN & STATE FINDS"); selected: connectionsPage.connectionMode === 1; accentColor: green; onClicked: connectionsPage.connectionMode = 1 }
             }
         }
 
@@ -5467,20 +5582,22 @@ ApplicationWindow {
                 accent: cyan
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 22; spacing: 12
-                    Label { text: "INARA COMMANDER CONNECTION"; color: cyan; font.pixelSize: 14; font.bold: true }
+                                Label { text: window.t("connections.inara_title", "INARA COMMANDER CONNECTION"); color: cyan; font.pixelSize: 14; font.bold: true }
                     Label {
-                        text: "Nothing is sent until you enable consent. The API key is stored only in your local app profile and is never shown in logs or receipts."
+                        text: window.t("connections.inara_privacy", "Nothing is sent until you enable consent. The API key is stored only in your local app profile and is never shown in logs or receipts.")
                         color: textSecondary; wrapMode: Text.WordWrap; Layout.fillWidth: true
                     }
-                    Label { text: "COMMANDER"; color: muted; font.pixelSize: 10; font.bold: true }
+                                    Label { text: window.t("connections.commander", "COMMANDER"); color: muted; font.pixelSize: 10; font.bold: true }
                     TextField {
                         id: inaraCommanderField
                         Layout.fillWidth: true
                         text: cockpit.inaraCommander
-                        placeholderText: "Commander name"
+                        placeholderText: window.t("connections.commander_name", "Commander name")
                     }
                     Label {
-                        text: cockpit.inaraKeyConfigured ? "API KEY · CONFIGURED" : "API KEY"
+                                    text: cockpit.inaraKeyConfigured
+                                          ? window.t("connections.api_configured", "API KEY · CONFIGURED")
+                                          : window.t("connections.api_key", "API KEY")
                         color: cockpit.inaraKeyConfigured ? green : muted
                         font.pixelSize: 10
                         font.bold: true
@@ -5497,19 +5614,19 @@ ApplicationWindow {
                     }
                     CheckBox {
                         id: inaraConsentBox
-                        text: "Allow this app to contact INARA"
+                        text: window.t("connections.inara_allow", "Allow this app to contact INARA")
                         checked: cockpit.inaraConsent
                     }
                     CheckBox {
                         id: inaraAutoBox
-                        text: "Allow automatic material snapshots after Journal changes"
+                        text: window.t("connections.inara_auto", "Allow automatic material snapshots after Journal changes")
                         checked: cockpit.inaraAutoSync
                         enabled: inaraConsentBox.checked
                     }
                     RowLayout {
                         Layout.fillWidth: true
                         CockpitButton {
-                            text: "SAVE LOCALLY"; selected: true
+                            text: window.t("connections.save_local", "SAVE LOCALLY"); selected: true
                             onClicked: {
                                 cockpit.saveInaraConfig(
                                     inaraKeyField.text,
@@ -5521,10 +5638,10 @@ ApplicationWindow {
                                 inaraKeyField.text = ""
                             }
                         }
-                        CockpitButton { text: "TEST"; enabled: !cockpit.inaraBusy; onClicked: cockpit.testInaraConnection() }
+                                        CockpitButton { text: window.t("connections.test", "TEST"); enabled: !cockpit.inaraBusy; onClicked: cockpit.testInaraConnection() }
                         CockpitButton {
-                            text: "CLEAR KEY"
-                            helpText: "Delete the locally stored INARA API key"
+                            text: window.t("connections.clear_key", "CLEAR KEY")
+                                            helpText: window.t("connections.clear_key_help", "Delete the locally stored INARA API key")
                             onClicked: {
                                 cockpit.clearInaraKey()
                                 inaraKeyField.text = ""
@@ -5532,22 +5649,22 @@ ApplicationWindow {
                         }
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
-                    Label { text: "COMMANDER ACTIONS"; color: green; font.pixelSize: 11; font.bold: true }
+                                Label { text: window.t("connections.commander_actions", "COMMANDER ACTIONS"); color: green; font.pixelSize: 11; font.bold: true }
                     CockpitButton {
-                        text: "SEND CURRENT MATERIAL SNAPSHOT"
+                        text: window.t("connections.send_snapshot", "SEND CURRENT MATERIAL SNAPSHOT")
                         Layout.fillWidth: true
                         enabled: !cockpit.inaraBusy
                         onClicked: cockpit.syncInaraMaterials()
                     }
                     CockpitButton {
-                        text: "IMPORT FLEET · KEEP EXISTING PLANS"
+                        text: window.t("connections.import_fleet", "IMPORT FLEET · KEEP EXISTING PLANS")
                         Layout.fillWidth: true
                         enabled: !cockpit.inaraBusy
                         onClicked: cockpit.importInaraFleet()
                     }
                     Item { Layout.fillHeight: true }
                     Label {
-                        text: cockpit.inaraBusy ? "WORKING…" : cockpit.inaraStatus
+                                text: cockpit.inaraBusy ? window.t("status.working", "WORKING…") : cockpit.inaraStatus
                         color: cockpit.inaraBusy ? orange
                                : cockpit.inaraStatus.indexOf("FAILED") === 0 ? error : green
                         wrapMode: Text.WordWrap; Layout.fillWidth: true; font.bold: true
@@ -5560,9 +5677,9 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 22; spacing: 12
-                    Label { text: "RECEIPTS"; color: orange; font.pixelSize: 14; font.bold: true }
+                                Label { text: window.t("connections.receipts", "RECEIPTS"); color: orange; font.pixelSize: 14; font.bold: true }
                     Label {
-                        text: "Only delivery status is retained — never credentials or transmitted inventory."
+                        text: window.t("connections.delivery_privacy", "Only delivery status is retained — never credentials or transmitted inventory.")
                         color: muted; wrapMode: Text.WordWrap; Layout.fillWidth: true
                     }
                     ListView {
@@ -5601,8 +5718,8 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             visible: parent.count === 0
                             symbol: "↗"
-                            title: "NO INARA REQUESTS YET"
-                            detail: "Receipts appear here after an explicitly approved connection action."
+                            title: window.t("connections.no_inara", "NO INARA REQUESTS YET")
+                            detail: window.t("connections.no_inara_help", "Receipts appear here after an explicitly approved connection action.")
                             tone: cyan
                         }
                     }
@@ -5630,9 +5747,9 @@ ApplicationWindow {
                 ColumnLayout {
                     width: eddnCommunityScroll.availableWidth
                     spacing: 11
-                    Label { text: "EDDN COMMUNITY NETWORK"; color: green; font.pixelSize: 14; font.bold: true }
+                                Label { text: window.t("connections.eddn_title", "EDDN COMMUNITY NETWORK"); color: green; font.pixelSize: 14; font.bold: true }
                     Label {
-                        text: "Uploads contain only schema-approved public galaxy and station data. Commander identifiers and all *_Localised fields are removed before queueing."
+                        text: window.t("connections.eddn_privacy", "Uploads contain only schema-approved public galaxy and station data. Commander identifiers and all *_Localised fields are removed before queueing.")
                         color: textSecondary; wrapMode: Text.WordWrap; Layout.fillWidth: true
                     }
                     Rectangle {
@@ -5645,7 +5762,7 @@ ApplicationWindow {
                             id: edmcVerdictColumn
                             anchors.left: parent.left; anchors.right: parent.right
                             anchors.top: parent.top; anchors.margins: 10; spacing: 4
-                            Label { text: "EDMC PARALLEL STILL NEEDED?"; color: textSecondary; font.pixelSize: 9; font.bold: true }
+                                        Label { text: window.t("connections.edmc_parallel", "EDMC PARALLEL STILL NEEDED?"); color: textSecondary; font.pixelSize: 9; font.bold: true }
                             Label {
                                 text: cockpit.edmcParallelStatus.verdict
                                 color: cockpit.edmcParallelStatus.tone === "READY" ? green : orange
@@ -5653,7 +5770,7 @@ ApplicationWindow {
                             }
                             Label { text: cockpit.edmcParallelStatus.reason; color: textPrimary; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 9 }
                             Label { text: cockpit.edmcParallelStatus.stationNote; color: muted; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 9 }
-                            Label { text: "LIMIT · " + cockpit.edmcParallelStatus.capiNote; color: orange; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 9 }
+                                        Label { text: window.tf("connections.limit", "LIMIT · %1", [cockpit.edmcParallelStatus.capiNote]); color: orange; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 9 }
                         }
                     }
                     Rectangle {
@@ -5662,7 +5779,7 @@ ApplicationWindow {
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 9; spacing: 2
                             Label {
-                                text: "JOURNAL EDDN PARITY · " + cockpit.eddnParity.status
+                                text: window.tf("status.eddn_parity", "JOURNAL EDDN PARITY · %1", [cockpit.eddnParity.status])
                                 color: green; font.pixelSize: 10; font.bold: true
                             }
                             Label {
@@ -5676,28 +5793,28 @@ ApplicationWindow {
                     }
                     CheckBox {
                         id: eddnConsentBox
-                        text: "Allow this app to contact EDDN"
+                        text: window.t("connections.eddn_allow", "Allow this app to contact EDDN")
                         checked: cockpit.eddnConsent
                     }
                     CheckBox {
                         id: eddnUploadBox
-                        text: "Share supported new Journal events anonymously"
+                        text: window.t("connections.eddn_share", "Share supported new Journal events anonymously")
                         checked: cockpit.eddnUploadEnabled
                         enabled: eddnConsentBox.checked
                     }
                     CheckBox {
                         id: eddnListenerBox
-                        text: "Receive live State Finds intelligence"
+                        text: window.t("connections.eddn_receive", "Receive live State Finds intelligence")
                         checked: cockpit.eddnListenerEnabled
                         enabled: eddnConsentBox.checked
                     }
                     CockpitButton {
-                        text: "SAVE EDDN SETTINGS"; selected: true
+                        text: window.t("connections.eddn_save", "SAVE EDDN SETTINGS"); selected: true
                         Layout.fillWidth: true
                         onClicked: cockpit.saveEddnConfig(eddnConsentBox.checked, eddnUploadBox.checked, eddnListenerBox.checked)
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
-                    Label { text: "STATION DATA"; color: orange; font.pixelSize: 10; font.bold: true }
+                                Label { text: window.t("connections.station_data", "STATION DATA"); color: orange; font.pixelSize: 10; font.bold: true }
                     Label {
                         text: cockpit.eddnStationStatus
                         color: textSecondary; wrapMode: Text.WordWrap; Layout.fillWidth: true
@@ -5735,7 +5852,7 @@ ApplicationWindow {
                         }
                     }
                     Label {
-                        text: "MARKET · OUTFITTING · SHIPYARD\nBlack-market schema retired: prohibitions travel through Market data when Elite supplies them."
+                        text: window.t("connections.market_scope", "MARKET · OUTFITTING · SHIPYARD\nBlack-market schema retired: prohibitions travel through Market data when Elite supplies them.")
                         color: muted; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true
                     }
                 }
@@ -5749,13 +5866,13 @@ ApplicationWindow {
                     anchors.fill: parent; anchors.margins: 22; spacing: 10
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "UPLOAD QUEUE & RECEIPTS"; color: orange; font.pixelSize: 14; font.bold: true }
+                                Label { text: window.t("connections.upload_queue", "UPLOAD QUEUE & RECEIPTS"); color: orange; font.pixelSize: 14; font.bold: true }
                         Item { Layout.fillWidth: true }
-                        CockpitButton { text: "RETRY FAILED"; onClicked: cockpit.retryEddnFailed() }
-                        CockpitButton { text: "CLEAR SENT"; helpText: "Remove delivered receipts from the local queue history"; onClicked: cockpit.clearEddnSent() }
+                                    CockpitButton { text: window.t("connections.retry_failed", "RETRY FAILED"); onClicked: cockpit.retryEddnFailed() }
+                                    CockpitButton { text: window.t("connections.clear_sent", "CLEAR SENT"); helpText: window.t("connections.clear_sent_help", "Remove delivered receipts from the local queue history"); onClicked: cockpit.clearEddnSent() }
                     }
                     Label {
-                        text: cockpit.eddnBusy ? "SENDING…" : cockpit.eddnStatus
+                                text: cockpit.eddnBusy ? window.t("status.sending", "SENDING…") : cockpit.eddnStatus
                         color: cockpit.eddnBusy ? orange
                                : cockpit.eddnStatus.indexOf("FAILED") === 0 ? error : green
                         wrapMode: Text.WordWrap; Layout.fillWidth: true
@@ -5767,9 +5884,9 @@ ApplicationWindow {
                             id: deliveryProofColumn
                             anchors.left: parent.left; anchors.right: parent.right
                             anchors.top: parent.top; anchors.margins: 11; spacing: 5
-                            Label { text: "DELIVERY PROOF"; color: cyan; font.pixelSize: 11; font.bold: true }
+                                            Label { text: window.t("connections.delivery_proof", "DELIVERY PROOF"); color: cyan; font.pixelSize: 11; font.bold: true }
                             Label {
-                                text: "QUEUE · " + cockpit.eddnDeliverySummary.waiting + " WAITING · "
+                                text: window.tf("connections.queue_prefix", "QUEUE · %1 WAITING · ", [cockpit.eddnDeliverySummary.waiting])
                                       + cockpit.eddnDeliverySummary.sent + " SENT · "
                                       + cockpit.eddnDeliverySummary.failed + " FAILED"
                                 color: textPrimary; font.bold: true; font.pixelSize: 10
@@ -5784,19 +5901,19 @@ ApplicationWindow {
                             }
                             Label {
                                 visible: Boolean(cockpit.eddnDeliverySummary.lastError)
-                                text: "LAST ERROR · " + cockpit.eddnDeliverySummary.lastError
+                                text: window.tf("status.last_error", "LAST ERROR · %1", [cockpit.eddnDeliverySummary.lastError])
                                 color: error; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 10
                             }
                             Label {
                                 visible: Boolean(cockpit.eddnDeliverySummary.nextRetryAt)
-                                text: "RETRY PENDING · " + cockpit.eddnDeliverySummary.retry
+                                text: window.tf("status.retry_pending", "RETRY PENDING · %1", [cockpit.eddnDeliverySummary.retry])
                                       + " JOB(S) · NEXT ATTEMPT "
                                       + cockpit.eddnDeliverySummary.nextRetryAt
                                 color: orange; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 10
                             }
                             Label {
                                 visible: Boolean(cockpit.eddnDeliverySummary.lastNotShareable)
-                                text: "NOT SHAREABLE · " + cockpit.eddnDeliverySummary.lastNotShareable
+                                text: window.tf("status.not_shareable", "NOT SHAREABLE · %1", [cockpit.eddnDeliverySummary.lastNotShareable])
                                 color: orange; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 10
                             }
                         }
@@ -5814,12 +5931,14 @@ ApplicationWindow {
                             RowLayout {
                                 Layout.fillWidth: true
                                 Label {
-                                    text: "SPANSH CATALOGS"
+                                    text: window.t("connections.spansh", "SPANSH CATALOGS")
                                     color: cyan; font.pixelSize: 11; font.bold: true
                                 }
                                 Item { Layout.fillWidth: true }
                                 CockpitButton {
-                                    text: cockpit.spanshCatalogSyncBusy ? "UPDATING…" : "UPDATE VIA SPANSH · ALL"
+                                text: cockpit.spanshCatalogSyncBusy
+                                      ? window.t("status.updating", "UPDATING…")
+                                      : window.t("connections.update_spansh", "UPDATE VIA SPANSH · ALL")
                                     enabled: !cockpit.spanshCatalogSyncBusy
                                     onClicked: cockpit.updateSpanshCatalogs()
                                 }
@@ -5831,14 +5950,14 @@ ApplicationWindow {
                                 font.pixelSize: 10
                             }
                             Label {
-                                text: "Updates Material Traders plus Human/Guardian Tech Brokers. The bundled 1,622-station catalog stays offline-ready; Sirius remains a separate bundled specialist catalog."
+                                text: window.t("connections.spansh_help", "Updates Material Traders plus Human/Guardian Tech Brokers. The bundled 1,622-station catalog stays offline-ready; Sirius remains a separate bundled specialist catalog.")
                                 color: muted; wrapMode: Text.WordWrap
                                 Layout.fillWidth: true; font.pixelSize: 9
                             }
                         }
                     }
                     Label {
-                        text: "A green HTTP 200 receipt confirms gateway acceptance. Permanent schema rejections are never retried automatically."
+                        text: window.t("connections.http_help", "A green HTTP 200 receipt confirms gateway acceptance. Permanent schema rejections are never retried automatically.")
                         color: muted; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true
                     }
                     ListView {
@@ -5860,13 +5979,13 @@ ApplicationWindow {
                                     Item { Layout.fillWidth: true }
                                     Label { text: (modelData.status || "").toUpperCase(); color: modelData.status === "sent" ? green : orange; font.bold: true; font.pixelSize: 10 }
                                 }
-                                Label { text: (modelData.schema || "") + " · attempt " + (modelData.attempts || 0); color: cyan; font.pixelSize: 10 }
+                                    Label { text: window.tf("connections.attempt", "%1 · attempt %2", [modelData.schema || "", modelData.attempts || 0]); color: cyan; font.pixelSize: 10 }
                                 RowLayout {
                                     Layout.fillWidth: true
                                     Label { text: modelData.result || modelData.error || modelData.sentAt || modelData.created || ""; color: muted; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
                                     CockpitButton {
                                         visible: modelData.retryable
-                                        text: "RETRY"
+                                        text: window.t("common.retry", "RETRY")
                                         onClicked: cockpit.retryEddnJob(modelData.id)
                                     }
                                 }
@@ -5876,8 +5995,8 @@ ApplicationWindow {
                             anchors.centerIn: parent
                             visible: parent.count === 0
                             symbol: "✓"
-                            title: "NO EDDN UPLOADS WAITING"
-                            detail: "No supported new Journal events are waiting. New uploads will appear here before delivery."
+                            title: window.t("connections.no_eddn", "NO EDDN UPLOADS WAITING")
+                            detail: window.t("connections.no_eddn_help", "No supported new Journal events are waiting. New uploads will appear here before delivery.")
                             tone: green
                         }
                     }
@@ -5920,12 +6039,12 @@ ApplicationWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
                 CheckBox {
-                    text: "Advanced logging"
+                    text: window.t("diagnostics.advanced_logging", "Advanced logging")
                     checked: cockpit.debugMode
                     onToggled: cockpit.setDebugMode(checked)
                 }
-                CockpitButton { text: "COPY REPORT"; onClicked: cockpit.copyDiagnostics() }
-                CockpitButton { text: "REFRESH"; selected: true; onClicked: cockpit.refreshDiagnostics() }
+                        CockpitButton { text: window.t("diagnostics.copy_report", "COPY REPORT"); onClicked: cockpit.copyDiagnostics() }
+                        CockpitButton { text: window.t("common.refresh", "REFRESH"); selected: true; onClicked: cockpit.refreshDiagnostics() }
             }
         }
 
@@ -5934,10 +6053,10 @@ ApplicationWindow {
             spacing: 12
             Repeater {
                 model: [
-                    {"label": "JOURNAL", "value": diagnosticsPage.health.status, "tone": diagnosticsPage.health.parserOk ? green : orange},
-                    {"label": "WATCHER", "value": diagnosticsPage.health.watcherActive ? "ACTIVE" : "STOPPED", "tone": diagnosticsPage.health.watcherActive ? green : orange},
-                    {"label": "LAST EVENT", "value": diagnosticsPage.health.lastEvent || "NONE", "tone": cyan},
-                    {"label": "RENDERER", "value": diagnosticsPage.health.renderer, "tone": cyan}
+                            {"label": window.t("diagnostics.journal", "JOURNAL"), "value": window.localizedStatus(diagnosticsPage.health.status), "tone": diagnosticsPage.health.parserOk ? green : orange},
+                            {"label": window.t("diagnostics.watcher", "WATCHER"), "value": window.localizedStatus(diagnosticsPage.health.watcherActive ? "ACTIVE" : "STOPPED"), "tone": diagnosticsPage.health.watcherActive ? green : orange},
+                            {"label": window.t("diagnostics.last_event", "LAST EVENT"), "value": diagnosticsPage.health.lastEvent || window.t("status.value.none", "NONE"), "tone": cyan},
+                            {"label": window.t("status.renderer", "RENDERER"), "value": diagnosticsPage.health.renderer, "tone": cyan}
                 ]
                 delegate: ShadowCard {
                     required property var modelData
@@ -5957,7 +6076,7 @@ ApplicationWindow {
                 Layout.preferredWidth: window.compactSidebar ? 360 : 430; Layout.fillHeight: true
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 18; spacing: 10
-                    Label { text: "JOURNAL PIPELINE"; color: cyan; font.pixelSize: 13; font.bold: true }
+                            Label { text: window.t("diagnostics.journal_pipeline", "JOURNAL PIPELINE"); color: cyan; font.pixelSize: 13; font.bold: true }
                     Repeater {
                         model: [
                             {"name": "Directory", "value": diagnosticsPage.health.directoryExists ? "Available" : "Missing"},
@@ -5981,7 +6100,7 @@ ApplicationWindow {
                         }
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
-                    Label { text: "SERVICE PIPELINE"; color: green; font.pixelSize: 11; font.bold: true }
+                                    Label { text: window.t("diagnostics.service_pipeline", "SERVICE PIPELINE"); color: green; font.pixelSize: 11; font.bold: true }
                     Repeater {
                         model: cockpit.serviceStatus
                         delegate: RowLayout {
@@ -6007,10 +6126,10 @@ ApplicationWindow {
                     anchors.fill: parent; anchors.margins: 18; spacing: 10
                     RowLayout {
                         Layout.fillWidth: true
-                        Label { text: "LOCAL LOG"; color: textPrimary; font.pixelSize: 13; font.bold: true }
+                            Label { text: window.t("diagnostics.local_log", "LOCAL LOG"); color: textPrimary; font.pixelSize: 13; font.bold: true }
                         Item { Layout.fillWidth: true }
-                        Label { text: cockpit.diagnosticLogs.length + " LINES"; color: muted; font.pixelSize: 10 }
-                        CockpitButton { text: "CLEAR LOG"; helpText: "Delete the local diagnostic log"; onClicked: cockpit.clearDiagnosticLog() }
+                            Label { text: window.tf("diagnostics.lines", "%1 LINES", [cockpit.diagnosticLogs.length]); color: muted; font.pixelSize: 10 }
+                                CockpitButton { text: window.t("diagnostics.clear_log", "CLEAR LOG"); helpText: window.t("diagnostics.clear_log_help", "Delete the local diagnostic log"); onClicked: cockpit.clearDiagnosticLog() }
                     }
                     ListView {
                         id: diagnosticLogList
@@ -6028,7 +6147,7 @@ ApplicationWindow {
                         onCountChanged: positionViewAtEnd()
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
-                    Label { text: "CRASH REPORTS"; color: orange; font.pixelSize: 11; font.bold: true }
+                                    Label { text: window.t("diagnostics.crash_reports", "CRASH REPORTS"); color: orange; font.pixelSize: 11; font.bold: true }
                     Label {
                         Layout.fillWidth: true
                         text: cockpit.crashReports.length
@@ -6060,7 +6179,7 @@ ApplicationWindow {
         Label {
             id: craftToastText
             anchors.centerIn: parent
-            text: "✓  " + cockpit.craftConfirmation
+            text: window.tf("status.confirmed", "✓  %1", [cockpit.craftConfirmation])
             color: green
             font.pixelSize: 13
             font.bold: true
@@ -6112,7 +6231,7 @@ ApplicationWindow {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 2
-                Label { text: "COMMANDER UPDATE"; color: cyan; font.pixelSize: 9; font.bold: true }
+                    Label { text: window.t("common.commander_update", "COMMANDER UPDATE"); color: cyan; font.pixelSize: 9; font.bold: true }
                 Label {
                     Layout.fillWidth: true
                     text: window.feedbackMessage
@@ -6128,7 +6247,7 @@ ApplicationWindow {
     Dialog {
         id: buildImportDialog
         objectName: "qa-dialog-build-import"
-        title: "Import Engineering Build"
+        title: window.t("dialog.import.title", "Import Engineering Build")
         modal: true
         anchors.centerIn: parent
         width: Math.max(560, Math.min(1280, window.width - 36))
@@ -6150,17 +6269,17 @@ ApplicationWindow {
             spacing: 10
             Label {
                 Layout.fillWidth: true
-                text: "CORIOLIS JSON · EDSY/SLEF · JOURNAL LOADOUT"
+                text: window.t("dialog.import.formats", "CORIOLIS JSON · EDSY/SLEF · JOURNAL LOADOUT")
                 color: cyan; font.pixelSize: 12; font.bold: true
             }
             Label {
                 Layout.fillWidth: true
-                text: "Paste exported JSON/SLEF, an embedded-data link, or a local .json path. Encoded share links without a documented payload are rejected instead of guessed."
+                text: window.t("import.instructions", "Paste exported JSON/SLEF, an embedded-data link, or a local .json path. Encoded share links without a documented payload are rejected instead of guessed.")
                 color: muted; font.pixelSize: 11; wrapMode: Text.WordWrap
             }
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "TARGET SHIP"; color: orange; font.pixelSize: 10; font.bold: true }
+                    Label { text: window.t("dialog.import.target_ship", "TARGET SHIP"); color: orange; font.pixelSize: 10; font.bold: true }
                 ComboBox {
                     id: buildImportTarget
                     Layout.fillWidth: true
@@ -6171,7 +6290,7 @@ ApplicationWindow {
                     }
                 }
                 CockpitButton {
-                    text: "PREVIEW"
+                    text: window.t("dialog.import.preview", "PREVIEW")
                     selected: true
                     enabled: buildImportSource.text.trim().length > 0
                              && buildImportTarget.currentText.length > 0
@@ -6189,7 +6308,7 @@ ApplicationWindow {
                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
                 TextArea {
                     id: buildImportSource
-                    placeholderText: "Paste Coriolis JSON, EDSY/SLEF, embedded-data link, or C:\\\\path\\\\build.json"
+                    placeholderText: window.t("import.placeholder", "Paste Coriolis JSON, EDSY/SLEF, embedded-data link, or C:\\\\path\\\\build.json")
                     wrapMode: TextEdit.NoWrap
                     font.family: "Consolas"
                     font.pixelSize: 10
@@ -6206,7 +6325,7 @@ ApplicationWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Label {
-                    text: (cockpit.buildImportPreview.source || "NO PREVIEW")
+                    text: (cockpit.buildImportPreview.source || window.t("import.no_preview", "NO PREVIEW"))
                           + " · " + (cockpit.buildImportPreview.shipType || "UNKNOWN SHIP")
                           + (cockpit.buildImportPreview.status
                              ? " · " + cockpit.buildImportPreview.status : "")
@@ -6217,7 +6336,7 @@ ApplicationWindow {
                 }
                 Item { Layout.fillWidth: true }
                 Label {
-                    text: (cockpit.buildImportPreview.recognized || 0) + " ENGINEERED MODULES MAPPED"
+                    text: window.tf("import.mapped", "%1 ENGINEERED MODULES MAPPED", [cockpit.buildImportPreview.recognized || 0])
                           + ((cockpit.buildImportPreview.partial || 0) > 0
                              ? " · " + cockpit.buildImportPreview.partial + " PARTIAL" : "")
                     color: (cockpit.buildImportPreview.partial || 0) > 0 ? orange : cyan
@@ -6253,11 +6372,11 @@ ApplicationWindow {
                             Label {
                                 text: modelData.status === "ready"
                                       ? (modelData.planMode === "experimental_only"
-                                         ? "EXP ONLY"
+                                         ? window.t("import.experimental_only", "EXP ONLY")
                                          : "G" + modelData.grade
                                            + (modelData.experimental ? " + EXP" : ""))
-                                      : modelData.status === "partial" ? "PARTIAL"
-                                      : modelData.status.toUpperCase()
+                                      : modelData.status === "partial" ? window.t("import.partial", "PARTIAL")
+                                      : window.localizedStatus(modelData.status)
                                 color: modelData.status === "ready" ? green : orange
                                 font.pixelSize: 10; font.bold: true
                             }
@@ -6305,11 +6424,11 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Label {
                     Layout.fillWidth: true
-                    text: "Existing plans stay intact; exact duplicates are skipped. Imported target modules remain unbound until confirmed by Journal."
+                    text: window.t("import.safety", "Existing plans stay intact; exact duplicates are skipped. Imported target modules remain unbound until confirmed by Journal.")
                     color: muted; font.pixelSize: 9; wrapMode: Text.WordWrap
                 }
                 CockpitButton {
-                    text: "APPLY TO WISHLIST"
+                    text: window.t("dialog.import.apply", "APPLY TO WISHLIST")
                     selected: true
                     enabled: cockpit.buildImportPreview.compatible
                              && (cockpit.buildImportPreview.recognized || 0) > 0
@@ -6322,7 +6441,7 @@ ApplicationWindow {
     Dialog {
         id: logbookDetailDialog
         objectName: "qa-dialog-logbook-detail"
-        title: "Logbook Entry"
+        title: window.t("dialog.logbook.title", "Logbook Entry")
         modal: true
         anchors.centerIn: parent
         width: Math.min(680, window.width - 80)
@@ -6333,7 +6452,7 @@ ApplicationWindow {
         contentItem: ColumnLayout {
             spacing: 10
             Label {
-                text: cockpit.selectedLogbookEntry.title || "Journal event"
+                text: cockpit.selectedLogbookEntry.title || window.t("logbook.journal_event", "Journal event")
                 color: textPrimary; font.pixelSize: 18; font.bold: true
             }
             Label {
@@ -6359,12 +6478,12 @@ ApplicationWindow {
                 }
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
-            Label { text: "COMMANDER NOTE"; color: orange; font.pixelSize: 10; font.bold: true }
+                Label { text: window.t("dialog.logbook.commander_note", "COMMANDER NOTE"); color: orange; font.pixelSize: 10; font.bold: true }
             TextArea {
                 id: logbookNoteEditor
                 Layout.fillWidth: true
                 Layout.preferredHeight: 110
-                placeholderText: "Add a short personal note for this event…"
+                placeholderText: window.t("dialog.logbook.note", "Add a short personal note for this event…")
                 wrapMode: TextEdit.Wrap
                 onTextChanged: {
                     if (length > 500)
@@ -6379,7 +6498,7 @@ ApplicationWindow {
                 }
                 Item { Layout.fillWidth: true }
                 CockpitButton {
-                    text: "DELETE NOTE"
+                    text: window.t("dialog.logbook.delete", "DELETE NOTE")
                     visible: !!cockpit.selectedLogbookEntry.note
                     accentColor: error
                     onClicked: {
@@ -6388,7 +6507,7 @@ ApplicationWindow {
                     }
                 }
                 CockpitButton {
-                    text: "SAVE NOTE"
+                    text: window.t("dialog.logbook.save", "SAVE NOTE")
                     selected: true
                     onClicked: cockpit.setLogbookNote(
                                    cockpit.selectedLogbookEntry.id || "",
@@ -6401,7 +6520,7 @@ ApplicationWindow {
     Dialog {
         id: shortcutHelpDialog
         objectName: "qa-dialog-shortcuts"
-        title: "Commander Controls"
+        title: window.t("dialog.controls.title", "Commander Controls")
         modal: true
         anchors.centerIn: parent
         width: Math.min(640, window.width - 80)
@@ -6409,7 +6528,7 @@ ApplicationWindow {
         contentItem: ColumnLayout {
             spacing: 8
             Label {
-                text: "FAST COCKPIT CONTROL"
+                text: window.t("dialog.controls.heading", "FAST COCKPIT CONTROL")
                 color: cyan
                 font.bold: true
                 font.pixelSize: 12
@@ -6446,7 +6565,9 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
-                text: (cockpit.journalAuto ? "● JOURNAL LIVE" : "Ⅱ JOURNAL PAUSED")
+                text: cockpit.journalAuto
+                      ? window.t("common.journal_live", "● JOURNAL LIVE")
+                      : window.t("common.journal_paused", "Ⅱ JOURNAL PAUSED")
                       + "   ·   " + (window.enhancedVisuals ? "ENHANCED GPU VISUALS" : "FLAT VISUALS")
                 color: cockpit.journalAuto ? green : orange
                 font.pixelSize: 10
@@ -6457,7 +6578,7 @@ ApplicationWindow {
     Dialog {
         id: globalSearchDialog
         objectName: "qa-dialog-global-search"
-        title: "Global Search"
+        title: window.t("dialog.search.title", "Global Search")
         modal: true
         anchors.centerIn: parent
         width: Math.min(820, window.width - 80)
@@ -6472,7 +6593,7 @@ ApplicationWindow {
             TextField {
                 id: globalSearchField
                 Layout.fillWidth: true
-                placeholderText: "Material, blueprint, module, engineer or system…"
+                placeholderText: window.t("dialog.search.placeholder", "Material, blueprint, module, engineer or system…")
                 onTextChanged: window.globalResults = cockpit.globalSearch(text)
                 Keys.onDownPressed: {
                     if (globalResultList.count > 0) {
@@ -6486,7 +6607,7 @@ ApplicationWindow {
                 }
             }
             Label {
-                text: window.globalResults.length + " RESULTS"
+                text: window.tf("dialog.search.results", "%1 RESULTS", [window.globalResults.length])
                 color: cyan; font.pixelSize: 10; font.bold: true
             }
             ListView {
@@ -6545,7 +6666,7 @@ ApplicationWindow {
     Dialog {
         id: aboutDialog
         objectName: "qa-dialog-about"
-        title: "About ED Engineering Companion"
+        title: window.t("dialog.about.title", "About ED Engineering Companion")
         modal: true
         anchors.centerIn: parent
         width: Math.min(620, window.width - 80)
@@ -6560,7 +6681,7 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
-                text: "Engineering Companion tool for Elite Dangerous"
+                text: window.t("dialog.about.subtitle", "Engineering Companion tool for Elite Dangerous")
                 color: textPrimary
                 font.pixelSize: 14
                 wrapMode: Text.WordWrap
@@ -6568,7 +6689,7 @@ ApplicationWindow {
             Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: "DEVELOPER"; color: muted; font.pixelSize: 10; font.bold: true }
+                    Label { text: window.t("dialog.about.developer", "DEVELOPER"); color: muted; font.pixelSize: 10; font.bold: true }
                 Item { Layout.fillWidth: true }
                 Label { text: "CMDR Forcer"; color: textPrimary; font.pixelSize: 13; font.bold: true }
             }
@@ -6577,34 +6698,34 @@ ApplicationWindow {
                 spacing: 10
                 CockpitButton {
                     objectName: "qa-about-github-link"
-                    text: "OPEN GITHUB"
+                    text: window.t("dialog.about.github", "OPEN GITHUB")
                     Layout.fillWidth: true
                     onClicked: Qt.openUrlExternally("https://github.com/CMDRForcer/ED-Engineering-Companion")
                 }
                 CockpitButton {
                     objectName: "qa-about-kofi-link"
-                    text: "SUPPORT ON KO-FI"
+                    text: window.t("dialog.about.support", "SUPPORT ON KO-FI")
                     Layout.fillWidth: true
                     onClicked: Qt.openUrlExternally("https://ko-fi.com/cmdrforcer")
                 }
             }
             Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
             Label {
-                text: "THANK YOU"
+                text: window.t("dialog.about.thanks", "THANK YOU")
                 color: orange
                 font.pixelSize: 11
                 font.bold: true
             }
             Label {
                 Layout.fillWidth: true
-                text: "Special thanks to everyone who helped shape EDEC — contributors, testers, bug reporters, translators, and the Elite Dangerous community. Thanks also to EDCD/EDDN, INARA, and Spansh for their documentation, services, and community resources."
+                text: window.t("about.thanks_text", "Special thanks to everyone who helped shape EDEC — contributors, testers, bug reporters, translators, and the Elite Dangerous community. Thanks also to EDCD/EDDN, INARA, and Spansh for their documentation, services, and community resources.")
                 color: textSecondary
                 font.pixelSize: 11
                 wrapMode: Text.WordWrap
             }
             Label {
                 Layout.fillWidth: true
-                text: "Licensed under the GNU General Public License v3.0"
+                text: window.t("about.license", "Licensed under the GNU General Public License v3.0")
                 color: green
                 font.pixelSize: 11
                 font.bold: true
@@ -6612,7 +6733,7 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
-                text: "ED Engineering Companion (EDEC) is a third-party tool and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc."
+                text: window.t("about.disclaimer", "ED Engineering Companion (EDEC) is a third-party tool and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc.")
                 color: muted
                 font.pixelSize: 10
                 wrapMode: Text.WordWrap
@@ -6623,7 +6744,7 @@ ApplicationWindow {
     Dialog {
         id: onboardingDialog
         objectName: "qa-dialog-onboarding"
-        title: "Welcome, Commander"
+        title: window.t("dialog.onboarding.title", "Welcome, Commander")
         modal: true
         closePolicy: Popup.NoAutoClose
         anchors.centerIn: parent
@@ -6633,12 +6754,12 @@ ApplicationWindow {
         contentItem: ColumnLayout {
             spacing: 14
             Label {
-                text: "YOUR ENGINEERING COCKPIT"
+                text: window.t("dialog.onboarding.heading", "YOUR ENGINEERING COCKPIT")
                 color: cyan; font.pixelSize: 20; font.bold: true
             }
             Label {
                 Layout.fillWidth: true
-                text: "1 · Pin a module plan in Engineering.\n"
+                text: window.t("onboarding.steps", "1 · Pin a module plan in Engineering.\n")
                       + "2 · Operations calculates materials, safe trades and routes.\n"
                       + "3 · Elite Journal events update inventory, trades and crafts automatically."
                 color: textPrimary; font.pixelSize: 13
@@ -6646,11 +6767,11 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
-                text: "No network connection is required for planning. INARA and EDDN stay disabled until you explicitly grant access in Connections."
+                text: window.t("onboarding.network", "No network connection is required for planning. INARA and EDDN stay disabled until you explicitly grant access in Connections.")
                 color: muted; font.pixelSize: 11; wrapMode: Text.WordWrap
             }
             Label {
-                text: "Press Ctrl+K anywhere for global search."
+                text: window.t("onboarding.search", "Press Ctrl+K anywhere for global search.")
                 color: green; font.pixelSize: 12; font.bold: true
             }
         }
@@ -6701,19 +6822,20 @@ ApplicationWindow {
                         }
                         Label {
                             visible: (cockpit.selectedMaterial.rawAvailability || []).length > 0
-                            text: "AVAILABLE: " + (cockpit.selectedMaterial.rawAvailability || [])
-                                  .map(function(value) {
+                            text: window.tf("status.available", "AVAILABLE: %1", [
+                                (cockpit.selectedMaterial.rawAvailability || []).map(function(value) {
                                       return value === "surface" ? "SURFACE" : "ASTEROIDS"
-                                  }).join(" + ")
+                                }).join(" + ")
+                            ])
                             color: muted; font.pixelSize: 11; font.bold: true
                         }
                     }
                     CockpitButton {
                         id: materialCloseButton
-                        text: "CLOSE"
+                        text: window.t("common.close", "CLOSE")
                         implicitWidth: 92
                         implicitHeight: 44
-                        Accessible.name: "Close material details"
+                        Accessible.name: window.t("materials.close_details", "Close material details")
                         onClicked: cockpit.clearSelectedMaterial()
                     }
                 }
@@ -6721,10 +6843,10 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Repeater {
                         model: [
-                            {"title": "STOCK", "value": (cockpit.selectedMaterial.have || 0) + " / " + (cockpit.selectedMaterial.capacity || 0)},
-                            {"title": "BUILD NEED", "value": cockpit.selectedMaterial.need > 0 ? cockpit.selectedMaterial.need : "NOT NEEDED"},
-                            {"title": "PROTECTED", "value": cockpit.selectedMaterial.protected || 0},
-                            {"title": "SAFE SURPLUS", "value": cockpit.selectedMaterial.surplus || 0}
+                            {"title": window.t("common.stock", "STOCK"), "value": (cockpit.selectedMaterial.have || 0) + " / " + (cockpit.selectedMaterial.capacity || 0)},
+                            {"title": window.t("materials.build_need", "BUILD NEED"), "value": cockpit.selectedMaterial.need > 0 ? cockpit.selectedMaterial.need : window.t("status.value.not_needed", "NOT NEEDED")},
+                            {"title": window.t("materials.protected", "PROTECTED"), "value": cockpit.selectedMaterial.protected || 0},
+                            {"title": window.t("materials.safe_surplus", "SAFE SURPLUS"), "value": cockpit.selectedMaterial.surplus || 0}
                         ]
                         delegate: Rectangle {
                             required property var modelData
@@ -6746,7 +6868,7 @@ ApplicationWindow {
                         radius: 12; color: backgroundSecondary
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 18
-                            Label { text: "WHERE TO GET IT"; color: orange; font.pixelSize: 16; font.bold: true }
+                    Label { text: window.t("materials.where_to_get", "WHERE TO GET IT"); color: orange; font.pixelSize: 16; font.bold: true }
                             ListView {
                                 Layout.fillWidth: true; Layout.fillHeight: true
                                 clip: true
@@ -6777,11 +6899,11 @@ ApplicationWindow {
                                             }
                                             CockpitButton {
                                                 visible: !!modelData.system
-                                                text: "COPY SYSTEM"
+                                                text: window.t("common.copy_system", "COPY SYSTEM")
                                                 accentColor: orange
                                                 implicitWidth: 126
                                                 implicitHeight: 42
-                                                Accessible.name: "Copy material source system"
+                                        Accessible.name: window.t("materials.copy_source_system", "Copy material source system")
                                                 onClicked: cockpit.copySystem(modelData.system || "")
                                             }
                                         }
@@ -6796,7 +6918,7 @@ ApplicationWindow {
                                 Label {
                                     anchors.centerIn: parent
                                     visible: (cockpit.selectedMaterial.sourceCards || []).length === 0
-                                    text: "No source guidance available."
+                                    text: window.t("common.no_source", "No source guidance available.")
                                     color: muted
                                 }
                             }
@@ -6807,7 +6929,7 @@ ApplicationWindow {
                         radius: 12; color: backgroundSecondary
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 18
-                            Label { text: "BEST SAFE TRADES"; color: cyan; font.pixelSize: 16; font.bold: true }
+                    Label { text: window.t("materials.best_safe_trades", "BEST SAFE TRADES"); color: cyan; font.pixelSize: 16; font.bold: true }
                             Rectangle {
                                 visible: !!materialDetailsOverlay.safeTrader.system
                                 Layout.fillWidth: true
@@ -6845,13 +6967,13 @@ ApplicationWindow {
                                         anchors.fill: parent; anchors.margins: 14
                                         spacing: 7
                                         Label {
-                                            text: "GIVE " + modelData.spend + "  " + modelData.sourceName
+                                            text: window.tf("materials.give", "GIVE %1  %2", [modelData.spend, modelData.sourceName])
                                                   + "  →  RECEIVE " + modelData.receive
                                             color: textPrimary; font.pixelSize: 13; font.bold: true
                                             Layout.fillWidth: true; elide: Text.ElideRight
                                         }
                                         Label {
-                                            text: "Stock " + modelData.stock
+                                            text: window.tf("status.stock", "Stock %1", [modelData.stock])
                                                   + " · protected " + modelData.protected
                                                   + " · safe surplus " + modelData.surplus
                                             color: green; font.pixelSize: 12; font.bold: true
@@ -6881,7 +7003,7 @@ ApplicationWindow {
                         radius: 12; color: backgroundSecondary
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 18
-                            Label { text: "USED IN"; color: green; font.pixelSize: 16; font.bold: true }
+                    Label { text: window.t("materials.used_in", "USED IN"); color: green; font.pixelSize: 16; font.bold: true }
                             ListView {
                                 Layout.fillWidth: true; Layout.fillHeight: true
                                 clip: true
@@ -6898,7 +7020,7 @@ ApplicationWindow {
                                             elide: Text.ElideRight; Layout.fillWidth: true
                                         }
                                         Label {
-                                            text: "G" + modelData.grade + " · " + modelData.amount
+                                            text: window.tf("status.grade_short", "G%1", [modelData.grade]) + " · " + modelData.amount
                                                   + " units" + (modelData.engineers ? " · " + modelData.engineers : "")
                                             color: muted; font.pixelSize: 11
                                             elide: Text.ElideRight; Layout.fillWidth: true

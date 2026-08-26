@@ -496,6 +496,9 @@ def run():
             window.setProperty("currentPage", int(preview_page))
         except ValueError:
             pass
+    preview_language = os.environ.get("PHASE14_PREVIEW_LANGUAGE")
+    if preview_language:
+        controller.setInterfaceLanguage(preview_language)
     preview_connection = os.environ.get("PHASE14_PREVIEW_CONNECTION")
     if preview_connection is not None:
         try:

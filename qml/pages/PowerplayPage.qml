@@ -31,18 +31,18 @@ ColumnLayout {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 2
-            Label { text: "POWERPLAY"; color: textPrimary; font.pixelSize: 24; font.bold: true }
+            Label { text: appWindow.t("powerplay.title", "POWERPLAY"); color: textPrimary; font.pixelSize: 24; font.bold: true }
             Label {
                 text: overview.pledged
-                      ? "Journal-derived Commander pledge and local system state"
-                      : "No active Power pledge found in this Commander's Journal"
+                      ? appWindow.t("powerplay.subtitle_pledged", "Journal-derived Commander pledge and local system state")
+                      : appWindow.t("powerplay.subtitle_none", "No active Power pledge found in this Commander's Journal")
                 color: muted
                 font.pixelSize: 11
             }
         }
         Label {
             visible: overview.pledged && overview.timePledgedKnown
-            text: "PLEDGED FOR " + appWindow.powerplayPledgedHours(overview) + " H"
+            text: appWindow.tf("powerplay.pledged", "PLEDGED FOR %1 H", [appWindow.powerplayPledgedHours(overview)])
             color: muted
             font.pixelSize: 12
             font.bold: true
@@ -54,8 +54,8 @@ ColumnLayout {
         Layout.fillHeight: true
         visible: !overview.pledged
         symbol: "⚑"
-        title: "NO POWER AFFILIATION"
-        detail: "EDEC will show Powerplay data after the Journal confirms a Commander pledge. No external account or CAPI query is used."
+        title: appWindow.t("powerplay.none", "NO POWER AFFILIATION")
+        detail: appWindow.t("powerplay.none_help", "EDEC will show Powerplay data after the Journal confirms a Commander pledge. No external account or CAPI query is used.")
         tone: cyan
     }
 
@@ -126,9 +126,9 @@ ColumnLayout {
                 rowSpacing: 14
                 Repeater {
                     model: [
-                        {"label": "RANK", "value": overview.rankKnown ? "RANK " + overview.rank : ""},
-                        {"label": "MERITS", "value": overview.meritsKnown ? Number(overview.merits).toLocaleString(Qt.locale(), "f", 0) : ""},
-                        {"label": "PLEDGED FOR", "value": overview.timePledgedKnown ? appWindow.powerplayPledgedHours(overview) + " H" : ""}
+                        {"label": appWindow.t("powerplay.rank", "RANK"), "value": overview.rankKnown ? appWindow.t("powerplay.rank", "RANK") + " " + overview.rank : ""},
+                        {"label": appWindow.t("powerplay.merits", "MERITS"), "value": overview.meritsKnown ? Number(overview.merits).toLocaleString(Qt.locale(), "f", 0) : ""},
+                        {"label": appWindow.t("powerplay.pledged_for", "PLEDGED FOR"), "value": overview.timePledgedKnown ? appWindow.powerplayPledgedHours(overview) + " H" : ""}
                     ]
                     delegate: ShadowCard {
                         required property var modelData
@@ -162,11 +162,11 @@ ColumnLayout {
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 4
-                            Label { text: "CURRENT SYSTEM"; color: textPrimary; font.pixelSize: 16; font.bold: true }
+                    Label { text: appWindow.t("powerplay.current_system", "CURRENT SYSTEM"); color: textPrimary; font.pixelSize: 16; font.bold: true }
                             Label { Layout.fillWidth: true; text: location.system || ""; color: textSecondary; font.pixelSize: 14; elide: Text.ElideRight }
                             Label {
                                 visible: !!location.controllingPower
-                                text: "CONTROLLED BY " + location.controllingPower
+                                text: appWindow.tf("powerplay.controlled", "CONTROLLED BY %1", [location.controllingPower])
                                 color: muted
                                 font.pixelSize: 9
                                 font.bold: true
@@ -186,7 +186,7 @@ ColumnLayout {
                             Label {
                                 id: stateBadgeText
                                 anchors.centerIn: parent
-                                text: String(location.state || "").toUpperCase()
+                                text: appWindow.localizedStatus(location.state)
                                 color: appWindow.powerplayStateColor(location.state)
                                 font.pixelSize: 11
                                 font.bold: true
@@ -231,7 +231,7 @@ ColumnLayout {
                                     required property string modelData
                                     required property int index
                                     Layout.fillWidth: true
-                                    text: modelData
+                                    text: appWindow.localizedStatus(modelData)
                                     horizontalAlignment: index === 0 ? Text.AlignLeft
                                                          : index === 3 ? Text.AlignRight
                                                          : Text.AlignHCenter
@@ -243,7 +243,7 @@ ColumnLayout {
                     }
                     Label {
                         visible: location.controlProgressKnown === true
-                        text: "CONTROL PROGRESS · "
+                        text: appWindow.t("powerplay.control_progress", "CONTROL PROGRESS · ")
                               + Math.round(location.controlProgress * 100) + "%"
                         color: cyan
                         font.pixelSize: 10
@@ -253,7 +253,7 @@ ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 7
                         visible: location.tugKnown === true
-                        Label { text: "TUG OF WAR"; color: textPrimary; font.pixelSize: 13; font.bold: true }
+                        Label { text: appWindow.t("powerplay.tug_of_war", "TUG OF WAR"); color: textPrimary; font.pixelSize: 13; font.bold: true }
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 10
@@ -284,9 +284,9 @@ ColumnLayout {
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "UNDERMINING"; color: muted; font.pixelSize: 9 }
+                            Label { text: appWindow.t("powerplay.undermining", "UNDERMINING"); color: muted; font.pixelSize: 9 }
                             Item { Layout.fillWidth: true }
-                            Label { text: "REINFORCEMENT"; color: muted; font.pixelSize: 9 }
+                            Label { text: appWindow.t("powerplay.reinforcement", "REINFORCEMENT"); color: muted; font.pixelSize: 9 }
                         }
                     }
                 }
@@ -300,7 +300,7 @@ ColumnLayout {
                 RowLayout {
                     anchors.fill: parent
                     anchors.margins: 18
-                    Label { text: "LAST SALARY"; color: textPrimary; font.pixelSize: 13; font.bold: true }
+                        Label { text: appWindow.t("powerplay.last_salary", "LAST SALARY"); color: textPrimary; font.pixelSize: 13; font.bold: true }
                     Item { Layout.fillWidth: true }
                     Label {
                         text: Number(overview.salary.amount).toLocaleString(Qt.locale(), "f", 0)
@@ -320,7 +320,7 @@ ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 18
                     spacing: 4
-                    Label { text: "RECENT CARGO ACTIVITY"; color: textPrimary; font.pixelSize: 14; font.bold: true }
+                        Label { text: appWindow.t("powerplay.recent_cargo", "RECENT CARGO ACTIVITY"); color: textPrimary; font.pixelSize: 14; font.bold: true }
                     Repeater {
                         model: overview.cargoHistory
                         delegate: ColumnLayout {
@@ -333,7 +333,10 @@ ColumnLayout {
                                 Layout.preferredHeight: 40
                                 Label {
                                     Layout.fillWidth: true
-                                    text: modelData.direction + " · " + modelData.type
+                                    text: appWindow.t(
+                                              modelData.direction === "DELIVER"
+                                              ? "powerplay.deliver" : "powerplay.collect",
+                                              modelData.direction) + " · " + modelData.type
                                     color: modelData.direction === "DELIVER" ? green : cyan
                                     font.pixelSize: 11
                                     font.bold: true
