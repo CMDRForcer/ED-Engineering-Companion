@@ -288,6 +288,9 @@ class CockpitController(QObject):
         self._commander_update_popups = bool(
             ui_config.get("commander_update_popups", True)
         )
+        preview_popups = os.environ.get("PHASE14_PREVIEW_POPUPS")
+        if preview_popups in {"0", "1"}:
+            self._commander_update_popups = preview_popups == "1"
         self._enhanced_visuals = bool(
             ui_config.get("enhanced_visuals", True)
         )

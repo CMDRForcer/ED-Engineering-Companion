@@ -1,44 +1,44 @@
 # ED Engineering Companion (EDEC)
 
-ED Engineering Companion (EDEC) is a free, open-source companion tool for Elite Dangerous. It combines blueprint planning, material tracking, Engineer unlock guidance, Journal processing, and optional INARA/EDDN connectivity in one desktop application.
+ED Engineering Companion is a free, open-source Windows companion for **Elite Dangerous**. It turns local Journal data into a ship-aware engineering workspace: inspect the exact slots of any ship in your fleet, plan upgrades on physical module instances, track materials, choose Engineers, and follow the next useful action without changing ships in-game.
 
-[Download the latest release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · [Changelog](CHANGELOG.md) · User manual: [English](docs/EDEC_User_Manual_Privacy_EN_21.164.pdf) / [Deutsch](docs/EDEC_User_Manual_Privacy_DE_21.164.pdf) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
+[Download the latest release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
 
-![EDEC Commander Operations](docs/images/edec-operations.png)
+![EDEC Ship Engineering in Crimson Dark](docs/images/edec-engineering-crimson.png)
 
-## Features
+## Highlights
 
-- Fleet-aware engineering planning bound to each ship's physical module slots
-- Safe EDEC, EDSY/SLEF, and Coriolis build import with exact hull-slot validation
-- Live raw, manufactured, and encoded material inventory
-- Material farming guidance and trader-route support
-- Engineer Unlock Guide and Technology Broker tracking
-- CMDR overview with ranks, reputation, finances, ship, and squadron
-- Journal-driven Powerplay overview with leader portraits, lore profiles, live pledge duration, rank, merits, local system state, salary, and recent cargo activity
-- Multiple persistent dark design skins with immediate in-app switching
-- Logbook, session history, and personal notes
-- Automatic, rate-limited INARA synchronization
-- EDDN contributions for market, outfitting, shipyard, exploration, and exobiology data
-- Offline-aware handling for INARA, EDDN, and Spansh
-- Customizable navigation and CMDR card ordering
+- **Slot-based ship engineering:** every supported hull uses its own Core Internal, Optional Internal, Hardpoint, Utility Mount, and Limpet/Controller layout.
+- **Fleet-wide planning:** select any known ship for planning without switching to it in Elite Dangerous.
+- **Installed engineering awareness:** Journal-confirmed blueprints, grades, and experimental effects appear directly on their physical module slots.
+- **Safe build interchange:** import EDEC, EDSY/SLEF, and Coriolis builds through exact hull-slot validation; export the selected ship's outfitting with its physical slot identities intact.
+- **Actionable Wishlist:** material readiness, craft progress, Engineer destinations, and trader routes are derived from the selected ship and its pinned plans.
+- **Material intelligence:** live Raw, Manufactured, and Encoded inventory, protected build stock, verified acquisition guidance, and selectable nearest-vs-Journal-confirmed trader routing.
+- **Engineer navigation:** searchable Engineer capabilities, Journal-backed unlock state, guided prerequisite chains, and Human/Guardian Technology Broker tracking.
+- **Powerplay 2.0:** local leader portraits and biographies, pledge duration, rank, merits, salary, cargo activity, and observed system state without inventing unavailable values.
+- **Commander tools:** CMDR overview, Logbook sessions and notes, State Finds, live HGE assistance, configurable navigation, and persistent interface settings.
+- **Four interface languages:** English, German, Spanish, and French. In-game names remain in English where that makes them easier to find in Elite Dangerous.
+- **Optional community connections:** rate-limited INARA synchronization and privacy-filtered EDDN contributions, both with offline-aware queues and retry handling.
 
-## Screenshots
+## Current interface
 
-### CMDR overview
+### Ship Engineering
 
-![EDEC CMDR overview using demo data](docs/images/edec-cmdr-overview.png)
-
-### Engineer Unlock Guide
-
-![EDEC Engineer Unlock Guide using demo data](docs/images/edec-unlock-guide.png)
+Engineering is bound to the selected ship's actual physical slots. The module wrench and grade come from the latest authoritative Loadout and EngineerCraft Journal events; plans remain attached to the slot even when the Commander later views another catalog blueprint.
 
 ### Powerplay
 
-![EDEC Powerplay overview captured from the app with synthetic demo data](docs/images/edec-powerplay-app-anonymous.png)
+The Powerplay page is derived entirely from local Journal events. It selects the pledged leader automatically, presents an offline profile and portrait, and shows only rank, merits, pledge duration, salary, cargo, and system-control values that EDEC has actually observed. Historical signature modules are described as prioritised Powerplay 2.0 unlocks rather than exclusive rewards; Nakato Kaine is represented by her trade and mining focus.
 
-The Powerplay page is derived entirely from local Journal events. It automatically selects the pledged leader, displays a local portrait and English background profile, tracks pledge duration live, and hides unavailable sections instead of inventing values.
+![Journal-driven Powerplay 2.0 overview](docs/images/edec-powerplay-crimson.png)
 
-All screenshots use synthetic demo data and do not contain a real Commander profile or API credentials.
+### Engineer Navigation
+
+The Engineer area combines a capability index with unlock guidance and Technology Broker plans. Entries are ordered by state, distance, and name, while Journal evidence updates unlock progress without guessing unknown history.
+
+![Engineer navigation and capability index](docs/images/edec-engineers-crimson.png)
+
+All screenshots use the **Crimson Dark** theme and synthetic demo data. They contain no real Commander profile, Journal history, service credentials, or API keys.
 
 ## Download and install on Windows
 
@@ -50,69 +50,49 @@ All screenshots use synthetic demo data and do not contain a real Commander prof
 ### Portable installation (recommended)
 
 1. Open the [latest EDEC release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest).
-2. Under **Assets**, download the `EDEC-<version>-Windows.zip` file.
-3. Extract the entire ZIP to a writable folder.
-4. Start `EDEC.exe`. Keep the `_internal` folder next to the executable.
+2. Under **Assets**, download `EDEC-<version>-Windows.zip`.
+3. Extract the complete ZIP to a writable folder.
+4. Start `EDEC.exe` and keep the `_internal` folder beside it.
 
-The portable package includes Python and all required dependencies. Windows SmartScreen may show a warning because the executable is not code-signed yet.
+The Windows package is Explorer-compatible and includes the required runtime. A full project archive and `SHA256SUMS` are published alongside it. Windows SmartScreen may warn because the executable is not currently code-signed.
 
 ### Run from source
 
-To run the source version instead, install Python 3, download **Source code (zip)**, extract it, run `INSTALL_REQUIREMENTS.bat` once, and then start EDEC with `START_APP.bat`.
+Install Python 3, clone or extract the repository, run `INSTALL_REQUIREMENTS.bat` once, and then launch `START_APP.bat`.
 
-Personal settings, Journal cursors, caches, and service credentials are stored outside the program folder and are not part of the GitHub download.
+Personal settings, Journal cursors, caches, plans, and service credentials are stored outside the program directory and are not included in release archives.
 
-## User manual and privacy
+## Data and privacy
 
-The illustrated EDEC 21.164 manual explains installation, navigation, Engineering, the Unlock Guide, local data storage, and the complete INARA, EDDN, and Spansh data flows. It is available in [English](docs/EDEC_User_Manual_Privacy_EN_21.164.pdf) and [German](docs/EDEC_User_Manual_Privacy_DE_21.164.pdf). Both editions use synthetic demo screenshots throughout.
+EDEC works locally from Elite Dangerous Journal files. Network integrations are optional:
 
-## Connections
+- **INARA:** supported Commander events are batched, deduplicated, rate-limited, and recorded with local receipts before optional upload.
+- **EDDN:** supported public market, station, exploration, and exobiology messages are validated and stripped of private or unsupported fields before transmission.
+- **Spansh:** optional read-only catalog data assists navigation and material guidance, with bundled/offline fallbacks when unavailable.
 
-### INARA
-
-INARA synchronization is optional. EDEC batches supported Commander events, applies deduplication, respects rate limits, and stores local receipts. An INARA API key and Commander configuration are required before uploads can be enabled.
-
-### EDDN
-
-EDDN contribution is optional. EDEC validates supported messages locally and removes private or unsupported fields before sending public market, station, exploration, and exobiology data.
-
-### Spansh
-
-Spansh is used as an optional read-only catalog source for navigation and material-farming assistance. EDEC includes offline fallback behavior when the service is unavailable.
+The existing illustrated manuals cover release 21.164 and remain available in [English](docs/EDEC_User_Manual_Privacy_EN_21.164.pdf) and [German](docs/EDEC_User_Manual_Privacy_DE_21.164.pdf). The README and [changelog](CHANGELOG.md) describe the newer interface and behavior.
 
 ## Reliability
 
-- Honest, state-based smoke testing with QML runtime errors connected to the exit code
-- Persistent queues, receipts, and retry backoff for external services
-- Atomic local persistence and multi-process protection
-- Journal processing that tracks recently active files without replaying known lines
+- State-based QML smoke tests whose runtime errors fail the test run
+- Contract tests for physical slot binding, EDEC/EDSY/Coriolis interchange, Powerplay observation boundaries, and external-service safety limits
+- Atomic local persistence, bounded history, multi-process protection, retry backoff, and durable queues
+- Journal processing that follows recently active files without replaying known lines
+- Translation contracts that keep EN/DE/ES/FR catalogs and template placeholders synchronized
 
 ## Development
 
-Install dependencies with:
+Install dependencies and start the source build with:
 
 ```text
 INSTALL_REQUIREMENTS.bat
-```
-
-Start the application with:
-
-```text
 START_APP.bat
 ```
 
-See [`requirements.txt`](requirements.txt) for the Python dependencies.
+See [`requirements.txt`](requirements.txt) for runtime dependencies. EDEC is under active development; contributions, bug reports, translations, and feature suggestions are welcome through [GitHub Issues](https://github.com/CMDRForcer/ED-Engineering-Companion/issues).
 
-## Status
+## License and attribution
 
-EDEC is under active development. Contributions, bug reports, and feature suggestions are welcome through [GitHub Issues](https://github.com/CMDRForcer/ED-Engineering-Companion/issues).
+EDEC is licensed under the [GNU General Public License v3.0](LICENSE) and remains free to use.
 
-## License
-
-EDEC is licensed under the [GNU General Public License v3.0](LICENSE).
-
-## Support
-
-EDEC remains free to use. If you would like to support its development, visit [ko-fi.com/cmdrforcer](https://ko-fi.com/cmdrforcer).
-
-ED Engineering Companion (EDEC) is an independent third-party project and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc.
+ED Engineering Companion is an independent third-party project and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc.

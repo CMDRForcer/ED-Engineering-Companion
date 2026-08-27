@@ -493,12 +493,25 @@ def run():
     preview_page = os.environ.get("PHASE14_PREVIEW_PAGE")
     if preview_page is not None:
         try:
-            window.setProperty("currentPage", int(preview_page))
+            selected_preview_page = int(preview_page)
+            window.setProperty("currentPage", selected_preview_page)
+            # Journal bootstrap may restore the persisted page shortly after
+            # the QML root appears. Reassert explicit preview intent before a
+            # scheduled screenshot so documentation captures stay stable.
+            QTimer.singleShot(
+                500,
+                lambda page=selected_preview_page: window.setProperty(
+                    "currentPage", page
+                ),
+            )
         except ValueError:
             pass
     preview_language = os.environ.get("PHASE14_PREVIEW_LANGUAGE")
     if preview_language:
         controller.setInterfaceLanguage(preview_language)
+    preview_theme = os.environ.get("PHASE14_PREVIEW_THEME")
+    if preview_theme:
+        controller.setTheme(preview_theme)
     preview_connection = os.environ.get("PHASE14_PREVIEW_CONNECTION")
     if preview_connection is not None:
         try:
