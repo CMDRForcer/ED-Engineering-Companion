@@ -1,5 +1,23 @@
 # Changelog
 
+## 21.181 — 2026-08-27
+
+### Added
+
+- Complete English, German, Spanish, and French interface catalogs with immediate in-app language switching and persistent selection.
+- Translation contracts that keep all four catalogs aligned, preserve dynamic placeholders, and verify every Powerplay leader biography.
+
+### Improved
+
+- Localized navigation, Engineering, Wishlist, Materials, Engineers, Operations, Logbook, settings, status text, empty states, and Powerplay leader profiles.
+- In-game names for modules, materials, blueprints, Engineers, systems, and powers remain in English where this improves findability in Elite Dangerous.
+- Material filters wrap responsively for longer translated labels without clipping controls or reducing text size.
+- README content now reflects slot-based Engineering, build interchange, Engineer navigation, Powerplay 2.0, and all supported languages, with new Crimson Dark screenshots from synthetic demo data.
+
+### Safety
+
+- Existing physical-slot binding, EDEC/EDSY/Coriolis interchange, Journal observation boundaries, INARA/EDDN limits, material allocation, and persistence behavior remain covered by the release contract suite.
+
 ## 21.180 — 2026-08-26
 
 ### Added
