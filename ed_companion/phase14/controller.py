@@ -3262,6 +3262,35 @@ class CockpitController(QObject):
             return
         applied = 0
         duplicates = 0
+        desired_path = self._data_dir / "desired_outfitting.json"
+        desired_payload = read_json(desired_path, {})
+        if not isinstance(desired_payload, dict):
+            desired_payload = {}
+        ship_id = str(target.get("id") or "")
+        desired_slots = desired_payload.get(ship_id, {})
+        if not isinstance(desired_slots, dict):
+            desired_slots = {}
+        module_changes = 0
+        for row in preview.get("rows", []):
+            if not isinstance(row, dict) or not row.get("slotBound"):
+                continue
+            slot = str(row.get("slot") or "")
+            desired_module = str(row.get("desiredModule") or "")
+            if not slot or not desired_module:
+                continue
+            if row.get("moduleChange"):
+                desired_slots[slot] = desired_module
+                module_changes += 1
+            else:
+                desired_slots.pop(slot, None)
+        if desired_slots:
+            desired_payload[ship_id] = desired_slots
+        else:
+            desired_payload.pop(ship_id, None)
+        atomic_write(
+            desired_path,
+            json.dumps(desired_payload, ensure_ascii=False, indent=2) + "\n",
+        )
         import_baseline = journal_craft_baseline(
             profiled_journal_events(), target.get("id", "")
         )
@@ -3330,18 +3359,23 @@ class CockpitController(QObject):
                 duplicates += 1
         self._engineering_status = (
             f"Build import applied to {target_ship}: {applied} module plan(s)"
+            + (f" · {module_changes} module replacement(s) tracked"
+               if module_changes else "")
             + (f" · {duplicates} duplicate(s) skipped" if duplicates else "")
             + "."
         )
-        if applied == 0 and duplicates == 0:
+        if applied == 0 and duplicates == 0 and module_changes == 0:
             self._engineering_status = (
                 "Build import applied no plans. Review the preview warnings and "
                 "select at least one safely mapped engineered module."
             )
         self._build_import_preview["applied"] = applied
         self._build_import_preview["duplicates"] = duplicates
+        self._build_import_preview["moduleChangesApplied"] = module_changes
         self._build_import_preview["actionMessage"] = self._engineering_status
-        self._build_import_preview["actionError"] = applied == 0 and duplicates == 0
+        self._build_import_preview["actionError"] = (
+            applied == 0 and duplicates == 0 and module_changes == 0
+        )
         self.refresh()
         self.engineeringChanged.emit()
 

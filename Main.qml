@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import "qml/components"
 import "qml/pages"
@@ -3097,7 +3098,9 @@ ApplicationWindow {
                             }
                             delegate: Rectangle {
                                 required property var modelData
-                                width: ListView.view.width - 8; height: 38; radius: 8
+                                width: ListView.view.width - 8
+                                height: (modelData.moduleChange || modelData.planPending) ? 52 : 38
+                                radius: 8
                                 property bool exactSelection:
                                     engineeringPage.selectedInstalledSlot === String(modelData.slot || "")
                                 color: exactSelection ? active
@@ -3119,6 +3122,7 @@ ApplicationWindow {
                                     anchors.left: parent.left; anchors.leftMargin: 45
                                     anchors.right: slotStatus.left; anchors.rightMargin: 6
                                     anchors.verticalCenter: parent.verticalCenter
+                                    anchors.verticalCenterOffset: (modelData.moduleChange || modelData.planPending) ? -8 : 0
                                     text: modelData.empty
                                           ? (modelData.restriction
                                              ? String(modelData.restriction).replace(/([A-Z])/g, " $1").toUpperCase()
@@ -3129,13 +3133,34 @@ ApplicationWindow {
                                     elide: Text.ElideRight
                                 }
                                 Label {
+                                    visible: modelData.moduleChange || modelData.planPending
+                                    anchors.left: parent.left; anchors.leftMargin: 45
+                                    anchors.right: parent.right; anchors.rightMargin: 8
+                                    anchors.bottom: parent.bottom; anchors.bottomMargin: 5
+                                    text: modelData.moduleChange
+                                          ? window.t("engineering.install_module", "INSTALL")
+                                            + ": "
+                                            + (modelData.desiredSizeRating
+                                               ? modelData.desiredSizeRating + " " : "")
+                                            + modelData.desiredModule
+                                          : window.t("engineering.target_plan", "TARGET")
+                                            + ": G" + modelData.planTargetGrade
+                                            + " · " + modelData.planBlueprint
+                                            + (modelData.planExperimental
+                                               ? " · " + modelData.planExperimental : "")
+                                    color: orange; font.pixelSize: 9; font.bold: true
+                                    elide: Text.ElideRight
+                                }
+                                Label {
                                     id: slotStatus
                                     anchors.right: parent.right; anchors.rightMargin: 9
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: modelData.engineered
+                                    text: modelData.moduleChange ? "↻"
+                                          : modelData.engineered
                                           ? "🔧 G" + modelData.engineeringGrade
                                           : modelData.engineerable ? "PLAN ›" : ""
-                                    color: modelData.engineered ? orange
+                                    color: modelData.moduleChange ? orange
+                                         : modelData.engineered ? orange
                                          : modelData.engineerable ? green : muted
                                     font.pixelSize: 9; font.bold: true
                                 }
@@ -6244,6 +6269,16 @@ ApplicationWindow {
         }
     }
 
+    FileDialog {
+        id: buildImportFileDialog
+        title: window.t("dialog.import.choose_file", "Select build file")
+        nameFilters: [window.t("dialog.import.json_files", "JSON build files (*.json)")]
+        onAccepted: {
+            buildImportSource.text = selectedFile.toString()
+            buildImportPreviewTimer.restart()
+        }
+    }
+
     Dialog {
         id: buildImportDialog
         objectName: "qa-dialog-build-import"
@@ -6274,8 +6309,14 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
-                text: window.t("import.instructions", "Paste exported JSON/SLEF, an embedded-data link, or a local .json path. Encoded share links without a documented payload are rejected instead of guessed.")
+                text: window.t("import.instructions", "Select or drop a JSON build file. You can also paste exported JSON/SLEF or an embedded-data link.")
                 color: muted; font.pixelSize: 11; wrapMode: Text.WordWrap
+            }
+            CockpitButton {
+                Layout.fillWidth: true
+                text: window.t("dialog.import.choose_file", "SELECT JSON BUILD FILE")
+                selected: true
+                onClicked: buildImportFileDialog.open()
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -6308,7 +6349,7 @@ ApplicationWindow {
                 ScrollBar.vertical.policy: ScrollBar.AsNeeded
                 TextArea {
                     id: buildImportSource
-                    placeholderText: window.t("import.placeholder", "Paste Coriolis JSON, EDSY/SLEF, embedded-data link, or C:\\\\path\\\\build.json")
+                    placeholderText: window.t("import.placeholder", "Drop a .json file here, or paste Coriolis JSON / EDSY-SLEF / embedded-data link")
                     wrapMode: TextEdit.NoWrap
                     font.family: "Consolas"
                     font.pixelSize: 10
@@ -6319,6 +6360,16 @@ ApplicationWindow {
                             buildImportPreviewTimer.restart()
                         else
                             cockpit.clearBuildImport()
+                    }
+                }
+                DropArea {
+                    anchors.fill: parent
+                    onDropped: function(drop) {
+                        if (drop.hasUrls && drop.urls.length > 0) {
+                            buildImportSource.text = drop.urls[0].toString()
+                            buildImportPreviewTimer.restart()
+                            drop.acceptProposedAction()
+                        }
                     }
                 }
             }
@@ -6336,7 +6387,9 @@ ApplicationWindow {
                 }
                 Item { Layout.fillWidth: true }
                 Label {
-                    text: window.tf("import.mapped", "%1 ENGINEERED MODULES MAPPED", [cockpit.buildImportPreview.recognized || 0])
+                    text: window.tf("import.mapped", "%1 IMPORT ITEMS MAPPED", [cockpit.buildImportPreview.recognized || 0])
+                          + ((cockpit.buildImportPreview.moduleChanges || 0) > 0
+                             ? " · " + cockpit.buildImportPreview.moduleChanges + " MODULE SWAPS" : "")
                           + ((cockpit.buildImportPreview.partial || 0) > 0
                              ? " · " + cockpit.buildImportPreview.partial + " PARTIAL" : "")
                     color: (cockpit.buildImportPreview.partial || 0) > 0 ? orange : cyan
@@ -6371,7 +6424,9 @@ ApplicationWindow {
                             Label { text: modelData.module; color: textPrimary; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
                             Label {
                                 text: modelData.status === "ready"
-                                      ? (modelData.planMode === "experimental_only"
+                                      ? (modelData.planMode === "module_only"
+                                         ? window.t("import.module_swap", "MODULE SWAP")
+                                         : modelData.planMode === "experimental_only"
                                          ? window.t("import.experimental_only", "EXP ONLY")
                                          : "G" + modelData.grade
                                            + (modelData.experimental ? " + EXP" : ""))
@@ -6384,13 +6439,15 @@ ApplicationWindow {
                         Label {
                             Layout.fillWidth: true
                             text: modelData.status === "ready"
-                                  ? ((modelData.blueprint || "Experimental only")
-                                     + (modelData.experimental ? " · " + modelData.experimental : ""))
-                                  : modelData.status === "partial"
-                                    ? ((modelData.blueprint || "Experimental only")
+                                  ? (modelData.planMode === "module_only"
+                                     ? window.t("import.module_swap_help", "Track desired module for this physical slot")
+                                     : (modelData.blueprint || "Experimental only")
+                                       + (modelData.experimental ? " · " + modelData.experimental : ""))
+                                  : (modelData.status === "partial"
+                                     ? (modelData.blueprint || "Experimental only")
                                        + (modelData.experimental ? " · " + modelData.experimental : "")
-                                       + " · " + modelData.detail)
-                                  : modelData.detail
+                                       + " · " + modelData.detail
+                                     : modelData.detail)
                             color: muted; font.pixelSize: 10; elide: Text.ElideRight
                         }
                     }

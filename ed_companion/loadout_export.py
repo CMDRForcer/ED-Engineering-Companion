@@ -14,6 +14,13 @@ from ed_companion.build_import import resolve_experimental_name
 FORMAT_ID = "EDOPS_LOADOUT_V1"
 
 
+def _module_id(value: object) -> str:
+    symbol = str(value or "").strip().strip("$;")
+    if symbol.casefold().endswith("_name"):
+        symbol = symbol[:-5]
+    return symbol.casefold()
+
+
 def _ordered(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         event for _index, event in sorted(
@@ -56,14 +63,15 @@ def build_loadout_export(
         for event in ordered[snapshot_index + 1:]
     ) if snapshot_index >= 0 else False
     physical_match = bool(snapshot_modules) and {
-        slot: str(module.get("Item") or "") for slot, module in snapshot_modules.items()
-    } == current_slots
+        slot: _module_id(module.get("Item"))
+        for slot, module in snapshot_modules.items()
+    } == {slot: _module_id(item) for slot, item in current_slots.items()}
     complete = physical_match and not later_craft
     modules = []
     unresolved_experimental = False
     for slot, item in current_slots.items():
         snapshot_module = snapshot_modules.get(slot, {})
-        if str(snapshot_module.get("Item") or "") == item:
+        if _module_id(snapshot_module.get("Item")) == _module_id(item):
             exported_module = deepcopy(snapshot_module)
             engineering = exported_module.get("Engineering")
             engineering = engineering if isinstance(engineering, dict) else {}

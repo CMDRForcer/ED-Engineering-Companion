@@ -313,6 +313,14 @@ def normalize(name: object) -> str:
     return material_key(name)
 
 
+def canonical_module_id(value: object) -> str:
+    """Normalize Frontier's wrapped and plain module symbols identically."""
+    symbol = str(value or "").strip().strip("$;")
+    if symbol.casefold().endswith("_name"):
+        symbol = symbol[:-5]
+    return symbol.casefold()
+
+
 def app_data_dir() -> Path:
     """Return the writable application root, never the installation tree."""
     root = Path(
@@ -1590,7 +1598,7 @@ def reconcile_fleet_cache(
 
 
 def module_matches_type(module_id: object, blueprint_type: object) -> bool:
-    module = normalize(module_id)
+    module = normalize(canonical_module_id(module_id))
     wanted = normalize(blueprint_type)
     if not module or not wanted:
         return False
@@ -1649,7 +1657,7 @@ def engineering_loadout_rows(
         if not match:
             continue
         size_rating = ""
-        symbol = module_id.strip("$;").casefold()
+        symbol = canonical_module_id(module_id)
         identity = re.search(r"_size(\d+)_class(\d+)", symbol)
         if identity:
             size = int(identity.group(1))
@@ -1682,6 +1690,7 @@ def engineering_loadout_rows(
 
 def ship_slot_layout(
     ship_data: object, module_slots: object, catalog_rows: object,
+    desired_modules: object = None,
 ) -> list[dict[str, Any]]:
     """Build the selected hull's physical slots and overlay known modules."""
     ship = ship_data if isinstance(ship_data, dict) else {}
@@ -1694,6 +1703,9 @@ def ship_slot_layout(
         str(row.get("slot") or ""): row
         for row in engineering_loadout_rows(module_slots, catalog_rows)
     }
+    desired_by_slot = (
+        desired_modules if isinstance(desired_modules, dict) else {}
+    )
     rating_letters = {1: "E", 2: "D", 3: "C", 4: "B", 5: "A"}
     core_specs = (
         ("Armour", "ARMOUR", 0),
@@ -1708,8 +1720,8 @@ def ship_slot_layout(
     size_names = {1: "SMALL", 2: "MEDIUM", 3: "LARGE", 4: "HUGE"}
 
     def module_identity(module_id: str) -> tuple[str, str]:
-        symbol = module_id.strip("$;")
-        normalized = normalize(symbol.removesuffix("_Name"))
+        symbol = canonical_module_id(module_id)
+        normalized = normalize(symbol)
         identity = re.search(r"_size(\d+)_class(\d+)", symbol.casefold())
         size_rating = ""
         if identity:
@@ -1723,6 +1735,8 @@ def ship_slot_layout(
             ("intsensors", "SENSORS"),
             ("intfueltank", "FUEL TANK"),
             ("intcargorack", "CARGO RACK"),
+            ("inthullreinforcement", "HULL REINFORCEMENT PACKAGE"),
+            ("intmodulereinforcement", "MODULE REINFORCEMENT PACKAGE"),
             ("intshieldgenerator", "SHIELD GENERATOR"),
             ("intfuelscoop", "FUEL SCOOP"),
             ("intfighterbay", "FIGHTER HANGAR"),
@@ -1736,7 +1750,12 @@ def ship_slot_layout(
             ("heatsink", "HEAT SINK LAUNCHER"),
             ("armour", "ARMOUR"),
         )
-        name = next((label for marker, label in labels if marker in normalized), "")
+        name = (
+            "BI-WEAVE SHIELD GENERATOR"
+            if normalized.startswith("intshieldgenerator")
+            and normalized.endswith("fast") else
+            next((label for marker, label in labels if marker in normalized), "")
+        )
         if not name:
             name = re.sub(r"[_-]+", " ", symbol).upper()
         return name, size_rating
@@ -1751,6 +1770,15 @@ def ship_slot_layout(
         module_id = str(installed.get("moduleId") or "")
         module_name, size_rating = module_identity(module_id) if module_id else ("", "")
         engineering = engineerable.get(slot, {})
+        desired_module_id = str(desired_by_slot.get(slot) or "")
+        desired_name, desired_size_rating = (
+            module_identity(desired_module_id)
+            if desired_module_id else ("", "")
+        )
+        module_change = bool(
+            desired_module_id
+            and canonical_module_id(desired_module_id) != canonical_module_id(module_id)
+        )
         rows.append({
             "group": group,
             "slot": slot,
@@ -1773,6 +1801,14 @@ def ship_slot_layout(
             "category": str(engineering.get("category") or ""),
             "blueprintCount": int(engineering.get("blueprintCount") or 0),
             "bindingKey": f"{slot}\u241f{module_id}" if module_id else slot,
+            "moduleChange": module_change,
+            "desiredModuleId": desired_module_id,
+            "desiredModule": desired_name,
+            "desiredSizeRating": desired_size_rating,
+            "planPending": False,
+            "planTargetGrade": 0,
+            "planBlueprint": "",
+            "planExperimental": "",
         })
 
     for slot, label, size in core_specs:
@@ -1845,7 +1881,7 @@ def latest_loadout_slots(
         except (TypeError, ValueError):
             grade = 0
         return {
-            "moduleId": str(module_id or ""),
+            "moduleId": canonical_module_id(module_id),
             "engineered": bool(details and grade > 0),
             "engineeringGrade": grade,
             "engineeringBlueprint": str(
@@ -5337,7 +5373,27 @@ def build_state(
     engineering_ship_slots = ship_slot_layout(
         selected_ship_data, module_slots,
         blueprint_catalog(reference_data_dir(package_root)),
+        read_json(data_dir / "desired_outfitting.json", {}).get(
+            selected_ship_id, {}
+        ),
     )
+    pending_plans_by_slot = {}
+    for task in tasks or []:
+        if not isinstance(task, list) or not task:
+            continue
+        first = next((row for row in task if isinstance(row, dict)), {})
+        planner = first.get("_Planner", {}) if isinstance(first, dict) else {}
+        slot = str(planner.get("slot") or "")
+        if not slot or wishlist_target_status(planner)["code"] == "completed":
+            continue
+        pending_plans_by_slot[slot] = {
+            "planPending": True,
+            "planTargetGrade": int(planner.get("target_grade") or 0),
+            "planBlueprint": str(first.get("Name") or ""),
+            "planExperimental": str(planner.get("experimental_name") or ""),
+        }
+    for row in engineering_ship_slots:
+        row.update(pending_plans_by_slot.get(str(row.get("slot") or ""), {}))
     selected_loadout = next(
         (
             event for event in reversed(ship_events)

@@ -1,5 +1,25 @@
 # Changelog
 
+## 21.182 — 2026-08-28
+
+### Added
+
+- Explorer file selection and drag-and-drop for Coriolis, EDSY/SLEF, and EDEC JSON build imports.
+- Slot-bound desired-outfitting tracking that shows the exact module, class, and rating to install.
+- Engineering target summaries directly below installed modules, including target grade, blueprint, and experimental effect.
+
+### Improved
+
+- Complete builds now retain non-engineered modules instead of silently ignoring pure module replacements.
+- Journal module identifiers are canonicalized across live loadouts, imports, exports, and desired-module matching.
+- Installed Bi-Weave shields and newly purchased modules immediately satisfy matching desired slots.
+- New import and outfitting guidance is localized in English, German, Spanish, and French.
+
+### Safety
+
+- Desired outfitting remains a planning overlay; the Journal remains the sole authority for actually installed modules.
+- Existing engineering plans are preserved, exact duplicates remain skipped, and external slot mappings stay hull-validated.
+
 ## 21.181 — 2026-08-27
 
 ### Added

@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from ed_companion.build_import import preview_build
+from ed_companion.build_import import _read_input, preview_build
 from ed_companion.integrations.eddn import (
     prepare_event,
     schema_parity_report,
@@ -33,6 +33,14 @@ from ed_companion.navigation import find_nearest_catalog_trader
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_build_import_accepts_file_dialog_urls(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "Krait build.json"
+            payload = {"Ship": "Krait_MkII", "Modules": []}
+            path.write_text(json.dumps(payload), encoding="utf-8")
+
+            self.assertEqual(_read_input(path.as_uri()), payload)
+
     def test_qt_cache_and_runtime_data_share_the_canonical_app_directory(self):
         root = Path(__file__).resolve().parents[1]
         entrypoint = (root / "phase14_main.py").read_text(encoding="utf-8")
@@ -125,6 +133,40 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertEqual(slef_preview["source"], "SLEF")
         self.assertEqual(slef_preview["rows"][0]["slot"], "FrameShiftDrive")
         self.assertTrue(slef_preview["rows"][0]["slotBound"])
+
+    def test_import_tracks_non_engineered_module_replacements_by_slot(self):
+        root = Path(__file__).resolve().parents[1]
+        ships = json.loads((root / "ed_data" / "ships.json").read_text(encoding="utf-8"))
+        ship = next(row for row in ships if row["symbol"] == "Krait_MkII")
+        installed = [{
+            "slot": "Slot03_Size5",
+            "moduleId": "int_hullreinforcement_size5_class2",
+        }]
+        slots = ship_slot_layout(ship, installed, [])
+        payload = {
+            "format": "EDOPS_LOADOUT_V1", "Ship": "krait_mkii",
+            "Modules": [{
+                "Slot": "Slot03_Size5", "Item": "int_fuelscoop_size5_class5",
+            }],
+        }
+
+        preview = preview_build(
+            json.dumps(payload), "Krait_MkII", [], [],
+            module_matches_type, physical_slots=slots,
+        )
+        desired_rows = ship_slot_layout(
+            ship, installed, [],
+            {"Slot03_Size5": "int_fuelscoop_size5_class5"},
+        )
+        desired = next(row for row in desired_rows if row["slot"] == "Slot03_Size5")
+
+        self.assertEqual(preview["status"], "COMPLETE")
+        self.assertEqual(preview["recognized"], 1)
+        self.assertEqual(preview["moduleChanges"], 1)
+        self.assertEqual(preview["rows"][0]["planMode"], "module_only")
+        self.assertTrue(desired["moduleChange"])
+        self.assertEqual(desired["desiredModule"], "FUEL SCOOP")
+        self.assertEqual(desired["desiredSizeRating"], "5A")
 
     def test_coriolis_component_path_maps_only_through_hull_schema(self):
         root = Path(__file__).resolve().parents[1]
@@ -304,6 +346,26 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertEqual(fsd["engineeringGrade"], 4)
         self.assertEqual(fsd["engineeringBlueprint"], "FSD_LongRange")
         self.assertEqual(fsd["experimentalEffect"], "Mass Manager")
+
+    def test_module_buy_symbol_matches_plain_desired_module_id(self):
+        module_slots = latest_loadout_slots(
+            [{
+                "timestamp": "2026-08-28T20:09:51Z",
+                "event": "ModuleBuy", "ShipID": 37,
+                "Slot": "Slot01_Size5",
+                "BuyItem": "$int_fuelscoop_size5_class5_name;",
+            }],
+            37,
+        )
+        rows = ship_slot_layout(
+            {"optional": [{"size": 5}], "hardpoints": [], "utility": 0},
+            module_slots, [],
+            {"Slot01_Size5": "int_fuelscoop_size5_class5"},
+        )
+        scoop = next(row for row in rows if row["slot"] == "Slot01_Size5")
+
+        self.assertEqual(scoop["moduleId"], "int_fuelscoop_size5_class5")
+        self.assertFalse(scoop["moduleChange"])
 
     def test_engineer_craft_without_ship_id_updates_active_physical_slot(self):
         events = [

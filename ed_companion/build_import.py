@@ -4,6 +4,7 @@ import json
 import re
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
+from urllib.request import url2pathname
 
 
 class BuildImportError(ValueError):
@@ -196,6 +197,16 @@ def _read_input(value):
     text = str(value or "").strip()
     if not text:
         raise BuildImportError("Paste JSON/SLEF or enter a local JSON file path.")
+    if text.casefold().startswith("file:"):
+        parsed = urlparse(text)
+        if parsed.scheme.casefold() != "file":
+            raise BuildImportError("Only local file URLs are accepted.")
+        local_path = url2pathname(unquote(parsed.path))
+        if parsed.netloc:
+            local_path = f"//{parsed.netloc}{local_path}"
+        if re.match(r"^/[a-zA-Z]:/", local_path):
+            local_path = local_path[1:]
+        text = local_path
     looks_like_path = (
         len(text) < 2048 and "\n" not in text
         and not text.lstrip().startswith(("{", "[", "http://", "https://"))
@@ -543,6 +554,10 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
         groups.setdefault(group, []).append(record)
     blueprint_types = {group[0] for group in groups if group[0]}
     rows, warnings = [], []
+    installed_by_slot = {
+        str(row.get("slot") or ""): str(row.get("moduleId") or "")
+        for row in (physical_slots or []) if isinstance(row, dict)
+    }
     for position, module in enumerate(selected["modules"], 1):
         if not isinstance(module, dict):
             continue
@@ -554,15 +569,29 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
             source_slot, physical_slots, selected["source"]
         )
         module_id = _module_identity(module)
+        installed_module = installed_by_slot.get(slot, "")
+        module_change = bool(
+            slot and module_id
+            and _key(installed_module) != _key(module_id)
+        )
         blueprint_evidence, grade, experimental_evidence = _engineering(module)
         blueprint_name = next(iter(blueprint_evidence), "")
         experimental_name = next(iter(experimental_evidence), "")
         if not blueprint_evidence and not experimental_evidence:
             rows.append({
-                "status": "ignored", "slot": slot,
+                "status": "ready" if module_change else "ignored", "slot": slot,
+                "sourceSlot": source_slot, "slotBound": bool(slot),
                 "module": module_id or "Unknown module", "blueprint": "",
                 "grade": 0, "experimental": "",
-                "detail": "No engineering data; shown but not imported.",
+                "planMode": "module_only" if module_change else "",
+                "moduleChange": module_change,
+                "installedModule": installed_module,
+                "desiredModule": module_id,
+                "detail": (
+                    "Installed module differs; module replacement will be tracked."
+                    if module_change else
+                    "No engineering data and installed module already matches."
+                ),
             })
             continue
         types = _module_types(module_id, blueprint_types, module_matcher)
@@ -636,6 +665,9 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
                 effect.get("ExperimentalId") or effect.get("Name") or ""
             ) if effect else "",
             "planMode": plan_mode,
+            "moduleChange": module_change,
+            "installedModule": installed_module,
+            "desiredModule": module_id,
             "detail": (
                 "; ".join(issues) if issues else
                 "Complete engineering data; ready for wishlist import."
@@ -644,6 +676,7 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
     recognized = sum(
         bool(row.get("planMode")) and bool(row.get("slotBound")) for row in rows
     )
+    module_changes = sum(bool(row.get("moduleChange")) for row in rows)
     partial = sum(row.get("status") in {"partial", "blocked"} for row in rows)
     return {
         "compatible": True, "source": selected["source"],
@@ -652,4 +685,5 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
         "partial": partial,
         "status": "PARTIAL" if partial or warnings else "COMPLETE",
         "warnings": list(dict.fromkeys(warnings)),
+        "moduleChanges": module_changes,
     }
