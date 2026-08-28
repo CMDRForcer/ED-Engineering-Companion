@@ -451,7 +451,9 @@ def run():
     install_diagnostics(smoke_messages)
     app = QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 12))
-    app.setApplicationName("ED Engineering Companion")
+    # Keep Qt's writable cache location aligned with EDEC's existing runtime
+    # data directory. The display name remains human-readable in Windows.
+    app.setApplicationName("EDEngineeringCompanion")
     app.setApplicationDisplayName("ED Engineering Companion")
     app.setApplicationVersion(APP_VERSION)
 

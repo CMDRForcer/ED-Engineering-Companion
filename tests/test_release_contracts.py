@@ -33,6 +33,21 @@ from ed_companion.navigation import find_nearest_catalog_trader
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_qt_cache_and_runtime_data_share_the_canonical_app_directory(self):
+        root = Path(__file__).resolve().parents[1]
+        entrypoint = (root / "phase14_main.py").read_text(encoding="utf-8")
+
+        self.assertIn(
+            'app.setApplicationName("EDEngineeringCompanion")', entrypoint
+        )
+        self.assertIn(
+            'app.setApplicationDisplayName("ED Engineering Companion")',
+            entrypoint,
+        )
+        self.assertNotIn(
+            'app.setApplicationName("ED Engineering Companion")', entrypoint
+        )
+
     def test_trader_preference_switches_confidence_and_distance_priority(self):
         stations = [
             {
