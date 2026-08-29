@@ -1,5 +1,15 @@
 # Changelog
 
+## 21.184 — 2026-08-29
+
+### Fixed
+
+- Clearing delivered EDDN queue entries now preserves the latest accepted gateway proof for the Delivery Proof summary.
+
+### Safety
+
+- The retained proof contains only delivery metadata such as time, schema, event type, station label, and gateway result; Journal payloads and Commander identifiers are not persisted in it.
+
 ## 21.183 — 2026-08-29
 
 ### Added

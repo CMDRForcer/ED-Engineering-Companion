@@ -32,9 +32,33 @@ from ed_companion.phase14.state import (
 )
 from ed_companion.loadout_export import build_loadout_export
 from ed_companion.navigation import find_nearest_catalog_trader
+from ed_companion.services import latest_delivery_proof
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_clearing_eddn_history_can_preserve_latest_delivery_proof(self):
+        jobs = [
+            {
+                "status": "sent",
+                "sent_at": "2026-08-28T21:34:34+00:00",
+                "receipt": {"httpStatus": 200},
+                "event": {
+                    "schema": "journal/1",
+                    "message": {
+                        "event": "FSDJump",
+                        "timestamp": "2026-08-28T21:33:10Z",
+                    },
+                },
+            }
+        ]
+
+        proof = latest_delivery_proof(jobs)
+
+        self.assertEqual(proof["sentAt"], "2026-08-28T21:34:34+00:00")
+        self.assertEqual(proof["schema"], "journal/1")
+        self.assertEqual(proof["eventName"], "FSDJump")
+        self.assertEqual(proof["result"], "Gateway accepted HTTP 200")
+
     def test_operations_collects_all_build_materials_before_any_engineer_trip(self):
         state = {
             "blueprints": [

@@ -158,6 +158,7 @@ from ed_companion.trader_config import (
 )
 from ed_companion.services import (
     compact_upload_queue,
+    latest_delivery_proof,
     normalize_upload_queue,
 )
 from ed_companion.diagnostics import filtered_log_lines
@@ -4665,6 +4666,9 @@ class CockpitController(QObject):
 
     @Slot()
     def clearEddnSent(self):
+        proof = latest_delivery_proof(self._eddn_queue)
+        if proof:
+            self._eddn_config["last_success"] = proof
         self._eddn_queue = [
             row for row in self._eddn_queue if row.get("status") != "sent"
         ]
