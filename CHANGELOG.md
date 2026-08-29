@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+## 21.186 — 2026-08-29
+
+### Improved
+
+- Windows builds now carry explicit EDEC product/version metadata, and bundled manual filenames follow the current application release instead of the historical 21.164 source-document name.
+
 ## 21.185 — 2026-08-29
 
 ### Improved

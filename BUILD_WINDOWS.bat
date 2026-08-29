@@ -20,8 +20,8 @@ if errorlevel 1 goto :failed
 
 copy /y "PORTABLE_README.txt" "dist\EDEC\README.txt" >nul
 copy /y "LICENSE" "dist\EDEC\LICENSE" >nul
-copy /y "docs\EDEC_User_Manual_Privacy_EN_21.164.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_EN_21.164.pdf" >nul
-copy /y "docs\EDEC_User_Manual_Privacy_DE_21.164.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_DE_21.164.pdf" >nul
+copy /y "docs\EDEC_User_Manual_Privacy_EN_21.164.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_EN_%EDEC_VERSION%.pdf" >nul
+copy /y "docs\EDEC_User_Manual_Privacy_DE_21.164.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_DE_%EDEC_VERSION%.pdf" >nul
 
 if not exist "output" mkdir "output"
 powershell -NoProfile -Command "Compress-Archive -Path 'dist\EDEC\*' -DestinationPath 'output\EDEC-%EDEC_VERSION%-Windows.zip' -CompressionLevel Optimal -Force"

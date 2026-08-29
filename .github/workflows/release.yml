@@ -98,8 +98,8 @@ jobs:
         run: |
           Copy-Item -LiteralPath "PORTABLE_README.txt" -Destination "dist/EDEC/README.txt"
           Copy-Item -LiteralPath "LICENSE" -Destination "dist/EDEC/LICENSE"
-          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_EN_21.164.pdf" -Destination "dist/EDEC/EDEC_User_Manual_Privacy_EN_21.164.pdf"
-          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_DE_21.164.pdf" -Destination "dist/EDEC/EDEC_User_Manual_Privacy_DE_21.164.pdf"
+          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_EN_21.164.pdf" -Destination "dist/EDEC/EDEC_User_Manual_Privacy_EN_${env:EDEC_VERSION}.pdf"
+          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_DE_21.164.pdf" -Destination "dist/EDEC/EDEC_User_Manual_Privacy_DE_${env:EDEC_VERSION}.pdf"
 
       - name: Run honest packaged smoke test
         shell: pwsh
