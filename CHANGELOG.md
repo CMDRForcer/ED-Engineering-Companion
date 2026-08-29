@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Improved
+
+- Spansh trader and Technology Broker catalog requests now use a longer timeout, bounded transport retries, and short gaps between category requests to tolerate intermittent connection resets without discarding the offline catalog.
+
 ## 21.184 — 2026-08-29
 
 ### Fixed

@@ -1,8 +1,17 @@
 from datetime import datetime, timezone
 import math
+import time
+
+import requests
 
 from ed_companion import APP_VERSION
-from ed_companion.trader_config import SPANSH_STATION_SEARCH_URL
+from ed_companion.trader_config import (
+    SPANSH_MAX_ATTEMPTS,
+    SPANSH_REQUEST_GAP_SECONDS,
+    SPANSH_RETRY_DELAYS_SECONDS,
+    SPANSH_STATION_SEARCH_URL,
+    SPANSH_TIMEOUT_SECONDS,
+)
 
 
 TRADER_CATEGORIES = {"Raw", "Manufactured", "Encoded"}
@@ -14,13 +23,28 @@ class SpanshError(RuntimeError):
 
 
 def _spansh_json(post, payload, timeout):
+    response = None
+    for attempt in range(SPANSH_MAX_ATTEMPTS):
+        try:
+            response = post(
+                SPANSH_STATION_SEARCH_URL,
+                json=payload,
+                timeout=timeout,
+                headers={"User-Agent": f"EDEngineeringCompanion/{APP_VERSION}"},
+            )
+            break
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            if attempt + 1 >= SPANSH_MAX_ATTEMPTS:
+                raise SpanshError(
+                    f"Spansh connection failed after {SPANSH_MAX_ATTEMPTS} "
+                    f"attempts ({type(exc).__name__}): {exc}"
+                ) from None
+            time.sleep(SPANSH_RETRY_DELAYS_SECONDS[attempt])
+        except Exception as exc:
+            raise SpanshError(
+                f"Spansh request failed ({type(exc).__name__}): {exc}"
+            ) from None
     try:
-        response = post(
-            SPANSH_STATION_SEARCH_URL,
-            json=payload,
-            timeout=timeout,
-            headers={"User-Agent": f"EDEngineeringCompanion/{APP_VERSION}"},
-        )
         response.raise_for_status()
         body = response.json()
     except Exception as exc:
@@ -29,6 +53,11 @@ def _spansh_json(post, payload, timeout):
     if not isinstance(body, dict) or not isinstance(body.get("results"), list):
         raise SpanshError("Spansh returned invalid or incomplete JSON (results missing).")
     return body
+
+
+def _pause_between_requests(index, total):
+    if index + 1 < total:
+        time.sleep(SPANSH_REQUEST_GAP_SECONDS)
 def find_nearest_catalog_trader(
     category, reference_coords, stations, preference="confirmed"
 ):
@@ -182,7 +211,9 @@ def spansh_trader_type_evidence(row, event_timestamp=None):
     }
 
 
-def fetch_nearest_trader(category, reference_coords, post, timeout=12):
+def fetch_nearest_trader(
+    category, reference_coords, post, timeout=SPANSH_TIMEOUT_SECONDS
+):
     payload = build_trader_search_payload(category, reference_coords)
     trader = parse_nearest_trader(category, _spansh_json(post, payload, timeout))
     if not trader:
@@ -190,12 +221,15 @@ def fetch_nearest_trader(category, reference_coords, post, timeout=12):
     return trader
 
 
-def fetch_nearest_traders(categories, reference_coords, post, timeout=12):
+def fetch_nearest_traders(
+    categories, reference_coords, post, timeout=SPANSH_TIMEOUT_SECONDS
+):
     locations = {}
     errors = {}
-    for category in sorted({
+    categories = sorted({
         str(value or "").strip().title() for value in categories or []
-    } & TRADER_CATEGORIES):
+    } & TRADER_CATEGORIES)
+    for index, category in enumerate(categories):
         try:
             locations[category] = fetch_nearest_trader(
                 category, reference_coords, post=post, timeout=timeout
@@ -211,14 +245,16 @@ def fetch_nearest_traders(categories, reference_coords, post, timeout=12):
 
 
 def fetch_trader_catalog_updates(
-    categories, reference_coords, post, timeout=12, size=100
+    categories, reference_coords, post,
+    timeout=SPANSH_TIMEOUT_SECONDS, size=100,
 ):
     """Fetch and combine nearby valid trader rows without replacing local data."""
     locations = []
     errors = {}
-    for category in sorted({
+    categories = sorted({
         str(value or "").strip().title() for value in categories or []
-    } & TRADER_CATEGORIES):
+    } & TRADER_CATEGORIES)
+    for index, category in enumerate(categories):
         try:
             payload = build_trader_search_payload(
                 category, reference_coords, size=size
@@ -233,6 +269,8 @@ def fetch_trader_catalog_updates(
             locations.extend(rows)
         except Exception as exc:
             errors[category] = str(exc)
+        _pause_between_requests(index, len(categories))
+        _pause_between_requests(index, len(categories))
     return {
         "stations": locations,
         "errors": errors,
@@ -332,10 +370,13 @@ def parse_tech_broker_results(broker_type, response_data):
     return [item[3] for item in sorted(candidates, key=lambda item: item[:3])]
 
 
-def fetch_tech_broker_catalog_updates(reference_coords, post, timeout=12, size=100):
+def fetch_tech_broker_catalog_updates(
+    reference_coords, post, timeout=SPANSH_TIMEOUT_SECONDS, size=100
+):
     stations = []
     errors = {}
-    for broker_type in sorted(TECH_BROKER_TYPES):
+    broker_types = sorted(TECH_BROKER_TYPES)
+    for index, broker_type in enumerate(broker_types):
         try:
             rows = parse_tech_broker_results(
                 broker_type,
@@ -352,6 +393,7 @@ def fetch_tech_broker_catalog_updates(reference_coords, post, timeout=12, size=1
             stations.extend(rows)
         except Exception as exc:
             errors[broker_type] = str(exc)
+        _pause_between_requests(index, len(broker_types))
     return {
         "stations": stations,
         "errors": errors,

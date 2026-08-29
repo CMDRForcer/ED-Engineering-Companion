@@ -3,6 +3,9 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest import mock
+
+import requests
 
 from ed_companion.build_import import _read_input, preview_build
 from ed_companion.integrations.eddn import (
@@ -32,10 +35,36 @@ from ed_companion.phase14.state import (
 )
 from ed_companion.loadout_export import build_loadout_export
 from ed_companion.navigation import find_nearest_catalog_trader
+from ed_companion.navigation.trader_search import _spansh_json
 from ed_companion.services import latest_delivery_proof
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_spansh_transport_retries_then_accepts_valid_response(self):
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"results": []}
+
+        calls = []
+
+        def post(*_args, **_kwargs):
+            calls.append(True)
+            if len(calls) < 3:
+                raise requests.ConnectionError("temporary")
+            return Response()
+
+        with mock.patch(
+            "ed_companion.navigation.trader_search.time.sleep"
+        ) as sleep:
+            result = _spansh_json(post, {"filters": {}}, 20)
+
+        self.assertEqual(result, {"results": []})
+        self.assertEqual(len(calls), 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 3])
+
     def test_clearing_eddn_history_can_preserve_latest_delivery_proof(self):
         jobs = [
             {
