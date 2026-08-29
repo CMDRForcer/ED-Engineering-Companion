@@ -40,6 +40,56 @@ from ed_companion.services import latest_delivery_proof
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_inara_accepts_material_snapshot_before_loadgame(self):
+        events = [
+            {
+                "timestamp": "2026-08-29T09:16:25Z",
+                "event": "Fileheader",
+                "Odyssey": True,
+                "gameversion": "4.4.0.3",
+            },
+            {
+                "timestamp": "2026-08-29T09:21:50Z",
+                "event": "Commander",
+                "FID": "F207773",
+                "Name": "Forcer",
+            },
+            {
+                "timestamp": "2026-08-29T09:21:50Z",
+                "event": "Materials",
+                "Raw": [{"Name": "iron", "Count": 117}],
+                "Manufactured": [{"Name": "heatvanes", "Count": 20}],
+                "Encoded": [{"Name": "dataminedwake", "Count": 5}],
+            },
+            {
+                "timestamp": "2026-08-29T09:21:51Z",
+                "event": "LoadGame",
+                "FID": "F207773",
+                "Commander": "Forcer",
+                "Odyssey": True,
+                "gameversion": "4.4.0.3",
+            },
+        ]
+
+        identity, prepared, _ = prepare_journal_batch(
+            events, expected_identity="F207773", max_events=None,
+        )
+
+        materials = [
+            event for event in prepared
+            if event.get("eventName") == "setCommanderInventoryMaterials"
+        ]
+        self.assertEqual(identity["frontier_id"], "F207773")
+        self.assertEqual(len(materials), 1)
+        self.assertEqual(
+            materials[0]["eventData"],
+            [
+                {"itemName": "dataminedwake", "itemCount": 5},
+                {"itemName": "heatvanes", "itemCount": 20},
+                {"itemName": "iron", "itemCount": 117},
+            ],
+        )
+
     def test_spansh_transport_retries_then_accepts_valid_response(self):
         class Response:
             def raise_for_status(self):

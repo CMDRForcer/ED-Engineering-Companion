@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 21.188 — 2026-08-29
+
+### Fixed
+
+- Recognize the live `Commander` Journal preamble before `LoadGame`, so current Elite Dangerous journals upload their complete material inventory snapshot to INARA instead of accepting unrelated batches while leaving material timestamps stale.
+
 ## 21.187 — 2026-08-29
 
 ### Fixed

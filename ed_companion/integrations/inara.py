@@ -799,6 +799,19 @@ def prepare_journal_batch(events, known_fingerprints=(), expected_identity="",
             storage_inventory = None
             locker_inventory = None
             continue
+        if name == "Commander":
+            frontier_id = str(source.get("FID") or "").strip()
+            commander = str(source.get("Name") or "").strip()
+            matches = not expected_identity or expected_identity in {
+                frontier_id, commander,
+            }
+            live_session = live_file and matches
+            if live_session:
+                identity = {
+                    "commander_name": commander,
+                    "frontier_id": frontier_id,
+                }
+            continue
         if name == "LoadGame":
             frontier_id = str(source.get("FID") or "").strip()
             commander = str(source.get("Commander") or "").strip()
