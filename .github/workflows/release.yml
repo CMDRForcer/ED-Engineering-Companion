@@ -93,6 +93,18 @@ jobs:
       - name: Build Windows portable application
         run: python -m PyInstaller --noconfirm --clean EDEC.spec
 
+      - name: Reject foreign runtime DLLs
+        shell: pwsh
+        run: |
+          $forbidden = @(
+            "dist/EDEC/_internal/icuuc.dll",
+            "dist/EDEC/_internal/icudt78.dll"
+          ) | Where-Object { Test-Path -LiteralPath $_ }
+          if ($forbidden) {
+            Write-Error "Foreign ICU runtime detected: $($forbidden -join ', ')"
+            exit 1
+          }
+
       - name: Add portable documentation
         shell: pwsh
         run: |

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 21.187 — 2026-08-29
+
+### Fixed
+
+- Isolate local Windows packaging from third-party DLL directories injected into `PATH`, preventing an incompatible Poppler ICU runtime from breaking QtCore at application startup.
+- Reject locally built release archives if the known foreign ICU DLLs are present.
+
 ## 21.186 — 2026-08-29
 
 ### Improved
