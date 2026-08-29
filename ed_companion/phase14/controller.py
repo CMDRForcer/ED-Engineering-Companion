@@ -1314,6 +1314,7 @@ class CockpitController(QObject):
                     for left, right in zip(origin, target)
                 ))
             row["distance"] = distance if distance is not None else -1.0
+            row["coordinates"] = target if isinstance(target, list) else []
             row["unlockGuide"] = build_unlock_guide(
                 name, group, progress, self._engineer_unlock_catalog,
                 self._state.get("engineerUnlockSignals", {}),
@@ -1346,12 +1347,34 @@ class CockpitController(QObject):
             self._state.get("blueprints", []),
             self._engineer_index(),
         )
-        rows.sort(key=lambda row: (
-            row.get("distance", -1) < 0,
-            row.get("distance", 0) if row.get("distance", -1) >= 0 else 0,
-            -row.get("readyJobs", 0),
-            row.get("name", "").casefold(),
-        ))
+        origin = self._state.get("currentPosition")
+        ordered = []
+        remaining = list(rows)
+        while remaining:
+            def route_key(row):
+                target = row.get("coordinates")
+                distance = -1.0
+                if (
+                    isinstance(origin, list) and len(origin) == 3
+                    and isinstance(target, list) and len(target) == 3
+                ):
+                    distance = math.sqrt(sum(
+                        (float(left) - float(right)) ** 2
+                        for left, right in zip(origin, target)
+                    ))
+                return (
+                    not bool(row.get("craftable")),
+                    distance < 0,
+                    distance if distance >= 0 else 0,
+                    -int(row.get("readyJobs", 0) or 0),
+                    str(row.get("name") or "").casefold(),
+                )
+            chosen = min(remaining, key=route_key)
+            ordered.append(chosen)
+            remaining.remove(chosen)
+            if isinstance(chosen.get("coordinates"), list):
+                origin = chosen["coordinates"]
+        rows = ordered
         if self._deferred_engineers:
             rows = [
                 row for row in rows

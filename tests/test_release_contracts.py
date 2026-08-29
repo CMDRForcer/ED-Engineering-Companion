@@ -19,6 +19,7 @@ from ed_companion.integrations.inara import (
     prepare_journal_batch,
 )
 from ed_companion.phase14.state import (
+    assign_plans_to_nearest_engineers,
     blueprint_rows,
     apply_engineer_craft,
     build_experimental_plan,
@@ -26,6 +27,7 @@ from ed_companion.phase14.state import (
     latest_loadout_slots,
     module_matches_type,
     powerplay_journal_overview,
+    select_operation_action,
     ship_slot_layout,
 )
 from ed_companion.loadout_export import build_loadout_export
@@ -33,6 +35,136 @@ from ed_companion.navigation import find_nearest_catalog_trader
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_operations_collects_all_build_materials_before_any_engineer_trip(self):
+        state = {
+            "blueprints": [
+                {
+                    "module": "Frame Shift Drive",
+                    "blueprint": "Increased Range",
+                    "targetGrade": 5,
+                    "targetStatus": "not_started",
+                    "priority": True,
+                    "canCraftNext": True,
+                    "materialProgress": [],
+                },
+                {
+                    "module": "Hull Reinforcement Package",
+                    "blueprint": "Heavy Duty Hull Reinforcement",
+                    "targetGrade": 5,
+                    "targetStatus": "not_started",
+                    "priority": False,
+                    "canCraftNext": False,
+                    "materialProgress": [{
+                        "key": "tungsten", "name": "Tungsten",
+                        "missing": 4,
+                    }],
+                },
+            ],
+            "materials": [{
+                "key": "tungsten", "name": "Tungsten", "missing": 4,
+            }],
+            "trades": [],
+        }
+        route = [{
+            "name": "Felicity Farseer", "system": "Deciat",
+            "station": "Farseer Inc", "craftable": True,
+            "jobNames": ["Frame Shift Drive · Increased Range · G5"],
+            "readyJobs": 1,
+        }]
+
+        action = select_operation_action(state, route)
+
+        self.assertEqual(action["kind"], "COLLECT")
+        self.assertIn("Tungsten", action["title"])
+
+    def test_next_engineer_action_identifies_module_blueprint_and_experimental(self):
+        plan = {
+            "module": "Hull Reinforcement Package",
+            "blueprint": "Heavy Duty Hull Reinforcement",
+            "targetGrade": 5,
+            "targetStatus": "not_started",
+            "canCraftNext": True,
+            "materialProgress": [],
+            "experimental": "Deep Plating",
+            "boundSlot": "Slot03_Size5",
+        }
+        state = {"blueprints": [plan], "materials": [], "trades": []}
+        route = [{
+            "name": "Selene Jean", "system": "Kuk", "station": "Prospector's Rest",
+            "craftable": True, "readyJobs": 1,
+            "jobNames": [
+                "Hull Reinforcement Package · Heavy Duty Hull Reinforcement · G5"
+            ],
+        }]
+
+        action = select_operation_action(state, route)
+
+        self.assertEqual(action["kind"], "GRADE_CRAFT")
+        self.assertEqual(action["moduleName"], "Hull Reinforcement Package")
+        self.assertEqual(action["blueprintName"], "Heavy Duty Hull Reinforcement")
+        self.assertEqual(action["targetGrade"], 5)
+        self.assertEqual(action["experimentalName"], "Deep Plating")
+
+    def test_engineer_assignment_globally_minimizes_repeat_visits(self):
+        plans = [
+            {
+                "module": "A", "blueprint": "One", "grade": 5,
+                "eligibleEngineers": ["Nearby A", "Shared"],
+                "completion": 1, "targetStatus": "not_started",
+            },
+            {
+                "module": "B", "blueprint": "Two", "grade": 5,
+                "eligibleEngineers": ["Nearby B", "Shared"],
+                "completion": 1, "targetStatus": "not_started",
+            },
+            {
+                "module": "C", "blueprint": "Three", "grade": 5,
+                "eligibleEngineers": ["Nearby C", "Shared"],
+                "completion": 1, "targetStatus": "not_started",
+            },
+        ]
+        engineers = [
+            {
+                "name": name, "statusGroup": "unlocked", "rank": 5,
+                "distance": distance, "status": "UNLOCKED",
+            }
+            for name, distance in (
+                ("Nearby A", 1), ("Nearby B", 2), ("Nearby C", 3),
+                ("Shared", 50),
+            )
+        ]
+
+        route = assign_plans_to_nearest_engineers(plans, engineers)
+
+        self.assertEqual([row["name"] for row in route], ["Shared"])
+        self.assertEqual(route[0]["openJobs"], 3)
+
+    def test_single_plan_uses_nearest_engineer_with_required_rank(self):
+        plans = [{
+            "module": "Frame Shift Drive", "blueprint": "Increased Range",
+            "grade": 5, "eligibleEngineers": ["Near Low", "Near G5", "Far G5"],
+            "completion": 1, "targetStatus": "not_started",
+        }]
+        engineers = [
+            {
+                "name": "Near Low", "statusGroup": "unlocked", "rank": 4,
+                "distance": 1, "status": "UNLOCKED",
+            },
+            {
+                "name": "Near G5", "statusGroup": "unlocked", "rank": 5,
+                "distance": 10, "status": "UNLOCKED",
+            },
+            {
+                "name": "Far G5", "statusGroup": "unlocked", "rank": 5,
+                "distance": 100, "status": "UNLOCKED",
+            },
+        ]
+
+        route = assign_plans_to_nearest_engineers(plans, engineers)
+
+        self.assertEqual([row["name"] for row in route], ["Near G5"])
+        self.assertTrue(route[0]["craftable"])
+
     def test_build_import_accepts_file_dialog_urls(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "Krait build.json"

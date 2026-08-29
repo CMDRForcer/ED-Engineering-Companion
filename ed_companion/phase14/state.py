@@ -2615,38 +2615,97 @@ def classify_craft_tracking_issues(rows: object, plans: object) -> list[dict]:
     return classified_rows
 
 
+def _minimum_engineer_cover(candidate_sets, engineer_index):
+    """Return a deterministic minimum Engineer set covering every plan."""
+    requirements = [set(values) for values in candidate_sets if values]
+    if not requirements:
+        return set()
+    best = None
+
+    def engineer_order(name):
+        row = engineer_index.get(name, {})
+        distance = float(row.get("distance", -1) or -1)
+        return (
+            distance < 0,
+            distance if distance >= 0 else 0,
+            str(name).casefold(),
+        )
+
+    def search(chosen, remaining):
+        nonlocal best
+        if not remaining:
+            candidate = set(chosen)
+            if best is None or len(candidate) < len(best) or (
+                len(candidate) == len(best)
+                and tuple(sorted(engineer_order(name) for name in candidate))
+                < tuple(sorted(engineer_order(name) for name in best))
+            ):
+                best = candidate
+            return
+        if best is not None and len(chosen) >= len(best):
+            return
+        requirement = min(remaining, key=lambda values: (len(values), sorted(values)))
+        coverage = {
+            name: sum(name in values for values in remaining)
+            for name in requirement
+        }
+        for name in sorted(
+            requirement,
+            key=lambda value: (-coverage[value], engineer_order(value)),
+        ):
+            search(
+                chosen | {name},
+                [values for values in remaining if name not in values],
+            )
+
+    search(set(), requirements)
+    return best or set()
+
+
 def assign_plans_to_nearest_engineers(plans, engineer_rows):
-    """Assign every open plan exactly once to its nearest usable engineer."""
+    """Globally minimize Engineer visits, then prefer access and distance."""
     engineer_index = {
         row["name"]: dict(row)
         for row in engineer_rows or []
         if row.get("name")
     }
-    assignments = {}
+    prepared = []
     for plan in plans or []:
-        eligible = list(plan.get("eligibleEngineers") or [])
-        candidates = [
-            engineer_index[name] for name in eligible
+        if str(plan.get("targetStatus") or "") == "completed":
+            continue
+        eligible = [
+            name for name in (plan.get("eligibleEngineers") or [])
             if name in engineer_index
         ]
-        if not candidates:
+        if not eligible:
             continue
         target_grade = int(plan.get("grade", 0) or 0)
         usable = [
-            row for row in candidates
-            if row.get("statusGroup") == "unlocked"
-            and int(row.get("rank", 0) or 0) >= target_grade
+            name for name in eligible
+            if engineer_index[name].get("statusGroup") == "unlocked"
+            and int(engineer_index[name].get("rank", 0) or 0) >= target_grade
         ]
-        selection = usable or candidates
-        selection.sort(key=lambda row: (
-            row.get("statusGroup") != "unlocked",
-            row.get("distance", -1) < 0,
-            row.get("distance", 0)
-            if row.get("distance", -1) >= 0 else 0,
-            row.get("name", "").casefold(),
+        selected = str(plan.get("selectedEngineer") or "")
+        candidates = usable or eligible
+        if selected in candidates:
+            candidates = [selected]
+        prepared.append((plan, target_grade, candidates, bool(usable)))
+
+    cover = _minimum_engineer_cover(
+        [candidates for _plan, _grade, candidates, _usable in prepared],
+        engineer_index,
+    )
+    assignments = {}
+    for plan, target_grade, candidates, craftable in prepared:
+        covered = [name for name in candidates if name in cover]
+        selection = covered or candidates
+        selection.sort(key=lambda name: (
+            float(engineer_index[name].get("distance", -1) or -1) < 0,
+            float(engineer_index[name].get("distance", 0) or 0)
+            if float(engineer_index[name].get("distance", -1) or -1) >= 0 else 0,
+            str(name).casefold(),
         ))
-        chosen = selection[0]
-        craftable = bool(usable)
+        chosen = engineer_index[selection[0]]
         rank = int(chosen.get("rank", 0) or 0)
         block_reason = "" if craftable else (
             f"Engineer access/rank insufficient: requires unlocked G{target_grade}, "
@@ -2970,6 +3029,11 @@ def select_operation_action(
         return {
             "kind": kind, "title": title,
             "detail": " · ".join(value for value in (engineer, station, system) if value),
+            "moduleName": module,
+            "blueprintName": blueprint,
+            "targetGrade": grade,
+            "experimentalName": str(plan.get("experimental") or ""),
+            "physicalSlot": str(plan.get("boundSlot") or ""),
             "reason": reason, "after": after,
             "system": system, "station": station,
             "buttonLabel": "COPY TARGET SYSTEM" if system else "OPEN ENGINEERS",
@@ -2992,22 +3056,6 @@ def select_operation_action(
     else:
         active_progress = []
 
-    if active_plan.get("priority"):
-        priority_missing = [
-            row for row in active_progress
-            if int(row.get("missing", 0) or 0) > 0
-        ]
-        priority_keys = {str(row.get("key") or "") for row in priority_missing}
-        missing = priority_missing
-        trades = [
-            row for row in trades
-            if str(row.get("targetKey") or "") in priority_keys
-        ]
-
-    active_missing_keys = {
-        str(row.get("key") or "") for row in active_progress
-        if int(row.get("missing", 0) or 0) > 0
-    }
     if active_plan and active_status == "experimental_pending" and not active_progress:
         return {
             "kind": "EXPERIMENTAL_BLOCKER",
@@ -3018,17 +3066,10 @@ def select_operation_action(
             "system": "", "station": "", "buttonLabel": "OPEN WISHLIST",
             "targetPage": 1, "executable": True,
         }
-    active_trades = [
-        row for row in trades if str(row.get("targetKey") or "") in active_missing_keys
-    ]
-    if active_missing_keys:
-        trades = active_trades
-        active_missing = [
-            row for row in missing
-            if str(row.get("key") or "") in active_missing_keys
-        ]
-        if active_missing:
-            missing = active_missing
+    # Engineering is deliberately a two-phase workflow: acquire enough
+    # materials for every open plan first, then visit Engineers.  A tracked or
+    # otherwise prioritised plan controls the later craft order, but must never
+    # hide shortages belonging to another physical module slot.
     if trades and missing:
         trade = trades[0]
         system = str(trade.get("system") or "")

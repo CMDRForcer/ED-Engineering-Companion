@@ -414,17 +414,38 @@ ApplicationWindow {
         feedbackVisible = true
         feedbackTimer.restart()
     }
-    function sortedMaterialTrades(rows) {
-        const order = {"RAW": 0, "ENCODED": 1, "MANUFACTURED": 2}
-        const sorted = (rows || []).map(function(row, index) {
+    property string materialTradeFilter: "AUTO"
+    function automaticTradeCategory() {
+        if ((cockpit.traderRoute || []).length > 0)
+            return String(cockpit.traderRoute[0].category || "").toUpperCase()
+        return ""
+    }
+    function visibleMaterialTrades(rows) {
+        const automatic = automaticTradeCategory()
+        const selected = materialTradeFilter === "AUTO"
+                       ? automatic : materialTradeFilter
+        const routeOrder = ({})
+        ;(cockpit.traderRoute || []).forEach(function(stop, index) {
+            routeOrder[String(stop.category || "").toUpperCase()] = index
+        })
+        const fallbackOrder = {"RAW": 0, "MANUFACTURED": 1, "ENCODED": 2}
+        const filtered = (rows || []).filter(function(row) {
+            return !selected
+                   || String(row.category || "").toUpperCase() === selected
+        })
+        const sorted = filtered.map(function(row, index) {
             return {"row": row, "index": index}
         }).sort(function(left, right) {
             const leftCategory = String(left.row.category || "").toUpperCase()
             const rightCategory = String(right.row.category || "").toUpperCase()
-            const leftRank = order[leftCategory] === undefined
-                           ? 99 : order[leftCategory]
-            const rightRank = order[rightCategory] === undefined
-                            ? 99 : order[rightCategory]
+            const leftRank = routeOrder[leftCategory] === undefined
+                           ? (fallbackOrder[leftCategory] === undefined
+                              ? 99 : 10 + fallbackOrder[leftCategory])
+                           : routeOrder[leftCategory]
+            const rightRank = routeOrder[rightCategory] === undefined
+                            ? (fallbackOrder[rightCategory] === undefined
+                               ? 99 : 10 + fallbackOrder[rightCategory])
+                            : routeOrder[rightCategory]
             return leftRank === rightRank ? left.index - right.index
                                           : leftRank - rightRank
         }).map(function(entry) { return entry.row })
@@ -1220,6 +1241,33 @@ ApplicationWindow {
                     color: muted; font.pixelSize: 12
                     Layout.fillWidth: true; elide: Text.ElideRight
                 }
+                RowLayout {
+                    visible: !!cockpit.operationAction.moduleName
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Label {
+                        text: window.t("operations.module", "MODULE") + " · "
+                              + (cockpit.operationAction.moduleName || "")
+                              + (cockpit.operationAction.targetGrade > 0
+                                 ? " · G" + cockpit.operationAction.targetGrade : "")
+                        color: cyan; font.pixelSize: 11; font.bold: true
+                        elide: Text.ElideRight; Layout.fillWidth: true
+                    }
+                    Label {
+                        visible: !!cockpit.operationAction.experimentalName
+                        text: window.t("operations.experimental", "EXPERIMENTAL") + " · "
+                              + cockpit.operationAction.experimentalName
+                        color: green; font.pixelSize: 11; font.bold: true
+                        elide: Text.ElideRight; Layout.fillWidth: true
+                    }
+                }
+                Label {
+                    visible: !!cockpit.operationAction.blueprintName
+                    text: window.t("operations.blueprint", "BLUEPRINT") + " · "
+                          + cockpit.operationAction.blueprintName
+                    color: textSecondary; font.pixelSize: 11; font.bold: true
+                    Layout.fillWidth: true; elide: Text.ElideRight
+                }
                 ModernProgress {
                     Layout.fillWidth: true
                     value: window.materialDisplay(
@@ -1517,6 +1565,25 @@ ApplicationWindow {
                               : "Collect these exact amounts. Open MATERIAL DETAILS for verified sources and safe trade options."
                         color: muted; font.pixelSize: 12
                     }
+                    RowLayout {
+                        visible: cockpit.trades.length > 0
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Repeater {
+                            model: ["AUTO", "RAW", "MANUFACTURED", "ENCODED"]
+                            CockpitButton {
+                                required property string modelData
+                                Layout.fillWidth: true
+                                implicitHeight: 34
+                                text: modelData === "AUTO"
+                                      ? "AUTO" + (window.automaticTradeCategory()
+                                                   ? " · " + window.automaticTradeCategory() : "")
+                                      : modelData
+                                selected: window.materialTradeFilter === modelData
+                                onClicked: window.materialTradeFilter = modelData
+                            }
+                        }
+                    }
                     ListView {
                         id: tradeList
                         property real retainedContentY: 0
@@ -1532,7 +1599,7 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         clip: true
                         spacing: 5
-                        model: window.sortedMaterialTrades(cockpit.trades)
+                        model: window.visibleMaterialTrades(cockpit.trades)
                         visible: cockpit.trades.length > 0
                         onMovementEnded: rememberViewport()
                         ScrollBar.vertical: CockpitScrollBar {}
