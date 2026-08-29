@@ -1187,7 +1187,7 @@ ApplicationWindow {
 
         RowLayout {
             property int focusHeight: (cockpit.operationAction.engineerOptions || []).length > 0
-                                      ? 410 : 320
+                                      ? 390 : 310
             Layout.fillWidth: true
             Layout.fillHeight: false
             Layout.minimumHeight: focusHeight
@@ -1205,13 +1205,13 @@ ApplicationWindow {
             scale: actionHover.containsMouse ? 1.006 : 1.0
             MouseArea { id: actionHover; anchors.fill: parent; hoverEnabled: true }
             ColumnLayout {
-                anchors.fill: parent; anchors.margins: 24; spacing: 8
+                anchors.fill: parent; anchors.margins: 20; spacing: 7
                     Label { text: window.t("operations.next_action", "NEXT BEST ACTION  ·  WHAT NOW"); color: cyan; font.pixelSize: 12; font.bold: true }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 14
                     Item {
-                        width: 72; height: 72
+                        width: 64; height: 64
                         visible: !!(cockpit.operationAction.portraitUrl)
                         Rectangle {
                             anchors.fill: parent
@@ -1231,7 +1231,7 @@ ApplicationWindow {
                     Label {
                         Layout.fillWidth: true
                         text: cockpit.operationAction.title || cockpit.nextAction
-                        color: textPrimary; font.pixelSize: 25; font.bold: true
+                        color: textPrimary; font.pixelSize: 23; font.bold: true
                         wrapMode: Text.WordWrap
                     }
                 }
@@ -1244,29 +1244,55 @@ ApplicationWindow {
                 RowLayout {
                     visible: !!cockpit.operationAction.moduleName
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 52
                     spacing: 8
-                    Label {
-                        text: window.t("operations.module", "MODULE") + " · "
-                              + (cockpit.operationAction.moduleName || "")
-                              + (cockpit.operationAction.targetGrade > 0
-                                 ? " · G" + cockpit.operationAction.targetGrade : "")
-                        color: cyan; font.pixelSize: 11; font.bold: true
-                        elide: Text.ElideRight; Layout.fillWidth: true
+                    Repeater {
+                        model: [
+                            {
+                                label: window.t("operations.module", "MODULE"),
+                                value: (cockpit.operationAction.moduleName || "")
+                                       + (cockpit.operationAction.targetGrade > 0
+                                          ? " · G" + cockpit.operationAction.targetGrade : ""),
+                                tone: cyan
+                            },
+                            {
+                                label: window.t("operations.blueprint", "BLUEPRINT"),
+                                value: cockpit.operationAction.blueprintName || "—",
+                                tone: textPrimary
+                            },
+                            {
+                                label: window.t("operations.experimental", "EXPERIMENTAL"),
+                                value: cockpit.operationAction.experimentalName || "—",
+                                tone: cockpit.operationAction.experimentalName ? green : muted
+                            }
+                        ]
+                        delegate: Rectangle {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 50
+                            radius: 8
+                            color: panelRaised
+                            border.width: 1
+                            border.color: borderTone
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12; anchors.rightMargin: 12
+                                anchors.topMargin: 7; anchors.bottomMargin: 7
+                                spacing: 2
+                                Label {
+                                    text: modelData.label
+                                    color: muted; font.pixelSize: 9; font.bold: true
+                                    font.letterSpacing: 0.4
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: modelData.value
+                                    color: modelData.tone; font.pixelSize: 12; font.bold: true
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
                     }
-                    Label {
-                        visible: !!cockpit.operationAction.experimentalName
-                        text: window.t("operations.experimental", "EXPERIMENTAL") + " · "
-                              + cockpit.operationAction.experimentalName
-                        color: green; font.pixelSize: 11; font.bold: true
-                        elide: Text.ElideRight; Layout.fillWidth: true
-                    }
-                }
-                Label {
-                    visible: !!cockpit.operationAction.blueprintName
-                    text: window.t("operations.blueprint", "BLUEPRINT") + " · "
-                          + cockpit.operationAction.blueprintName
-                    color: textSecondary; font.pixelSize: 11; font.bold: true
-                    Layout.fillWidth: true; elide: Text.ElideRight
                 }
                 ModernProgress {
                     Layout.fillWidth: true
@@ -1330,20 +1356,20 @@ ApplicationWindow {
                 }
                 Label {
                     visible: (cockpit.operationAction.engineerOptions || []).length > 0
-                    text: window.t("operations.engineers", "ENGINEERS FOR TARGET GRADE · ALL CAPABLE OPTIONS")
+                    text: window.t("operations.engineers", "ENGINEERS FOR TARGET GRADE · RECOMMENDED FIRST")
                     color: orange; font.pixelSize: 10; font.bold: true
                 }
                 ListView {
                     visible: count > 0
                     Layout.fillWidth: true
-                    Layout.preferredHeight: visible ? 72 : 0
+                    Layout.preferredHeight: visible ? 66 : 0
                     orientation: ListView.Horizontal
                     spacing: 8; clip: true
                     model: cockpit.operationAction.engineerOptions || []
                     ScrollBar.horizontal: CockpitScrollBar {}
                     delegate: Rectangle {
                         required property var modelData
-                        width: 340; height: 64; radius: 9
+                        width: 340; height: 58; radius: 9
                         color: modelData.craftable ? successBackground : panelRaised
                         border.width: 1
                         border.color: modelData.craftable ? success
@@ -1351,7 +1377,7 @@ ApplicationWindow {
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 9; spacing: 8
                             Item {
-                                width: 46; height: 46
+                                width: 40; height: 40
                                 visible: !!(modelData.portraitUrl)
                                 Rectangle {
                                     anchors.fill: parent

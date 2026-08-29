@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 21.189 — 2026-08-29
+
+### Changed
+
+- Reworked Commander Operations so module, blueprint, target grade, and experimental effect are readable at a glance.
+- Compacted the action card and marked the route-optimized engineer as the first recommendation.
+
 ## 21.188 — 2026-08-29
 
 ### Fixed
