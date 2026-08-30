@@ -35,6 +35,7 @@ from ed_companion.phase14.state import (
     module_matches_type,
     partition_engineer_assignments,
     powerplay_journal_overview,
+    remaining_grade_rolls,
     required_materials,
     select_operation_action,
     ship_slot_layout,
@@ -1286,6 +1287,97 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "applied")
         self.assertEqual(planner["slot"], "MediumHardpoint1")
         self.assertEqual(planner["instance"], "MediumHardpoint1")
+
+    def test_same_slot_foreign_blueprint_cannot_hijack_pinned_plan(self):
+        plan = build_engineering_plan(
+            [
+                {
+                    "Type": "Pulse Laser", "Name": "Efficient Weapon",
+                    "Grade": 1, "Engineers": ["Broo Tarquin"],
+                    "Ingredients": [{"Name": "Sulphur", "Size": 1}],
+                },
+                {
+                    "Type": "Pulse Laser", "Name": "Efficient Weapon",
+                    "Grade": 2, "Engineers": ["Broo Tarquin"],
+                    "Ingredients": [
+                        {"Name": "Sulphur", "Size": 1},
+                        {"Name": "Heat Dispersion Plate", "Size": 1},
+                    ],
+                },
+            ],
+            0, 2, ship_id=37, slot="LargeHardpoint2",
+            module_id="hpt_pulselaser_gimbal_large",
+        )
+        foreign = {
+            "timestamp": "2026-08-30T11:36:24Z",
+            "event": "EngineerCraft", "ShipID": 37,
+            "Slot": "LargeHardpoint2",
+            "Module": "hpt_pulselaser_gimbal_large",
+            "BlueprintID": 128673580,
+            "BlueprintName": "Weapon_Overcharged",
+            "Level": 1, "Quality": 0.2,
+            "Ingredients": [{"Name": "nickel", "Count": 1}],
+        }
+        intended = {
+            **foreign,
+            "timestamp": "2026-08-30T11:36:36Z",
+            "BlueprintID": 128673560,
+            "BlueprintName": "Weapon_Efficient",
+            "Ingredients": [{"Name": "sulphur", "Count": 1}],
+        }
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "ship_blueprints.json"
+            path.write_text(
+                json.dumps({"Krait Mk II – Mechthild": [plan]}),
+                encoding="utf-8",
+            )
+
+            rejected = apply_engineer_craft(
+                path, "Krait Mk II – Mechthild", foreign, ship_id=37,
+            )
+            after_rejected = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                after_rejected["Krait Mk II – Mechthild"][0][0]["_Planner"]
+                .get("crafts_completed"), {}
+            )
+            # Reproduce the persisted corruption written by older releases;
+            # the intended pending craft must be able to repair it.
+            poisoned = after_rejected["Krait Mk II – Mechthild"][0][0]["_Planner"]
+            poisoned["blueprint_names"] = {"1": "Weapon_Overcharged"}
+            poisoned["blueprint_ids"] = {"1": "128673580"}
+            poisoned["blueprint_sources"] = {"1": "journal_override_conflict"}
+            poisoned["crafts_completed"] = {"1": 1}
+            poisoned["grade_progress"] = {"1": 0.2}
+            path.write_text(json.dumps(after_rejected), encoding="utf-8")
+            applied = apply_engineer_craft(
+                path, "Krait Mk II – Mechthild", intended, ship_id=37,
+            )
+            later_results = []
+            for offset, quality in enumerate((0.4, 0.65, 0.9), start=1):
+                later = {
+                    **intended,
+                    "timestamp": f"2026-08-30T11:36:{36 + offset * 4:02d}Z",
+                    "Quality": quality,
+                }
+                later_results.append(apply_engineer_craft(
+                    path, "Krait Mk II – Mechthild", later, ship_id=37,
+                ))
+            saved = json.loads(path.read_text(encoding="utf-8"))
+
+        rejected_planner = after_rejected["Krait Mk II – Mechthild"][0][0]["_Planner"]
+        planner = saved["Krait Mk II – Mechthild"][0][0]["_Planner"]
+        self.assertEqual(rejected["status"], "unmatched")
+        self.assertEqual(applied["status"], "applied")
+        self.assertTrue(all(row["status"] == "applied" for row in later_results))
+        self.assertEqual(planner["blueprint_names"]["1"], "Weapon_Efficient")
+        self.assertEqual(planner["crafts_completed"]["1"], 4)
+        self.assertEqual(planner["grade_progress"]["1"], 0.9)
+        self.assertEqual(remaining_grade_rolls(planner, saved[
+            "Krait Mk II – Mechthild"
+        ][0][0]), 0)
+        self.assertGreater(remaining_grade_rolls(planner, saved[
+            "Krait Mk II – Mechthild"
+        ][0][1]), 0)
 
     def test_weapon_machine_effect_without_localized_name_is_canonical(self):
         plan = build_experimental_plan(

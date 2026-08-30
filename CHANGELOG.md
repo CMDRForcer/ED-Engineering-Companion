@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 21.197 — 2026-08-30
+
+### Fixed
+
+- Prevent a craft for another blueprint on the same physical module from hijacking a pinned engineering plan.
+- Recover plans already affected by that mismatch when the correct pending Journal craft is replayed, restoring accurate remaining-material readiness.
+
 ## 21.191 — 2026-08-30
 
 ### Fixed

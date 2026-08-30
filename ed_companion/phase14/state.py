@@ -2224,7 +2224,13 @@ def remaining_grade_rolls(
     progress = planner.get("grade_progress", {}) or {}
     completed = planner.get("crafts_completed", {}) or {}
     quality = float(progress.get(str(level), 0) or 0)
-    if quality >= 0.999:
+    target = int(planner.get("target_grade", 0) or 0)
+    # Elite unlocks the next grade before the intermediate progress ring is
+    # visually full. Do not budget another lower-grade roll once Journal
+    # quality has crossed that usable boundary; the final target grade still
+    # requires complete quality.
+    completion_quality = 0.999 if level == target else 0.8
+    if quality >= completion_quality:
         return 0
     if any(
         int(other_level) > level
@@ -2247,7 +2253,6 @@ def remaining_grade_rolls(
         observed_total = max(done + 1, round(done / quality))
         planned = max(done, min(planned, observed_total))
     estimated_remaining = max(0, planned - done)
-    target = int(planner.get("target_grade", 0) or 0)
     if level == target:
         return max(1, estimated_remaining)
     return estimated_remaining
@@ -4265,6 +4270,20 @@ def _experimental_craft_matches(
     return bool(event_keys.intersection(planner_keys))
 
 
+def _grade_craft_matches_blueprint(
+    first: dict[str, Any], event: dict[str, Any]
+) -> bool:
+    """Keep a physical slot match from changing the pinned blueprint target."""
+    planned_name = str(first.get("Name") or "").strip()
+    journal_name = str(event.get("BlueprintName") or "").strip()
+    if not planned_name or not journal_name:
+        return False
+    canonical_journal_name = JOURNAL_BLUEPRINT_NAMES.get(
+        normalize(journal_name), journal_name
+    )
+    return normalize(canonical_journal_name) == normalize(planned_name)
+
+
 def apply_engineer_craft(
     path: Path, ship: str, event: dict[str, Any], preferred_plan_id: str = "",
     ship_id: object = "", eligible_plan_ids: set[str] | None = None,
@@ -4374,6 +4393,27 @@ def apply_engineer_craft(
             expected_id = str(
                 (planner.get("blueprint_ids", {}) or {}).get(str(level)) or ""
             )
+            # Older builds could persist a foreign same-slot craft here. Do
+            # not let that poisoned observation prevent the intended
+            # blueprint from repairing the plan on the next replay.
+            poisoned_observation = bool(
+                expected_name and not _grade_craft_matches_blueprint(
+                    first, {"BlueprintName": expected_name}
+                )
+            )
+            if (
+                poisoned_observation
+                and _grade_craft_matches_blueprint(first, event)
+            ):
+                for field in (
+                    "blueprint_names", "blueprint_ids", "blueprint_sources",
+                    "crafts_completed", "grade_progress",
+                ):
+                    values = planner.get(field, {}) or {}
+                    if isinstance(values, dict):
+                        values.pop(str(level), None)
+                expected_name = ""
+                expected_id = ""
             equivalent_slot = _craft_matches_unique_equivalent_slot(
                 planner, first, event, ship_id, tasks
             )
@@ -4381,6 +4421,13 @@ def apply_engineer_craft(
                 (
                     item for item in task if isinstance(item, dict)
                     and int(item.get("Grade", 0) or 0) == level
+                    # ShipID/slot/module identify the physical module, but do
+                    # not prove that the crafted blueprint is the pinned one.
+                    # A player can switch blueprints on that same module. In
+                    # that case the foreign craft must remain unmatched so it
+                    # cannot overwrite progress and material readiness for the
+                    # intended plan.
+                    and _grade_craft_matches_blueprint(first, event)
                     and (
                         _craft_can_bind(planner, first, event, ship_id)
                         or equivalent_slot
@@ -4428,7 +4475,17 @@ def apply_engineer_craft(
                 None,
             )
             if grade:
-                if remaining_grade_rolls(planner, grade) > 0:
+                recorded_quality = float(
+                    (planner.get("grade_progress", {}) or {}).get(
+                        str(level), 0
+                    ) or 0
+                )
+                # A newer Journal roll is authoritative progress even when a
+                # stale catalog estimate already reached zero remaining.
+                if (
+                    remaining_grade_rolls(planner, grade) > 0
+                    or float(event.get("Quality", 0) or 0) > recorded_quality
+                ):
                     candidates.append((index, planner))
         action = "grade"
     exact_candidates = [
