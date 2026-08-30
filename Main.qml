@@ -649,20 +649,93 @@ ApplicationWindow {
         property string qaName: ""
         objectName: qaName
         Layout.fillWidth: true
-        Layout.preferredHeight: window.narrowWorkspace ? 112 : 64
+        Layout.preferredHeight: window.narrowWorkspace ? 116 : 76
 
-        ColumnLayout {
-            id: settingsHeaderTitle
-            anchors.left: parent.left
-            anchors.top: parent.top
-            spacing: 2
-            Label { text: settingsHeader.heading; color: textPrimary; font.pixelSize: 24; font.bold: true }
-            Label { text: settingsHeader.subheading; color: muted; font.pixelSize: 13 }
+        WorkspaceHeader {
+            anchors.fill: parent
+            appWindow: window
+            eyebrow: window.t("settings.workspace", "SYSTEM CONTROL")
+            title: settingsHeader.heading
+            subtitle: settingsHeader.subheading
+            SettingsNavigation {}
         }
-        SettingsNavigation {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.top: window.narrowWorkspace ? settingsHeaderTitle.bottom : parent.top
-            anchors.topMargin: window.narrowWorkspace ? 12 : 0
+    }
+
+    component CockpitDialog: Dialog {
+        id: dialogControl
+        modal: true
+        dim: true
+        padding: 20
+        topPadding: 18
+        leftPadding: 20
+        rightPadding: 20
+        bottomPadding: 18
+        palette.window: panel
+        palette.windowText: textPrimary
+        palette.base: inputBackground
+        palette.text: textPrimary
+        palette.button: panelRaised
+        palette.buttonText: textPrimary
+        palette.highlight: accent
+        palette.highlightedText: backgroundPrimary
+
+        Overlay.modal: Rectangle { color: overlay }
+        background: Rectangle {
+            radius: 14
+            color: panel
+            border.width: 1
+            border.color: borderTone
+            Rectangle {
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: 3
+                radius: 2
+                color: accent
+            }
+        }
+        header: Rectangle {
+            implicitHeight: 58
+            color: panelRaised
+            radius: 14
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: 1
+                color: divider
+            }
+            Label {
+                anchors.left: parent.left
+                anchors.leftMargin: 20
+                anchors.verticalCenter: parent.verticalCenter
+                text: dialogControl.title
+                color: textPrimary
+                font.pixelSize: 17
+                font.weight: Font.DemiBold
+            }
+        }
+        footer: DialogButtonBox {
+            visible: dialogControl.standardButtons !== Dialog.NoButton
+            standardButtons: dialogControl.standardButtons
+            padding: 12
+            spacing: 8
+            palette.button: inputBackground
+            palette.buttonText: textSecondary
+            palette.highlight: accent
+            background: Rectangle {
+                color: panelRaised
+                radius: 14
+                Rectangle {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    height: 1
+                    color: divider
+                }
+            }
+            onAccepted: dialogControl.accept()
+            onRejected: dialogControl.reject()
         }
     }
 
@@ -4630,34 +4703,16 @@ ApplicationWindow {
         anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 16
 
-        RowLayout {
-            Layout.fillWidth: true
-            ColumnLayout {
-                spacing: 2
-                Label { text: window.t("state.title", "STATE FINDS FINDER"); color: textPrimary; font.pixelSize: 24; font.bold: true }
-                Label {
-                    text: window.tf("status.state_system", "State-dependent signal intelligence · %1", [cockpit.system])
-                    color: muted; font.pixelSize: 13
-                }
-            }
-            Item { Layout.fillWidth: true }
-            ColumnLayout {
-                spacing: 2
-                Label {
-                    text: cockpit.eddnListenerStatus
-                    color: cockpit.eddnListenerStatus.indexOf("Connected") === 0 ? green : orange
-                    font.pixelSize: 11; font.bold: true
-                    Layout.alignment: Qt.AlignRight
-                }
-                Label {
-                    text: cockpit.stateFindRefreshStatus
-                    color: muted; font.pixelSize: 9
-                    Layout.alignment: Qt.AlignRight
-                }
-            }
+        WorkspaceHeader {
+            appWindow: window
+            eyebrow: window.t("state.workspace", "GALAXY INTELLIGENCE")
+            title: window.t("state.title", "STATE FINDS FINDER")
+            subtitle: window.tf("status.state_system", "State-dependent signal intelligence · %1", [cockpit.system])
+            statusText: cockpit.eddnListenerStatus
+            statusTone: cockpit.eddnListenerStatus.indexOf("Connected") === 0 ? green : orange
             CockpitButton {
                 text: window.t("state.refresh", "REFRESH NOW")
-                        helpText: window.t("state.refresh_help", "Read new Journal evidence, flush live EDDN reports and remove expired finds")
+                helpText: window.t("state.refresh_help", "Read new Journal evidence, flush live EDDN reports and remove expired finds")
                 onClicked: cockpit.refreshStateFinds()
             }
         }
@@ -5116,28 +5171,17 @@ ApplicationWindow {
         anchors.bottomMargin: window.compactSidebar ? 18 : 26
         spacing: 14
 
-        RowLayout {
-            Layout.fillWidth: true
-            ColumnLayout {
-                Layout.fillWidth: true; spacing: 2
-                Label {
-                text: cockpit.commanderKnown ? "CMDR " + cockpit.commander : window.t("commander.overview", "CMDR OVERVIEW")
-                    color: textPrimary; font.pixelSize: 24; font.bold: true
-                }
-                Label {
-                    text: commanderPage.overview.lastUpdated
-                          ? "JOURNAL SNAPSHOT · " + commanderPage.overview.lastUpdated
-                          : "JOURNAL SNAPSHOT · WAITING FOR COMMANDER DATA"
-                    color: muted; font.pixelSize: 11
-                }
-            }
-            Label {
-                text: cockpit.journalAuto
-                      ? window.t("common.journal_live", "● JOURNAL LIVE")
-                      : window.t("common.journal_paused", "Ⅱ JOURNAL PAUSED")
-                color: cockpit.journalAuto ? green : orange
-                font.pixelSize: 10; font.bold: true
-            }
+        WorkspaceHeader {
+            appWindow: window
+            eyebrow: window.t("commander.workspace", "COMMANDER PROFILE")
+            title: cockpit.commanderKnown ? "CMDR " + cockpit.commander : window.t("commander.overview", "CMDR OVERVIEW")
+            subtitle: commanderPage.overview.lastUpdated
+                      ? "JOURNAL SNAPSHOT · " + commanderPage.overview.lastUpdated
+                      : "JOURNAL SNAPSHOT · WAITING FOR COMMANDER DATA"
+            statusText: cockpit.journalAuto
+                        ? window.t("common.journal_live", "JOURNAL LIVE")
+                        : window.t("common.journal_paused", "JOURNAL PAUSED")
+            statusTone: cockpit.journalAuto ? green : orange
         }
 
         GridView {
@@ -5692,9 +5736,11 @@ ApplicationWindow {
             }
         }
 
-        RowLayout {
+        GridLayout {
             Layout.fillWidth: true
-            spacing: 12
+            columns: Math.max(1, cockpit.serviceStatus.length)
+            columnSpacing: 12
+            rowSpacing: 8
             Repeater {
                 model: cockpit.serviceStatus
                 delegate: ShadowCard {
@@ -5715,18 +5761,30 @@ ApplicationWindow {
             }
         }
 
-        RowLayout {
+        GridLayout {
             visible: connectionsPage.connectionMode === 0
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 14
+            columns: 2
+            columnSpacing: 14
+            rowSpacing: 14
 
             ShadowCard {
-                Layout.preferredWidth: window.compactSidebar ? 470 : 570
+                Layout.preferredWidth: (connectionsPage.width - 14) / 2
+                Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: cyan
+                ScrollView {
+                    id: inaraConfigScroll
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    clip: true
+                    contentWidth: availableWidth
+                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                    ScrollBar.vertical: CockpitScrollBar {}
                 ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 22; spacing: 12
+                    width: inaraConfigScroll.availableWidth
+                    spacing: 12
                                 Label { text: window.t("connections.inara_title", "INARA COMMANDER CONNECTION"); color: cyan; font.pixelSize: 14; font.bold: true }
                     Label {
                         text: window.t("connections.inara_privacy", "Nothing is sent until you enable consent. The API key is stored only in your local app profile and is never shown in logs or receipts.")
@@ -5818,6 +5876,7 @@ ApplicationWindow {
             }
 
             ShadowCard {
+                Layout.preferredWidth: (connectionsPage.width - 14) / 2
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 ColumnLayout {
@@ -5872,14 +5931,17 @@ ApplicationWindow {
             }
         }
 
-        RowLayout {
+        GridLayout {
             visible: connectionsPage.connectionMode === 1
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 14
+            columns: 2
+            columnSpacing: 14
+            rowSpacing: 14
 
             ShadowCard {
-                Layout.preferredWidth: window.compactSidebar ? 430 : 510
+                Layout.preferredWidth: (connectionsPage.width - 14) / 2
+                Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: green
                 ScrollView {
@@ -6005,6 +6067,7 @@ ApplicationWindow {
             }
 
             ShadowCard {
+                Layout.preferredWidth: (connectionsPage.width - 14) / 2
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 ColumnLayout {
@@ -6399,7 +6462,7 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    CockpitDialog {
         id: buildImportDialog
         objectName: "qa-dialog-build-import"
         title: window.t("dialog.import.title", "Import Engineering Build")
@@ -6491,6 +6554,7 @@ ApplicationWindow {
                             drop.acceptProposedAction()
                         }
                     }
+                }
                 }
             }
             RowLayout {
@@ -6615,7 +6679,7 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    CockpitDialog {
         id: logbookDetailDialog
         objectName: "qa-dialog-logbook-detail"
         title: window.t("dialog.logbook.title", "Logbook Entry")
@@ -6694,7 +6758,7 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    CockpitDialog {
         id: shortcutHelpDialog
         objectName: "qa-dialog-shortcuts"
         title: window.t("dialog.controls.title", "Commander Controls")
@@ -6752,7 +6816,7 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    CockpitDialog {
         id: globalSearchDialog
         objectName: "qa-dialog-global-search"
         title: window.t("dialog.search.title", "Global Search")
@@ -6840,7 +6904,7 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    CockpitDialog {
         id: aboutDialog
         objectName: "qa-dialog-about"
         title: window.t("dialog.about.title", "About ED Engineering Companion")
@@ -6918,7 +6982,7 @@ ApplicationWindow {
         }
     }
 
-    Dialog {
+    CockpitDialog {
         id: onboardingDialog
         objectName: "qa-dialog-onboarding"
         title: window.t("dialog.onboarding.title", "Welcome, Commander")

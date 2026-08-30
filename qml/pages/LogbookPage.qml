@@ -29,22 +29,15 @@ ColumnLayout {
     anchors.bottomMargin: appWindow.compactSidebar ? 18 : 26
     spacing: 14
 
-    RowLayout {
-        Layout.fillWidth: true
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 2
-            Label { text: appWindow.t("logbook.title", "COMMANDER LOGBOOK"); color: textPrimary; font.pixelSize: 24; font.bold: true }
-            Label { text: appWindow.t("logbook.subtitle", "Profile-isolated Journal highlights · newest first"); color: muted; font.pixelSize: 11 }
-        }
-        Label {
-                text: cockpit.journalAuto
-                      ? appWindow.t("common.live", "● LIVE")
-                      : appWindow.t("common.paused", "Ⅱ PAUSED")
-            color: cockpit.journalAuto ? green : orange
-            font.pixelSize: 11
-            font.bold: true
-        }
+    WorkspaceHeader {
+        appWindow: logbookPage.appWindow
+        eyebrow: appWindow.t("logbook.workspace", "FLIGHT RECORD")
+        title: appWindow.t("logbook.title", "COMMANDER LOGBOOK")
+        subtitle: appWindow.t("logbook.subtitle", "Profile-isolated Journal highlights · newest first")
+        statusText: cockpit.journalAuto
+                    ? appWindow.t("common.live", "LIVE")
+                    : appWindow.t("common.paused", "PAUSED")
+        statusTone: cockpit.journalAuto ? green : orange
     }
     ShadowCard {
         Layout.fillWidth: true

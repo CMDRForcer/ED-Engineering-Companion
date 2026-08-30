@@ -26,27 +26,17 @@ ColumnLayout {
     anchors.bottomMargin: appWindow.compactSidebar ? 18 : 26
     spacing: 14
 
-    RowLayout {
-        Layout.fillWidth: true
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 2
-            Label { text: appWindow.t("powerplay.title", "POWERPLAY"); color: textPrimary; font.pixelSize: 24; font.bold: true }
-            Label {
-                text: overview.pledged
-                      ? appWindow.t("powerplay.subtitle_pledged", "Journal-derived Commander pledge and local system state")
-                      : appWindow.t("powerplay.subtitle_none", "No active Power pledge found in this Commander's Journal")
-                color: muted
-                font.pixelSize: 11
-            }
-        }
-        Label {
-            visible: overview.pledged && overview.timePledgedKnown
-            text: appWindow.tf("powerplay.pledged", "PLEDGED FOR %1 H", [appWindow.powerplayPledgedHours(overview)])
-            color: muted
-            font.pixelSize: 12
-            font.bold: true
-        }
+    WorkspaceHeader {
+        appWindow: powerplayPage.appWindow
+        eyebrow: appWindow.t("powerplay.workspace", "GALACTIC INFLUENCE")
+        title: appWindow.t("powerplay.title", "POWERPLAY")
+        subtitle: overview.pledged
+                  ? appWindow.t("powerplay.subtitle_pledged", "Journal-derived Commander pledge and local system state")
+                  : appWindow.t("powerplay.subtitle_none", "No active Power pledge found in this Commander's Journal")
+        statusText: overview.pledged && overview.timePledgedKnown
+                    ? appWindow.tf("powerplay.pledged", "PLEDGED FOR %1 H", [appWindow.powerplayPledgedHours(overview)])
+                    : ""
+        statusTone: cyan
     }
 
     EmptyState {

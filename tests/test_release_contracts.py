@@ -46,6 +46,23 @@ from ed_companion.services import latest_delivery_proof
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_workspace_design_system_covers_secondary_pages_and_dialogs(self):
+        root = Path(__file__).resolve().parents[1]
+        main_qml = (root / "Main.qml").read_text(encoding="utf-8")
+        logbook_qml = (root / "qml/pages/LogbookPage.qml").read_text(encoding="utf-8")
+        powerplay_qml = (root / "qml/pages/PowerplayPage.qml").read_text(encoding="utf-8")
+
+        self.assertTrue((root / "qml/components/WorkspaceHeader.qml").is_file())
+        self.assertTrue((root / "qml/components/StatusBadge.qml").is_file())
+        self.assertGreaterEqual(main_qml.count("CockpitDialog {"), 6)
+        self.assertIn("WorkspaceHeader {", logbook_qml)
+        self.assertIn("WorkspaceHeader {", powerplay_qml)
+        self.assertIn("id: inaraConfigScroll", main_qml)
+        self.assertEqual(
+            main_qml.count("Layout.preferredWidth: (connectionsPage.width - 14) / 2"),
+            4,
+        )
+
     def test_engineer_route_excludes_locked_access_tasks(self):
         assignments = [
             {
