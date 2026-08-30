@@ -2522,6 +2522,11 @@ def blueprint_rows(
             key=lambda item: int(item.get("Grade", 0) or 0),
             default=None,
         )
+        next_grade_record = min(
+            unfinished_grades,
+            key=lambda item: int(item.get("Grade", 0) or 0),
+            default=None,
+        )
         engineer_set = set(real_engineers(target_record or {}))
         if mode == "experimental_only":
             engineer_set = {
@@ -2709,6 +2714,9 @@ def blueprint_rows(
                 int(target_record.get("Grade", 0) or 0)
                 if target_record else max(grades, default=0)
             ),
+            "nextGrade": int(
+                next_grade_record.get("Grade", 0) or 0
+            ) if next_grade_record else 0,
             "required": total,
             "covered": covered,
             "completion": covered / total if total else 1.0,
@@ -3105,10 +3113,11 @@ def assign_plans_to_nearest_engineers(plans, engineer_rows):
         if not eligible:
             continue
         target_grade = int(plan.get("grade", 0) or 0)
+        next_grade = int(plan.get("nextGrade", 0) or target_grade)
         usable = [
             name for name in eligible
             if engineer_index[name].get("statusGroup") == "unlocked"
-            and int(engineer_index[name].get("rank", 0) or 0) >= target_grade
+            and int(engineer_index[name].get("rank", 0) or 0) >= next_grade
         ]
         selected = str(plan.get("selectedEngineer") or "")
         candidates = usable or eligible
@@ -3131,16 +3140,21 @@ def assign_plans_to_nearest_engineers(plans, engineer_rows):
                 candidates = [selected]
         elif selected in candidates:
             candidates = [selected]
-        prepared.append((plan, target_grade, candidates, bool(usable)))
+        prepared.append((
+            plan, target_grade, next_grade, candidates, bool(usable)
+        ))
 
     cover_route = _minimum_engineer_cover(
-        [candidates for _plan, _grade, candidates, _usable in prepared],
+        [
+            candidates
+            for _plan, _target, _next, candidates, _usable in prepared
+        ],
         engineer_index,
     )
     cover = set(cover_route)
     route_rank = {name: index for index, name in enumerate(cover_route)}
     assignments = {}
-    for plan, target_grade, candidates, craftable in prepared:
+    for plan, target_grade, next_grade, candidates, craftable in prepared:
         covered = [name for name in candidates if name in cover]
         selection = covered or candidates
         selection.sort(key=lambda name: (
@@ -3149,7 +3163,8 @@ def assign_plans_to_nearest_engineers(plans, engineer_rows):
         chosen = engineer_index[selection[0]]
         rank = int(chosen.get("rank", 0) or 0)
         block_reason = "" if craftable else (
-            f"Engineer access/rank insufficient: requires unlocked G{target_grade}, "
+            f"Engineer access/rank insufficient: requires unlocked G{next_grade} now "
+            f"for progressive target G{target_grade}, "
             f"Journal reports {chosen.get('status', 'UNKNOWN')} G{rank}"
         )
         bucket = assignments.setdefault(chosen["name"], {
@@ -3172,6 +3187,12 @@ def assign_plans_to_nearest_engineers(plans, engineer_rows):
             f"{plan.get('module', 'Module')} · "
             f"{plan.get('blueprint', 'Blueprint')} · G{target_grade}"
         )
+        if craftable and rank < target_grade:
+            bucket["progressiveRankUp"] = True
+            bucket["progressiveTargetGrade"] = max(
+                int(bucket.get("progressiveTargetGrade", 0) or 0),
+                target_grade,
+            )
     return sorted(assignments.values(), key=lambda row: (
         route_rank.get(row["name"], len(route_rank)),
         str(row["name"]).casefold(),
@@ -3200,6 +3221,7 @@ def engineer_options_for_plan(plan, engineer_rows, blueprint_records=None):
     """List every Engineer capable of this blueprint at the target Grade."""
     plan = plan or {}
     target = int(plan.get("targetGrade", 0) or plan.get("grade", 0) or 0)
+    next_grade = int(plan.get("nextGrade", 0) or target)
     module_key = normalize(plan.get("module"))
     blueprint_key = normalize(plan.get("blueprint"))
     capabilities: dict[str, int] = {}
@@ -3231,7 +3253,9 @@ def engineer_options_for_plan(plan, engineer_rows, blueprint_records=None):
         unlocked = str(row.get("statusGroup") or "") == "unlocked"
         if not unlocked:
             code, text = "unlock_required", "UNLOCK REQUIRED"
-        elif rank < target:
+        elif rank >= next_grade and rank < target:
+            code, text = "rank_progression", "RANK UP HERE"
+        elif rank < next_grade:
             code, text = "rank_too_low", "RANK TOO LOW"
         else:
             code, text = "craftable", "CRAFTABLE NOW"
@@ -3243,11 +3267,14 @@ def engineer_options_for_plan(plan, engineer_rows, blueprint_records=None):
             "rank": rank,
             "status": code,
             "statusText": text,
-            "craftable": code == "craftable",
+            "craftable": code in {"craftable", "rank_progression"},
             "distance": float(row.get("distance", -1) or -1),
             "portraitUrl": str(row.get("portraitUrl") or ""),
         })
-    order = {"craftable": 0, "rank_too_low": 1, "unlock_required": 2}
+    order = {
+        "craftable": 0, "rank_progression": 1,
+        "rank_too_low": 2, "unlock_required": 3,
+    }
     return sorted(options, key=lambda row: (
         order.get(row["status"], 9),
         -int(row["rank"]),

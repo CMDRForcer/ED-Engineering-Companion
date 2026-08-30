@@ -470,6 +470,38 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertEqual([row["name"] for row in route], ["Near G5"])
         self.assertTrue(route[0]["craftable"])
 
+    def test_unlocked_engineer_can_rank_up_during_progressive_grade_run(self):
+        plans = [{
+            "module": "Pulse Laser", "blueprint": "Efficient Weapon",
+            "grade": 5, "targetGrade": 5, "nextGrade": 2,
+            "eligibleEngineers": ["Broo Tarquin", "Mel Brandon"],
+            "completion": 1, "targetStatus": "in_progress",
+        }]
+        engineers = [
+            {
+                "name": "Broo Tarquin", "statusGroup": "unlocked",
+                "rank": 2, "distance": 0, "status": "UNLOCKED",
+            },
+            {
+                "name": "Mel Brandon", "statusGroup": "locked",
+                "rank": 0, "distance": 500, "status": "LOCKED",
+            },
+        ]
+
+        route = assign_plans_to_nearest_engineers(plans, engineers)
+        preflight = engineering_run_preflight(
+            {"blueprints": plans}, route
+        )
+
+        self.assertEqual([row["name"] for row in route], ["Broo Tarquin"])
+        self.assertTrue(route[0]["craftable"])
+        self.assertTrue(route[0]["progressiveRankUp"])
+        self.assertEqual(route[0]["progressiveTargetGrade"], 5)
+        self.assertNotIn(
+            "ENGINEER_ACCESS",
+            {row["code"] for row in preflight["blockers"]},
+        )
+
     def test_current_engineer_consolidates_all_compatible_jobs_before_departure(self):
         plans = [
             {

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 21.198 — 2026-08-30
+
+### Fixed
+
+- Treat an unlocked Engineer as an executable progressive stop when the currently available rank can craft the next unfinished grade and raise reputation toward the final target.
+- Reserve `RUN BLOCKED` for genuinely inaccessible workshops or ranks below the next required grade.
+
 ## 21.197 — 2026-08-30
 
 ### Fixed
