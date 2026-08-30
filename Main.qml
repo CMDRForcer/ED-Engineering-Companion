@@ -5761,18 +5761,20 @@ ApplicationWindow {
             }
         }
 
-        RowLayout {
-            visible: connectionsPage.connectionMode === 0
+        Item {
             Layout.fillWidth: true
-            Layout.fillHeight: visible
-            Layout.preferredHeight: visible ? -1 : 0
-            Layout.maximumHeight: visible ? 16777215 : 0
-            spacing: 14
+            Layout.fillHeight: true
+
+        Item {
+            anchors.fill: parent
+            visible: connectionsPage.connectionMode === 0
 
             ShadowCard {
-                Layout.preferredWidth: 0
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                anchors.left: parent.left
+                anchors.right: parent.horizontalCenter
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: 7
                 accent: cyan
                 ScrollView {
                     id: inaraConfigScroll
@@ -5874,11 +5876,14 @@ ApplicationWindow {
                     }
                 }
             }
+            }
 
             ShadowCard {
-                Layout.preferredWidth: 0
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                anchors.left: parent.horizontalCenter
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 7
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 22; spacing: 12
                                 Label { text: window.t("connections.receipts", "RECEIPTS"); color: orange; font.pixelSize: 14; font.bold: true }
@@ -5931,18 +5936,16 @@ ApplicationWindow {
             }
         }
 
-        RowLayout {
+        Item {
+            anchors.fill: parent
             visible: connectionsPage.connectionMode === 1
-            Layout.fillWidth: true
-            Layout.fillHeight: visible
-            Layout.preferredHeight: visible ? -1 : 0
-            Layout.maximumHeight: visible ? 16777215 : 0
-            spacing: 14
 
             ShadowCard {
-                Layout.preferredWidth: 0
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                anchors.left: parent.left
+                anchors.right: parent.horizontalCenter
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.rightMargin: 7
                 accent: green
                 ScrollView {
                     id: eddnCommunityScroll
@@ -6067,9 +6070,11 @@ ApplicationWindow {
             }
 
             ShadowCard {
-                Layout.preferredWidth: 0
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                anchors.left: parent.horizontalCenter
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 7
                 ColumnLayout {
                     anchors.fill: parent; anchors.margins: 22; spacing: 10
                     RowLayout {

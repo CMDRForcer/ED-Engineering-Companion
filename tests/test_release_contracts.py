@@ -58,13 +58,15 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("WorkspaceHeader {", logbook_qml)
         self.assertIn("WorkspaceHeader {", powerplay_qml)
         self.assertIn("id: inaraConfigScroll", main_qml)
+        self.assertIn("anchors.fill: parent\n            visible: connectionsPage.connectionMode === 0", main_qml)
+        self.assertIn("anchors.fill: parent\n            visible: connectionsPage.connectionMode === 1", main_qml)
         self.assertEqual(
-            main_qml.count("Layout.maximumHeight: visible ? 16777215 : 0"),
+            main_qml.count("anchors.right: parent.horizontalCenter"),
             2,
         )
         self.assertEqual(
-            main_qml.count("Layout.preferredWidth: 0"),
-            4,
+            main_qml.count("anchors.left: parent.horizontalCenter"),
+            2,
         )
 
     def test_engineer_route_excludes_locked_access_tasks(self):
