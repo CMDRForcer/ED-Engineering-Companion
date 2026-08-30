@@ -583,6 +583,7 @@ ApplicationWindow {
         property color accentColor: accent
         property bool selected: false
         property string helpText: ""
+        property real horizontalContentPadding: 10
         implicitHeight: 40
         focusPolicy: Qt.StrongFocus
         Accessible.name: text
@@ -601,8 +602,8 @@ ApplicationWindow {
             color: control.selected ? backgroundPrimary : (control.hovered ? textPrimary : textSecondary)
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
-            leftPadding: 10
-            rightPadding: 10
+            leftPadding: control.horizontalContentPadding
+            rightPadding: control.horizontalContentPadding
             elide: Text.ElideRight
             maximumLineCount: 1
             font: control.font
@@ -3538,7 +3539,7 @@ ApplicationWindow {
                         GridLayout {
                             visible: cockpit.planMode !== "experimental_only"
                             Layout.fillWidth: true
-                            columns: width >= 620 ? 2 : 1
+                            columns: width >= 760 ? 2 : 1
                             columnSpacing: 16; rowSpacing: 7
                             ColumnLayout {
                                 Layout.fillWidth: true; spacing: 6
@@ -3556,6 +3557,7 @@ ApplicationWindow {
                                 text: index === 0 ? window.t("status.value.none", "NONE") : "G" + index
                                             selected: cockpit.currentGrade === index
                                             enabled: !cockpit.editingGradeComplete
+                                            horizontalContentPadding: 3
                                             implicitWidth: index === 0 ? 62 : 48
                                             implicitHeight: 38
                                             onClicked: cockpit.setCurrentGrade(index)
@@ -3580,6 +3582,7 @@ ApplicationWindow {
                                             text: window.tf("status.grade_short", "G%1", [gradeValue])
                                             selected: cockpit.targetGrade === gradeValue
                                             enabled: !cockpit.editingGradeComplete
+                                            horizontalContentPadding: 3
                                             implicitWidth: 48; implicitHeight: 38
                                             onClicked: cockpit.setTargetGrade(gradeValue)
                                         }

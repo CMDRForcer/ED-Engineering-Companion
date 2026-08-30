@@ -60,6 +60,8 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("id: inaraConfigScroll", main_qml)
         self.assertIn("anchors.fill: parent\n            visible: connectionsPage.connectionMode === 0", main_qml)
         self.assertIn("anchors.fill: parent\n            visible: connectionsPage.connectionMode === 1", main_qml)
+        self.assertIn("columns: width >= 760 ? 2 : 1", main_qml)
+        self.assertEqual(main_qml.count("horizontalContentPadding: 3"), 2)
         self.assertEqual(
             main_qml.count("anchors.right: parent.horizontalCenter"),
             2,
