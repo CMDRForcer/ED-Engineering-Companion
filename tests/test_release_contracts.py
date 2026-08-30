@@ -59,7 +59,11 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertIn("WorkspaceHeader {", powerplay_qml)
         self.assertIn("id: inaraConfigScroll", main_qml)
         self.assertEqual(
-            main_qml.count("Layout.preferredWidth: (connectionsPage.width - 14) / 2"),
+            main_qml.count("Layout.maximumHeight: visible ? 16777215 : 0"),
+            2,
+        )
+        self.assertEqual(
+            main_qml.count("Layout.preferredWidth: 0"),
             4,
         )
 

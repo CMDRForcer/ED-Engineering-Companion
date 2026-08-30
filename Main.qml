@@ -5761,16 +5761,16 @@ ApplicationWindow {
             }
         }
 
-        GridLayout {
+        RowLayout {
             visible: connectionsPage.connectionMode === 0
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            columns: 2
-            columnSpacing: 14
-            rowSpacing: 14
+            Layout.fillHeight: visible
+            Layout.preferredHeight: visible ? -1 : 0
+            Layout.maximumHeight: visible ? 16777215 : 0
+            spacing: 14
 
             ShadowCard {
-                Layout.preferredWidth: (connectionsPage.width - 14) / 2
+                Layout.preferredWidth: 0
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: cyan
@@ -5876,7 +5876,7 @@ ApplicationWindow {
             }
 
             ShadowCard {
-                Layout.preferredWidth: (connectionsPage.width - 14) / 2
+                Layout.preferredWidth: 0
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 ColumnLayout {
@@ -5931,16 +5931,16 @@ ApplicationWindow {
             }
         }
 
-        GridLayout {
+        RowLayout {
             visible: connectionsPage.connectionMode === 1
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            columns: 2
-            columnSpacing: 14
-            rowSpacing: 14
+            Layout.fillHeight: visible
+            Layout.preferredHeight: visible ? -1 : 0
+            Layout.maximumHeight: visible ? 16777215 : 0
+            spacing: 14
 
             ShadowCard {
-                Layout.preferredWidth: (connectionsPage.width - 14) / 2
+                Layout.preferredWidth: 0
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 accent: green
@@ -6067,7 +6067,7 @@ ApplicationWindow {
             }
 
             ShadowCard {
-                Layout.preferredWidth: (connectionsPage.width - 14) / 2
+                Layout.preferredWidth: 0
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 ColumnLayout {
