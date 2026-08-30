@@ -5263,12 +5263,29 @@ def powerplay_journal_overview(events):
             continue
         name = str(event.get("event") or "")
         timestamp = str(event.get("timestamp") or "")
-        if name == "LoadGame":
-            # A new session must prove the current pledge again. Otherwise a
-            # historic Powerplay event could incorrectly survive after leaving.
+        if name == "PowerplayLeave":
+            # Leaving is the authoritative negative membership signal. Elite
+            # does not reliably repeat Powerplay after every LoadGame within a
+            # journal session, so LoadGame itself must not erase valid proof.
             membership = {"power": "", "rank": None, "merits": None,
                           "timePledged": None, "timePledgedObservedAt": "",
                           "timestamp": timestamp}
+        elif name == "PowerplayJoin" and str(event.get("Power") or "").strip():
+            power = str(event.get("Power") or "")
+            if membership["power"] and membership["power"] != power:
+                membership.update({
+                    "rank": None, "merits": None, "timePledged": None,
+                    "timePledgedObservedAt": "",
+                })
+            membership.update({"power": power, "timestamp": timestamp})
+        elif name == "PowerplayDefect" and str(
+            event.get("ToPower") or event.get("Power") or ""
+        ).strip():
+            membership = {
+                "power": str(event.get("ToPower") or event.get("Power") or ""),
+                "rank": None, "merits": None, "timePledged": None,
+                "timePledgedObservedAt": "", "timestamp": timestamp,
+            }
         elif name in {"Location", "FSDJump", "CarrierJump"}:
             current_system = str(event.get("StarSystem") or current_system)
             location = {

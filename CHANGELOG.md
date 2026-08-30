@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 21.191 — 2026-08-30
+
+### Fixed
+
+- Preserve a Journal-confirmed Powerplay pledge across subsequent `LoadGame` events when Elite does not repeat the `Powerplay` snapshot.
+- Apply explicit `PowerplayJoin`, `PowerplayDefect`, and `PowerplayLeave` events as the authoritative membership changes.
+
 ## 21.190 — 2026-08-30
 
 ### Fixed

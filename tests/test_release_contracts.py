@@ -783,12 +783,39 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertEqual(overview["merits"], 14230)
         self.assertEqual(overview["timePledgedSeconds"], 1713600)
 
-        unpledged = powerplay_journal_overview([
-            {"timestamp": "2026-08-23T17:00:00Z", "event": "LoadGame"}
-        ])
+        unpledged = powerplay_journal_overview([{
+            "timestamp": "2026-08-23T17:00:00Z", "event": "LoadGame"
+        }])
         self.assertFalse(unpledged["pledged"])
         self.assertFalse(unpledged["rankKnown"])
         self.assertFalse(unpledged["meritsKnown"])
+
+    def test_powerplay_membership_survives_loadgame_without_repeated_snapshot(self):
+        events = [
+            {
+                "timestamp": "2026-08-30T05:30:35Z", "event": "Powerplay",
+                "Power": "Aisling Duval", "Rank": 5, "Merits": 17057,
+                "TimePledged": 591292,
+            },
+            {"timestamp": "2026-08-30T05:41:01Z", "event": "LoadGame"},
+            {
+                "timestamp": "2026-08-30T05:41:05Z", "event": "Location",
+                "StarSystem": "Laksak", "ControllingPower": "Yuri Grom",
+            },
+        ]
+
+        overview = powerplay_journal_overview(events)
+
+        self.assertTrue(overview["pledged"])
+        self.assertEqual(overview["power"], "Aisling Duval")
+        self.assertEqual(overview["rank"], 5)
+        self.assertEqual(overview["merits"], 17057)
+
+        left = powerplay_journal_overview(events + [{
+            "timestamp": "2026-08-30T06:00:00Z", "event": "PowerplayLeave",
+            "Power": "Aisling Duval",
+        }])
+        self.assertFalse(left["pledged"])
 
     def test_scanorganic_contract_filters_private_fields(self):
         context = {}
