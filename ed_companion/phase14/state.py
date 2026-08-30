@@ -50,7 +50,10 @@ from ed_companion.navigation.trader_type_cache import normalize_timestamp
 from ed_companion.trader_config import HEURISTIC_TRADER_WARNING
 from ed_companion.material_integrity import material_key
 from ed_companion.persistence import atomic_write
-from ed_companion.build_import import JOURNAL_EXPERIMENTAL_NAMES
+from ed_companion.build_import import (
+    JOURNAL_BLUEPRINT_NAMES,
+    JOURNAL_EXPERIMENTAL_NAMES,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -194,7 +197,7 @@ def load_blueprint_id_catalog(
             seen.add(key)
             if key in catalog:
                 if str(catalog[key]["blueprint_id"]) != str(record["blueprint_id"]):
-                    LOGGER.warning(
+                    LOGGER.info(
                         "Learned BlueprintID conflicts with bundled catalog; "
                         "catalog unchanged: %s / G%s / bundled=%s / learned=%s",
                         key[0], key[1], catalog[key]["blueprint_id"],
@@ -234,7 +237,7 @@ def learn_blueprint_id_catalog(
     for key, ids in sorted(evidence.items()):
         if len(ids) != 1:
             ambiguous += 1
-            LOGGER.warning(
+            LOGGER.info(
                 "Ambiguous Journal BlueprintID evidence ignored: %s / G%s / %s",
                 key[0], key[1], sorted(ids),
             )
@@ -244,7 +247,7 @@ def learn_blueprint_id_catalog(
         if known:
             if str(known["blueprint_id"]) != identity:
                 conflicts += 1
-                LOGGER.warning(
+                LOGGER.info(
                     "BlueprintID catalog contradiction; Journal wins at runtime, "
                     "catalog unchanged: %s / G%s / catalog=%s / journal=%s",
                     key[0], key[1], known["blueprint_id"], identity,
@@ -276,7 +279,7 @@ def blueprint_id_evidence(
     journal_id = event.get("BlueprintID")
     entry = (catalog or load_blueprint_id_catalog()).get((name, level))
     if entry is None:
-        LOGGER.warning(
+        LOGGER.info(
             "Unknown BlueprintID learned from Journal: %s / G%s / %s",
             name, level, journal_id,
         )
@@ -287,7 +290,7 @@ def blueprint_id_evidence(
     if str(entry["blueprint_id"]) != str(journal_id):
         # The local Journal is authoritative evidence of what the game
         # actually applied. Keep the static catalog immutable for diagnosis.
-        LOGGER.warning(
+        LOGGER.info(
             "BlueprintID catalog contradiction; Journal wins: %s / G%s / "
             "catalog=%s / journal=%s",
             name, level, entry["blueprint_id"], journal_id,
@@ -1673,6 +1676,12 @@ def engineering_loadout_rows(
             "bindingKey": f"{slot}\u241f{module_id}",
             "engineered": bool(slot_row.get("engineered")),
             "engineeringGrade": int(slot_row.get("engineeringGrade") or 0),
+            "engineeringQuality": float(
+                slot_row.get("engineeringQuality") or 0
+            ),
+            "engineeringQualityKnown": bool(
+                slot_row.get("engineeringQualityKnown")
+            ),
             "engineeringBlueprint": str(
                 slot_row.get("engineeringBlueprint") or ""
             ),
@@ -1792,6 +1801,12 @@ def ship_slot_layout(
             "engineerable": bool(engineering),
             "engineered": bool(installed.get("engineered")),
             "engineeringGrade": int(installed.get("engineeringGrade") or 0),
+            "engineeringQuality": float(
+                installed.get("engineeringQuality") or 0
+            ),
+            "engineeringQualityKnown": bool(
+                installed.get("engineeringQualityKnown")
+            ),
             "engineeringBlueprint": str(
                 installed.get("engineeringBlueprint") or ""
             ),
@@ -1880,10 +1895,17 @@ def latest_loadout_slots(
             grade = max(0, min(5, int(level or 0)))
         except (TypeError, ValueError):
             grade = 0
+        quality_known = "Quality" in details and details.get("Quality") is not None
+        try:
+            quality = max(0.0, min(1.0, float(details.get("Quality") or 0)))
+        except (TypeError, ValueError):
+            quality = 0.0
         return {
             "moduleId": canonical_module_id(module_id),
             "engineered": bool(details and grade > 0),
             "engineeringGrade": grade,
+            "engineeringQuality": quality,
+            "engineeringQualityKnown": quality_known,
             "engineeringBlueprint": str(
                 details.get("BlueprintName_Localised")
                 or details.get("BlueprintName") or ""
@@ -1919,14 +1941,35 @@ def latest_loadout_slots(
         if resolved_ship_id != wanted_ship:
             continue
         if event_name == "Loadout":
-            slots = {
-                str(module.get("Slot")): slot_record(
-                    module.get("Item"), module.get("Engineering")
+            previous_slots = slots
+            rebuilt = {}
+            for module in event.get("Modules") or []:
+                if not isinstance(module, dict) or not module.get("Slot") or not module.get("Item"):
+                    continue
+                slot = str(module.get("Slot"))
+                record = slot_record(module.get("Item"), module.get("Engineering"))
+                previous = previous_slots.get(slot, {})
+                # Loadout normally omits within-grade Quality. Preserve the
+                # last authoritative EngineerCraft value only while the same
+                # physical module, blueprint and grade remain installed.
+                same_engineering = (
+                    normalize(previous.get("moduleId")) == normalize(record.get("moduleId"))
+                    and normalize(previous.get("engineeringBlueprint"))
+                    == normalize(record.get("engineeringBlueprint"))
+                    and int(previous.get("engineeringGrade") or 0)
+                    == int(record.get("engineeringGrade") or 0)
                 )
-                for module in (event.get("Modules") or [])
-                if isinstance(module, dict)
-                and module.get("Slot") and module.get("Item")
-            }
+                if (
+                    same_engineering
+                    and previous.get("engineeringQualityKnown")
+                    and not record.get("engineeringQualityKnown")
+                ):
+                    record["engineeringQuality"] = float(
+                        previous.get("engineeringQuality") or 0
+                    )
+                    record["engineeringQualityKnown"] = True
+                rebuilt[slot] = record
+            slots = rebuilt
         elif event_name in {"ModuleBuy", "ModuleRetrieve"}:
             item_key = "BuyItem" if event_name == "ModuleBuy" else "RetrievedItem"
             slot = str(event.get("Slot") or "")
@@ -1997,6 +2040,23 @@ def migrate_wishlist_bindings(
         for row in fleet_state.get("ships", [])
     }
     changed = False
+    observed_rolls: dict[tuple[str, int], int] = {}
+    for event in events or []:
+        if not isinstance(event, dict) or event.get("event") != "EngineerCraft":
+            continue
+        level = int(event.get("Level", 0) or 0)
+        quality = float(event.get("Quality", 0) or 0)
+        blueprint = JOURNAL_BLUEPRINT_NAMES.get(
+            normalize(event.get("BlueprintName")),
+            str(event.get("BlueprintName") or ""),
+        )
+        if level <= 0 or not blueprint or not 0 < quality < 0.999:
+            continue
+        key = (normalize(blueprint), level)
+        observed_rolls[key] = max(
+            observed_rolls.get(key, 0),
+            max(1, min(5, round(1 / quality))),
+        )
     for label, tasks in payload.items():
         ship_id = ids_by_label.get(str(label), "")
         slots = latest_loadout_slots(events, ship_id)
@@ -2010,6 +2070,116 @@ def migrate_wishlist_bindings(
             if not planner.get("plan_mode"):
                 planner["plan_mode"] = planner_mode(planner)
                 changed = True
+            target_name = normalize(first.get("Name"))
+            learned_any = False
+            for grade_record in task:
+                if not isinstance(grade_record, dict) or grade_record.get("Grade") is None:
+                    continue
+                level = int(grade_record.get("Grade", 0) or 0)
+                learned = observed_rolls.get((target_name, level), 0)
+                if learned:
+                    sources = planner.setdefault("roll_estimate_sources", {})
+                    if (
+                        int(grade_record.get("_Rolls", 0) or 0) != learned
+                        or str(sources.get(str(level)) or "") != "journal_history"
+                    ):
+                        grade_record["_Rolls"] = learned
+                        planner.setdefault("rolls", {})[str(level)] = learned
+                        sources[str(level)] = "journal_history"
+                        learned_any = True
+            if learned_any:
+                planner["estimated_total_rolls"] = sum(
+                    int(row.get("_Rolls", 0) or 0)
+                    for row in task if isinstance(row, dict)
+                    and row.get("Grade") is not None
+                )
+                changed = True
+            installed_at_slot = next((
+                row for row in slots
+                if str(row.get("slot") or "") == str(planner.get("slot") or "")
+                and normalize(row.get("moduleId")) == normalize(
+                    planner.get("module_id")
+                )
+            ), None)
+            if installed_at_slot and first.get("Kind") != "ExperimentalEffect":
+                installed_blueprint = str(
+                    installed_at_slot.get("engineeringBlueprint") or ""
+                )
+                canonical_blueprint = JOURNAL_BLUEPRINT_NAMES.get(
+                    normalize(installed_blueprint), installed_blueprint
+                )
+                blueprint_matches = bool(
+                    canonical_blueprint and first.get("Name")
+                    and normalize(canonical_blueprint) == normalize(first.get("Name"))
+                )
+                installed_grade = int(
+                    installed_at_slot.get("engineeringGrade") or 0
+                )
+                target_grade = int(planner.get("target_grade", 0) or 0)
+                installed_quality_known = bool(
+                    installed_at_slot.get("engineeringQualityKnown")
+                )
+                installed_quality = max(0.0, min(1.0, float(
+                    installed_at_slot.get("engineeringQuality") or 0
+                )))
+                if not blueprint_matches:
+                    current_grade = 0
+                elif installed_grade > target_grade:
+                    current_grade = target_grade
+                elif installed_quality_known:
+                    current_grade = min(installed_grade, target_grade)
+                else:
+                    current_grade = max(
+                        0, min(installed_grade, target_grade) - 1
+                    )
+                # Journal crafts are stronger evidence than Loadout. Only
+                # initialize/reset progress while this plan has not accepted
+                # any exact craft evidence yet.
+                if not (planner.get("processed_crafts") or []):
+                    if int(planner.get("current_grade", 0) or 0) != current_grade:
+                        planner["current_grade"] = current_grade
+                        planner["current_label"] = (
+                            f"G{current_grade}" if current_grade
+                            else "Not engineered"
+                        )
+                        changed = True
+                    grade_progress = {}
+                    crafts_completed = {}
+                    if (
+                        blueprint_matches and installed_grade > 0
+                        and installed_quality_known
+                        and installed_grade <= target_grade
+                    ):
+                        quality = installed_quality
+                        grade_progress[str(installed_grade)] = quality
+                        grade_record = next((
+                            row for row in task if isinstance(row, dict)
+                            and int(row.get("Grade", 0) or 0) == installed_grade
+                        ), {})
+                        planned_rolls = max(
+                            1, int(grade_record.get("_Rolls", installed_grade) or installed_grade)
+                        )
+                        crafts_completed[str(installed_grade)] = max(
+                            0, min(planned_rolls, round(quality * planned_rolls))
+                        )
+                    if planner.get("grade_progress", {}) != grade_progress:
+                        planner["grade_progress"] = grade_progress
+                        changed = True
+                    if planner.get("crafts_completed", {}) != crafts_completed:
+                        planner["crafts_completed"] = crafts_completed
+                        changed = True
+                if planner.get("experimental_id"):
+                    effect_matches = _experimental_craft_matches(
+                        planner,
+                        {
+                            "ExperimentalEffect": installed_at_slot.get(
+                                "experimentalEffect"
+                            )
+                        },
+                    )
+                    if bool(planner.get("experimental_complete")) != effect_matches:
+                        planner["experimental_complete"] = effect_matches
+                        changed = True
             if (
                 planner.get("ship_id") and planner.get("slot")
                 and planner.get("module_id")
@@ -2071,6 +2241,11 @@ def remaining_grade_rolls(
         return 0
     planned = max(1, int(grade.get("_Rolls", 1) or 1))
     done = max(0, int(completed.get(str(level), 0) or 0))
+    if 0 < quality < 0.999 and done > 0:
+        # Quality is stronger evidence than a catalog estimate. Derive the
+        # observed total roll count (for example 1 craft / 25% = 4 rolls).
+        observed_total = max(done + 1, round(done / quality))
+        planned = max(done, min(planned, observed_total))
     estimated_remaining = max(0, planned - done)
     target = int(planner.get("target_grade", 0) or 0)
     if level == target:
@@ -2395,6 +2570,23 @@ def blueprint_rows(
             if isinstance(item, dict) and item.get("Grade") is not None
         ]
         target_status = wishlist_target_status(planner)
+        estimate_sources = planner.get("roll_estimate_sources", {}) or {}
+        active_grade = int(
+            target_record.get("Grade", 0) or 0
+        ) if target_record else 0
+        live_grade_progress = float(
+            (planner.get("grade_progress", {}) or {}).get(
+                str(active_grade), 0
+            ) or 0
+        )
+        roll_estimate_source = str(
+            estimate_sources.get(str(active_grade)) or ""
+        )
+        roll_estimate_reliable = bool(
+            target_status["code"] in {"completed", "experimental_pending"}
+            or live_grade_progress > 0
+            or roll_estimate_source == "journal_history"
+        )
         is_priority = bool(
             priority_plan_id and str(planner.get("plan_id") or "") == priority_plan_id
         )
@@ -2469,6 +2661,11 @@ def blueprint_rows(
             "targetGrade": target_status["targetGrade"],
             "gradeStatus": target_status["gradeStatus"],
             "gradeStatusLabel": target_status["gradeStatusLabel"],
+            "rollEstimateReliable": roll_estimate_reliable,
+            "rollEstimateSource": (
+                "live_progress" if live_grade_progress > 0
+                else roll_estimate_source or "catalog_default"
+            ),
             "experimentalStatus": target_status["experimentalStatus"],
             "experimentalStatusLabel": target_status["experimentalStatusLabel"],
             "canCraftNext": can_craft_next,
@@ -2480,7 +2677,15 @@ def blueprint_rows(
                 int(value or 0)
                 for value in (planner.get("crafts_completed", {}) or {}).values()
             ),
-            "craftsPlanned": int(planner.get("estimated_total_rolls", 0) or 0),
+            "craftsPlanned": sum(
+                max(0, int(
+                    (planner.get("crafts_completed", {}) or {}).get(
+                        str(item.get("Grade")), 0
+                    ) or 0
+                )) + remaining_grade_rolls(planner, item)
+                for item in task if isinstance(item, dict)
+                and item.get("Grade") is not None
+            ),
             "craftReason": str(planner.get("last_change_reason") or ""),
             "module": str(
                 first.get("Type_Localised") or first.get("Type")
@@ -2520,6 +2725,108 @@ def blueprint_rows(
     return rows
 
 
+def engineering_run_preflight(state: object, engineer_route: object) -> dict[str, Any]:
+    """Audit the complete Engineering run without changing its next action."""
+    state = state if isinstance(state, dict) else {}
+    plans = [
+        row for row in (state.get("blueprints") or [])
+        if isinstance(row, dict)
+        and str(row.get("targetStatus") or "") != "completed"
+    ]
+    route = [row for row in (engineer_route or []) if isinstance(row, dict)]
+    blockers: list[dict[str, str]] = []
+    warnings: list[dict[str, str]] = []
+
+    def add(target, code: str, title: str, detail: str) -> None:
+        target.append({"code": code, "title": title, "detail": detail})
+
+    missing_rows = [
+        material
+        for plan in plans
+        for key in ("materialProgress", "experimentalMaterialProgress")
+        for material in (plan.get(key) or [])
+        if isinstance(material, dict) and int(material.get("missing", 0) or 0) > 0
+    ]
+    missing_by_key: dict[str, int] = {}
+    missing_names: dict[str, str] = {}
+    for material in missing_rows:
+        key = str(material.get("key") or material.get("name") or "material")
+        missing_by_key[key] = max(
+            missing_by_key.get(key, 0), int(material.get("missing", 0) or 0)
+        )
+        missing_names[key] = str(material.get("name") or key)
+    if missing_by_key:
+        units = sum(missing_by_key.values())
+        preview = ", ".join(
+            f"{missing_names[key]} ×{missing_by_key[key]}"
+            for key in list(missing_by_key)[:3]
+        )
+        add(blockers, "MATERIALS", "Materials incomplete",
+            f"{len(missing_by_key)} missing types · {units} units · {preview}")
+
+    binding = [plan for plan in plans if plan.get("bindingRequired")]
+    if binding:
+        add(blockers, "MODULE_BINDING", "Module slots not confirmed",
+            f"{len(binding)} plan(s) still need an exact physical slot binding.")
+    conflicts = [plan for plan in plans if plan.get("targetConflict")]
+    if conflicts:
+        add(blockers, "MODULE_CONFLICT", "Installed engineering differs",
+            f"{len(conflicts)} installed module(s) conflict with their target blueprint.")
+    missing_modules = [
+        plan for plan in plans
+        if plan.get("boundSlot") and not plan.get("bindingRequired")
+        and not plan.get("installedModule")
+    ]
+    if missing_modules:
+        add(blockers, "MODULE_MISSING", "Target modules are not installed",
+            f"{len(missing_modules)} bound slot(s) have no matching installed module.")
+
+    calculation_warnings = [
+        str(plan.get("calculationWarning") or "")
+        for plan in plans if plan.get("calculationWarning")
+    ]
+    state_warning = str(state.get("calculationWarning") or "")
+    if state_warning or calculation_warnings:
+        add(blockers, "RECIPE_DATA", "Material calculation is incomplete",
+            state_warning or calculation_warnings[0])
+    uncertain = [
+        plan for plan in plans
+        if str(plan.get("targetStatus") or "") in {"not_started", "in_progress"}
+        and not bool(plan.get("rollEstimateReliable"))
+    ]
+    if uncertain:
+        add(warnings, "ROLL_ESTIMATE", "Roll demand is still estimated",
+            f"{len(uncertain)} plan(s) have no matching live or Journal-history roll evidence.")
+
+    locked_stops = [row for row in route if not bool(row.get("craftable"))]
+    if locked_stops:
+        names = ", ".join(str(row.get("name") or "Engineer") for row in locked_stops)
+        add(blockers, "ENGINEER_ACCESS", "Engineer access or rank is insufficient",
+            f"{len(locked_stops)} blocked stop(s): {names}")
+    routed_jobs = sum(int(row.get("openJobs", 0) or 0) for row in route)
+    if plans and routed_jobs < len(plans):
+        add(blockers, "ENGINEER_ROUTE", "Some plans have no Engineer stop",
+            f"{len(plans) - routed_jobs} open plan(s) cannot be assigned safely.")
+
+    if not plans:
+        status, label, summary = "IDLE", "NO OPEN RUN", "No unfinished Engineering plans."
+    elif blockers:
+        status, label = "BLOCKED", "RUN BLOCKED"
+        summary = f"{len(blockers)} blocker(s) · {len(warnings)} estimate warning(s)"
+    elif warnings:
+        status, label = "CAUTION", "RUN READY · ESTIMATES"
+        summary = f"{len(plans)} plans · {len(route)} stops · verify {len(warnings)} estimate warning(s)"
+    else:
+        status, label = "READY", "RUN READY"
+        summary = f"{len(plans)} plans · {len(route)} Engineer stops · all checks passed"
+    return {
+        "status": status, "label": label, "summary": summary,
+        "blockers": blockers, "warnings": warnings,
+        "openPlans": len(plans), "engineerStops": len(route),
+        "ready": status == "READY",
+    }
+
+
 def aggregate_plan_progress(rows: object) -> str:
     """Summarize craft progress without mixing it with material coverage."""
     plans = [row for row in (rows or []) if isinstance(row, dict)]
@@ -2531,6 +2838,46 @@ def aggregate_plan_progress(rows: object) -> str:
     if any(status != PROGRESS_STATUS[0] for status in statuses):
         return PROGRESS_STATUS[1]
     return PROGRESS_STATUS[0]
+
+
+def annotate_installed_target_conflicts(
+    rows: list[dict[str, Any]], module_slots: object,
+) -> None:
+    """Expose verified Loadout-vs-wishlist conflicts without auto-deleting."""
+    installed_by_slot = {
+        str(row.get("slot") or ""): row
+        for row in (module_slots or [])
+        if isinstance(row, dict) and row.get("slot")
+    }
+    for row in rows:
+        installed = installed_by_slot.get(str(row.get("boundSlot") or ""), {})
+        installed_module = str(installed.get("moduleId") or "")
+        raw_blueprint = str(installed.get("engineeringBlueprint") or "")
+        installed_blueprint = JOURNAL_BLUEPRINT_NAMES.get(
+            normalize(raw_blueprint), raw_blueprint
+        )
+        same_module = bool(
+            installed_module and row.get("boundModule")
+            and normalize(installed_module) == normalize(row.get("boundModule"))
+        )
+        conflict = bool(
+            same_module and installed_blueprint and row.get("blueprint")
+            and normalize(installed_blueprint) != normalize(row.get("blueprint"))
+        )
+        row.update({
+            "installedModule": installed_module,
+            "installedBlueprint": installed_blueprint,
+            "installedGrade": int(installed.get("engineeringGrade") or 0),
+            "installedQuality": float(installed.get("engineeringQuality") or 0),
+            "installedQualityKnown": bool(installed.get("engineeringQualityKnown")),
+            "targetConflict": conflict,
+            "targetConflictText": (
+                f"INSTALLED · {installed_blueprint} G"
+                f"{int(installed.get('engineeringGrade') or 0)} · TARGET · "
+                f"{row.get('blueprint')} G{int(row.get('targetGrade') or 0)}"
+                if conflict else ""
+            ),
+        })
 
 
 def craft_tracking_issues_for_ship(rows: object, ship_id: object) -> list[dict]:
@@ -2615,8 +2962,78 @@ def classify_craft_tracking_issues(rows: object, plans: object) -> list[dict]:
     return classified_rows
 
 
+def _engineer_leg_distance(left, right):
+    """Return an exact inter-Engineer distance when both coordinates exist."""
+    left_position = left.get("coordinates")
+    right_position = right.get("coordinates")
+    if not (
+        isinstance(left_position, list) and len(left_position) == 3
+        and isinstance(right_position, list) and len(right_position) == 3
+    ):
+        return None
+    return math.sqrt(sum(
+        (float(a) - float(b)) ** 2
+        for a, b in zip(left_position, right_position)
+    ))
+
+
+def _shortest_engineer_route(names, engineer_index):
+    """Solve the open Hamiltonian route from the current Journal position."""
+    ordered_names = sorted(set(names), key=str.casefold)
+    if len(ordered_names) < 2:
+        return ordered_names, (
+            max(0.0, float(engineer_index[ordered_names[0]].get("distance", 0) or 0))
+            if ordered_names else 0.0
+        )
+    count = len(ordered_names)
+    # (visited mask, final index) -> (distance, path tuple). Unknown legs are
+    # penalised but remain routable instead of silently dropping a stop.
+    states = {}
+    current_indices = [
+        index for index, name in enumerate(ordered_names)
+        if 0 <= float(
+            engineer_index[name].get("distance")
+            if engineer_index[name].get("distance") is not None else -1
+        ) < 0.05
+        and bool(engineer_index[name].get("statusGroup") == "unlocked")
+    ]
+    start_indices = current_indices or list(range(count))
+    for index in start_indices:
+        name = ordered_names[index]
+        start_value = engineer_index[name].get("distance")
+        start = float(start_value if start_value is not None else -1)
+        states[(1 << index, index)] = (
+            start if start >= 0 else 1_000_000.0, (index,)
+        )
+    for mask in range(1, 1 << count):
+        for last in range(count):
+            current = states.get((mask, last))
+            if current is None:
+                continue
+            for nxt in range(count):
+                if mask & (1 << nxt):
+                    continue
+                leg = _engineer_leg_distance(
+                    engineer_index[ordered_names[last]],
+                    engineer_index[ordered_names[nxt]],
+                )
+                candidate = (
+                    current[0] + (leg if leg is not None else 1_000_000.0),
+                    current[1] + (nxt,),
+                )
+                key = (mask | (1 << nxt), nxt)
+                if key not in states or candidate < states[key]:
+                    states[key] = candidate
+    full_mask = (1 << count) - 1
+    distance, path = min(
+        value for (mask, _last), value in states.items()
+        if mask == full_mask
+    )
+    return [ordered_names[index] for index in path], distance
+
+
 def _minimum_engineer_cover(candidate_sets, engineer_index):
-    """Return a deterministic minimum Engineer set covering every plan."""
+    """Minimize stops first and the complete route distance second."""
     requirements = [set(values) for values in candidate_sets if values]
     if not requirements:
         return set()
@@ -2624,7 +3041,8 @@ def _minimum_engineer_cover(candidate_sets, engineer_index):
 
     def engineer_order(name):
         row = engineer_index.get(name, {})
-        distance = float(row.get("distance", -1) or -1)
+        distance_value = row.get("distance")
+        distance = float(distance_value if distance_value is not None else -1)
         return (
             distance < 0,
             distance if distance >= 0 else 0,
@@ -2635,14 +3053,16 @@ def _minimum_engineer_cover(candidate_sets, engineer_index):
         nonlocal best
         if not remaining:
             candidate = set(chosen)
-            if best is None or len(candidate) < len(best) or (
-                len(candidate) == len(best)
-                and tuple(sorted(engineer_order(name) for name in candidate))
-                < tuple(sorted(engineer_order(name) for name in best))
-            ):
-                best = candidate
+            route, distance = _shortest_engineer_route(
+                candidate, engineer_index
+            )
+            score = (len(candidate), distance, tuple(
+                name.casefold() for name in route
+            ))
+            if best is None or score < best[0]:
+                best = (score, route)
             return
-        if best is not None and len(chosen) >= len(best):
+        if best is not None and len(chosen) >= best[0][0]:
             return
         requirement = min(remaining, key=lambda values: (len(values), sorted(values)))
         coverage = {
@@ -2659,7 +3079,7 @@ def _minimum_engineer_cover(candidate_sets, engineer_index):
             )
 
     search(set(), requirements)
-    return best or set()
+    return best[1] if best else []
 
 
 def assign_plans_to_nearest_engineers(plans, engineer_rows):
@@ -2695,7 +3115,10 @@ def assign_plans_to_nearest_engineers(plans, engineer_rows):
             # away and back again.
             current = [
                 name for name in usable
-                if 0 <= float(engineer_index[name].get("distance", -1)) < 0.05
+                if 0 <= float(
+                    engineer_index[name].get("distance")
+                    if engineer_index[name].get("distance") is not None else -1
+                ) < 0.05
             ]
             if current:
                 candidates = current
@@ -2705,19 +3128,18 @@ def assign_plans_to_nearest_engineers(plans, engineer_rows):
             candidates = [selected]
         prepared.append((plan, target_grade, candidates, bool(usable)))
 
-    cover = _minimum_engineer_cover(
+    cover_route = _minimum_engineer_cover(
         [candidates for _plan, _grade, candidates, _usable in prepared],
         engineer_index,
     )
+    cover = set(cover_route)
+    route_rank = {name: index for index, name in enumerate(cover_route)}
     assignments = {}
     for plan, target_grade, candidates, craftable in prepared:
         covered = [name for name in candidates if name in cover]
         selection = covered or candidates
         selection.sort(key=lambda name: (
-            float(engineer_index[name].get("distance", -1) or -1) < 0,
-            float(engineer_index[name].get("distance", 0) or 0)
-            if float(engineer_index[name].get("distance", -1) or -1) >= 0 else 0,
-            str(name).casefold(),
+            route_rank.get(name, len(route_rank)), str(name).casefold()
         ))
         chosen = engineer_index[selection[0]]
         rank = int(chosen.get("rank", 0) or 0)
@@ -2745,7 +3167,28 @@ def assign_plans_to_nearest_engineers(plans, engineer_rows):
             f"{plan.get('module', 'Module')} · "
             f"{plan.get('blueprint', 'Blueprint')} · G{target_grade}"
         )
-    return list(assignments.values())
+    return sorted(assignments.values(), key=lambda row: (
+        route_rank.get(row["name"], len(route_rank)),
+        str(row["name"]).casefold(),
+    ))
+
+
+def partition_engineer_assignments(assignments: object) -> tuple[list[dict], list[dict]]:
+    """Separate executable travel from future access work and re-route both."""
+    rows = [dict(row) for row in (assignments or []) if isinstance(row, dict)]
+    engineer_index = {
+        str(row.get("name") or ""): row for row in rows if row.get("name")
+    }
+
+    def ordered(craftable: bool) -> list[dict]:
+        names = [
+            str(row.get("name") or "") for row in rows
+            if bool(row.get("craftable")) == craftable and row.get("name")
+        ]
+        route, _distance = _shortest_engineer_route(names, engineer_index)
+        return [engineer_index[name] for name in route]
+
+    return ordered(True), ordered(False)
 
 
 def engineer_options_for_plan(plan, engineer_rows, blueprint_records=None):
@@ -2807,6 +3250,45 @@ def engineer_options_for_plan(plan, engineer_rows, blueprint_records=None):
         row["distance"] if row["distance"] >= 0 else 0,
         row["name"].casefold(),
     ))
+
+
+def operation_physical_slot_label(slot: object) -> str:
+    """Return the cockpit-facing identity of one exact physical ship slot."""
+    value = str(slot or "").strip()
+    if not value:
+        return ""
+    core_labels = {
+        "Armour": "CORE · ARMOUR",
+        "PowerPlant": "CORE · POWER PLANT",
+        "MainEngines": "CORE · THRUSTERS",
+        "FrameShiftDrive": "CORE · FRAME SHIFT DRIVE",
+        "LifeSupport": "CORE · LIFE SUPPORT",
+        "PowerDistributor": "CORE · POWER DISTRIBUTOR",
+        "Radar": "CORE · SENSORS",
+        "FuelTank": "CORE · FUEL TANK",
+    }
+    if value in core_labels:
+        return core_labels[value]
+    optional = re.fullmatch(r"Slot(\d+)_Size(\d+)", value, re.IGNORECASE)
+    if optional:
+        return (
+            f"OPTIONAL SLOT {int(optional.group(1))} · "
+            f"SIZE {int(optional.group(2))}"
+        )
+    utility = re.fullmatch(r"TinyHardpoint(\d+)", value, re.IGNORECASE)
+    if utility:
+        return f"UTILITY SLOT {int(utility.group(1))}"
+    hardpoint = re.fullmatch(
+        r"(Small|Medium|Large|Huge)Hardpoint(\d+)", value, re.IGNORECASE
+    )
+    if hardpoint:
+        sizes = {"small": 1, "medium": 2, "large": 3, "huge": 4}
+        size_name = hardpoint.group(1).upper()
+        return (
+            f"{size_name} HARDPOINT {int(hardpoint.group(2))} · "
+            f"SIZE {sizes[hardpoint.group(1).casefold()]}"
+        )
+    return value
 
 
 def select_operation_action(
@@ -3013,11 +3495,16 @@ def select_operation_action(
         station = str((stop or {}).get("station") or "")
         engineer = str((stop or {}).get("name") or plan.get("engineer") or "Engineer")
         module = str(plan.get("module") or "Module")
+        physical_slot = str(plan.get("boundSlot") or "")
+        physical_slot_label = operation_physical_slot_label(physical_slot)
         blueprint = str(plan.get("blueprint") or "Blueprint")
         grade = int(plan.get("targetGrade", 0) or 0)
+        module_identity = " · ".join(
+            value for value in (module, physical_slot_label) if value
+        )
         identity = (
-            f"{module} · {blueprint} · G{grade}"
-            if grade > 0 else f"{module} · {blueprint}"
+            f"{module_identity} · {blueprint} · G{grade}"
+            if grade > 0 else f"{module_identity} · {blueprint}"
         )
         engineer_options = engineer_options_for_plan(
             plan, engineer_rows, blueprint_records
@@ -3026,11 +3513,18 @@ def select_operation_action(
             return {
                 "kind": "ENGINEER_PREPARE",
                 "title": f"Prepare {identity}",
+                "shortTitle": f"Prepare {module}",
                 "detail": "Open Engineer Navigation for the required access, rank and destination.",
                 "reason": "The active craft is material-ready, but no executable Engineer stop is confirmed yet.",
                 "after": "Once access is confirmed, continue this same craft without switching plans.",
                 "system": "", "station": "", "buttonLabel": "OPEN ENGINEERS",
                 "targetPage": 4, "executable": True,
+                "moduleName": module,
+                "blueprintName": blueprint,
+                "targetGrade": grade,
+                "experimentalName": str(plan.get("experimental") or ""),
+                "physicalSlot": physical_slot,
+                "physicalSlotLabel": physical_slot_label,
                 "engineerOptions": engineer_options,
                 "portraitUrl": str((stop or {}).get("portraitUrl") or ""),
                 "engineerName": engineer,
@@ -3056,12 +3550,17 @@ def select_operation_action(
             kind = "GRADE_CRAFT"
         return {
             "kind": kind, "title": title,
+            "shortTitle": (
+                f"Experimental · {module}" if experimental
+                else f"Continue {module}"
+            ),
             "detail": " · ".join(value for value in (engineer, station, system) if value),
             "moduleName": module,
             "blueprintName": blueprint,
             "targetGrade": grade,
             "experimentalName": str(plan.get("experimental") or ""),
-            "physicalSlot": str(plan.get("boundSlot") or ""),
+            "physicalSlot": physical_slot,
+            "physicalSlotLabel": physical_slot_label,
             "reason": reason, "after": after,
             "system": system, "station": station,
             "buttonLabel": "COPY TARGET SYSTEM" if system else "OPEN ENGINEERS",
@@ -3254,12 +3753,23 @@ def blueprint_catalog(data_dir):
 def build_engineering_plan(
     grades, current_grade, target_grade, *, plan_id="", instance="",
     experimental_id="", experimental_name="", ship_id="", slot="", module_id="",
-    plan_mode="", journal_baseline=None,
+    plan_mode="", journal_baseline=None, grade_progress=None,
+    crafts_completed=None,
 ):
     """Build a Classic-compatible deterministic Rank-5 engineering task."""
     current_grade = max(0, int(current_grade or 0))
     target_grade = max(1, int(target_grade or 1))
-    start = 1 if current_grade <= 0 else current_grade + 1
+    initial_progress = (
+        deepcopy(grade_progress) if isinstance(grade_progress, dict) else {}
+    )
+    current_quality = float(
+        initial_progress.get(str(current_grade), 0) or 0
+    )
+    start = (
+        1 if current_grade <= 0 else
+        current_grade if current_quality < 0.999 else
+        current_grade + 1
+    )
     plan = []
     rolls = {}
     for source in sorted(
@@ -3269,8 +3779,9 @@ def build_engineering_plan(
         grade = int(source.get("Grade", 0) or 0)
         if start <= grade <= target_grade:
             record = deepcopy(source)
-            record["_Rolls"] = grade
-            rolls[str(grade)] = grade
+            planned_rolls = grade
+            record["_Rolls"] = planned_rolls
+            rolls[str(grade)] = planned_rolls
             plan.append(record)
     if plan:
         mode = str(plan_mode or ("combined" if experimental_id else "grade_only"))
@@ -3298,7 +3809,10 @@ def build_engineering_plan(
                     "source": "plan_created_no_prior_craft",
                 }
             ),
-            "grade_progress": {},
+            "grade_progress": initial_progress,
+            "crafts_completed": deepcopy(
+                crafts_completed if isinstance(crafts_completed, dict) else {}
+            ),
             "blueprint_names": {
                 str(item.get("Grade")): str(item.get("BlueprintName"))
                 for item in plan if item.get("BlueprintName")
@@ -3701,6 +4215,31 @@ def _craft_can_bind(
     )
 
 
+def _craft_matches_unique_equivalent_slot(
+    planner: dict[str, Any], first: dict[str, Any], event: dict[str, Any],
+    ship_id: object, tasks: list[Any],
+) -> bool:
+    """Allow a uniquely planned identical module to follow the crafted slot."""
+    event_slot = str(event.get("Slot") or "")
+    planned_slot = str(planner.get("slot") or "")
+    if (
+        not event_slot or not planned_slot or event_slot == planned_slot
+        or planner.get("binding_required")
+        or str(planner.get("ship_id") or "") != str(ship_id or "")
+        or normalize(planner.get("module_id")) != normalize(event.get("Module"))
+    ):
+        return False
+    # Never steal a physical slot that already owns another primary plan.
+    return not any(
+        isinstance(task, list) and task and isinstance(task[0], dict)
+        and task[0].get("Kind") != "ExperimentalEffect"
+        and task[0].get("_Planner")
+        and task[0]["_Planner"] is not planner
+        and str(task[0]["_Planner"].get("slot") or "") == event_slot
+        for task in tasks
+    )
+
+
 def _experimental_craft_matches(
     planner: dict[str, Any], event: dict[str, Any]
 ) -> bool:
@@ -3835,11 +4374,17 @@ def apply_engineer_craft(
             expected_id = str(
                 (planner.get("blueprint_ids", {}) or {}).get(str(level)) or ""
             )
+            equivalent_slot = _craft_matches_unique_equivalent_slot(
+                planner, first, event, ship_id, tasks
+            )
             grade = next(
                 (
                     item for item in task if isinstance(item, dict)
                     and int(item.get("Grade", 0) or 0) == level
-                    and _craft_can_bind(planner, first, event, ship_id)
+                    and (
+                        _craft_can_bind(planner, first, event, ship_id)
+                        or equivalent_slot
+                    )
                     and (not expected_name or expected_name == str(event.get("BlueprintName") or ""))
                     and (
                         not expected_id
@@ -3849,7 +4394,19 @@ def apply_engineer_craft(
                     # Multiple Engineers can offer the same blueprint. The
                     # selected Engineer is routing intent, not an exclusion;
                     # compatibility is sufficient after exact module identity.
-                    and (not engineer or engineer in real_engineers(item))
+                    and (
+                        not engineer
+                        or engineer in real_engineers(item)
+                        # Frontier may include nicknames that are absent from
+                        # the static catalog (for example Tod 'The Blaster'
+                        # McQuinn). Exact ship/slot/module evidence is stronger
+                        # than a display-name mismatch.
+                        or _craft_matches_binding(
+                            planner, event, ship_id,
+                            first.get("Type") or planner.get("module_type"),
+                        )
+                        or equivalent_slot
+                    )
                     and (
                         _ingredient_signature(item.get("Ingredients"), "Size")
                         == signature
@@ -3865,6 +4422,7 @@ def apply_engineer_craft(
                             planner, event, ship_id,
                             first.get("Type") or planner.get("module_type"),
                         )
+                        or equivalent_slot
                     )
                 ),
                 None,
@@ -3906,13 +4464,19 @@ def apply_engineer_craft(
             ),
         }
     index, planner = candidates[0]
-    if planner.get("binding_required"):
+    chosen_first = tasks[index][0]
+    equivalent_slot = _craft_matches_unique_equivalent_slot(
+        planner, chosen_first, event, ship_id, tasks
+    )
+    if planner.get("binding_required") or equivalent_slot:
         planner.update({
             "ship_id": str(ship_id),
             "slot": str(event.get("Slot") or ""),
             "module_id": str(event.get("Module") or ""),
             "binding_required": False,
         })
+        if equivalent_slot:
+            planner["instance"] = str(event.get("Slot") or planner.get("instance") or "")
     instance = str(planner.get("instance") or "module")
     if action == "experimental":
         planner["experimental_complete"] = True
@@ -4507,6 +5071,13 @@ def _reconcile_engineer_craft_batch_locked(
     diagnostics_path = data_dir / "craft_batch_diagnostics.json"
     diagnostics = read_json(diagnostics_path, [])
     diagnostics = diagnostics if isinstance(diagnostics, list) else []
+    # Successfully replayed evidence is no longer an unresolved diagnostic.
+    diagnostics = [
+        row for row in diagnostics
+        if not isinstance(row, dict)
+        or str(row.get("fingerprint") or "") not in acknowledged
+    ]
+    _write_json_if_changed(diagnostics_path, diagnostics)
     known = {str(row.get("fingerprint") or "") for row in diagnostics if isinstance(row, dict)}
     additions = [row for row in unresolved if row["fingerprint"] not in known]
     if additions:
@@ -5419,6 +5990,10 @@ def build_state(
         default={},
     )
     fleet_state = rebuild_fleet(ship_events)
+    # Reconcile physical bindings and the installed grade boundary before
+    # replaying pending EngineerCraft events. Doing this later leaves an exact
+    # first craft falsely unmatched until another unrelated refresh occurs.
+    migrate_wishlist_bindings(data_dir, fleet_state, profile_events)
     craft_batch = reconcile_engineer_craft_batch(
         data_dir, fleet_state, profile_events, preferred_plan_id
     )
@@ -5427,7 +6002,7 @@ def build_state(
          if str(row["id"]) == str(fleet_state.get("active_id") or "")), "",
     )
     ship, tasks, ships = current_ship(
-        data_dir, fleet_state, selected_ship, ship_events
+        data_dir, fleet_state, selected_ship, profile_events
     )
     selected_ship_id = next(
         (str(row["id"]) for row in fleet_state.get("ships", [])
@@ -5900,6 +6475,7 @@ def build_state(
         consistency_issues.append("A material inventory became negative.")
 
     blueprint_state = blueprint_rows(tasks, wishlist_inventory, metadata)
+    annotate_installed_target_conflicts(blueprint_state, module_slots)
     tracked_items = [
         {
             "kind": "WISHLIST",

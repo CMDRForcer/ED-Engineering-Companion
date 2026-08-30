@@ -13,6 +13,7 @@ ApplicationWindow {
     minimumHeight: 700
     visible: true
     title: "ED Engineering Companion (EDEC) · " + cockpit.appVersion
+    font.family: "Segoe UI Variable Text"
     property int previewEngineersMode: 0
 
     // The single app-wide source of color truth. Every palette defines the
@@ -67,15 +68,15 @@ ApplicationWindow {
             overlay: "#c0171219", shadow: "#88000000"
         },
         "crimson_dark": {
-            backgroundPrimary: "#07080a", backgroundSecondary: "#0d0f12",
-            backgroundTertiary: "#13161a", card: "#171a1f", cardRaised: "#20242a",
-            inputBackground: "#111419", textPrimary: "#f5f6f8",
-            textSecondary: "#d3d6dc", textMuted: "#9298a2", textDisabled: "#5c626c",
-            accent: "#e23b4d", accentSecondary: "#a94a55",
-            success: "#60d394", warning: "#e9a84d", error: "#ff6372",
-            border: "#45343a", divider: "#332b30", hover: "#302126",
-            active: "#48252d", successBackground: "#193329",
-            warningBackground: "#3a2b1b", errorBackground: "#421f27",
+            backgroundPrimary: "#090f15", backgroundSecondary: "#0b1219",
+            backgroundTertiary: "#101820", card: "#111a22", cardRaised: "#17222c",
+            inputBackground: "#0e161e", textPrimary: "#f5f7fa",
+            textSecondary: "#c7d0da", textMuted: "#84919e", textDisabled: "#53606c",
+            accent: "#ec3d50", accentSecondary: "#36cfee",
+            success: "#42d888", warning: "#f2ae4b", error: "#ff5368",
+            border: "#2b3742", divider: "#222d36", hover: "#192731",
+            active: "#402029", successBackground: "#142d24",
+            warningBackground: "#35291a", errorBackground: "#371b22",
             overlay: "#c8000000", shadow: "#85000000"
         },
         "crimson_light": {
@@ -120,9 +121,10 @@ ApplicationWindow {
 
     // Compatibility aliases keep existing component APIs semantic while all
     // values now come from the active palette.
-    property color cyan: accent
+    property color cyan: accentSecondary
     property color green: success
     property color orange: warning
+    property color danger: error
     property color panel: card
     property color panelRaised: cardRaised
     property color muted: textMuted
@@ -350,16 +352,16 @@ ApplicationWindow {
         wishlistMaterialExpansion = updated
     }
     property var primaryNavigation: [
-        {"id": "operations", "label": t("nav.operations", "OPERATIONS"), "icon": "⌂", "page": 0},
-        {"id": "cmdr", "label": t("nav.commander", "CMDR"), "icon": "◆", "page": 10},
-        {"id": "engineering", "label": t("nav.engineering", "ENGINEERING"), "icon": "⌁", "page": 3},
-        {"id": "wishlist", "label": t("nav.wishlist", "WISHLIST"), "icon": "★", "page": 1},
-        {"id": "materials", "label": t("nav.materials", "MATERIALS"), "icon": "◇", "page": 2},
-        {"id": "engineers", "label": t("nav.engineers", "ENGINEERS"), "icon": "◎", "page": 4},
-        {"id": "state-finds", "label": t("nav.state_finds", "STATE FINDS"), "icon": "⌖", "page": 8},
-        {"id": "logbook", "label": t("nav.logbook", "LOGBOOK"), "icon": "≣", "page": 9},
-        {"id": "settings", "label": t("nav.settings", "SETTINGS"), "icon": "≡", "page": 5},
-        {"id": "powerplay", "label": t("nav.powerplay", "POWERPLAY"), "icon": "⚑", "page": 11}
+        {"id": "operations", "label": t("nav.operations", "OPERATIONS"), "icon": "\uE80F", "page": 0},
+        {"id": "cmdr", "label": t("nav.commander", "CMDR"), "icon": "\uE77B", "page": 10},
+        {"id": "engineering", "label": t("nav.engineering", "ENGINEERING"), "icon": "\uE90F", "page": 3},
+        {"id": "wishlist", "label": t("nav.wishlist", "WISHLIST"), "icon": "\uE77F", "page": 1},
+        {"id": "materials", "label": t("nav.materials", "MATERIALS"), "icon": "\uE8B7", "page": 2},
+        {"id": "engineers", "label": t("nav.engineers", "ENGINEERS"), "icon": "\uE716", "page": 4},
+        {"id": "state-finds", "label": t("nav.state_finds", "STATE FINDS"), "icon": "\uE707", "page": 8},
+        {"id": "logbook", "label": t("nav.logbook", "LOGBOOK"), "icon": "\uE8FD", "page": 9},
+        {"id": "settings", "label": t("nav.settings", "SETTINGS"), "icon": "\uE713", "page": 5},
+        {"id": "powerplay", "label": t("nav.powerplay", "POWERPLAY"), "icon": "\uE7C1", "page": 11}
     ]
     property var navigationOrder: cockpit.navigationOrder || []
     function orderedNavigation() {
@@ -578,22 +580,22 @@ ApplicationWindow {
 
     component CockpitButton: Button {
         id: control
-        property color accentColor: cyan
+        property color accentColor: accent
         property bool selected: false
         property string helpText: ""
-        implicitHeight: 42
+        implicitHeight: 40
         focusPolicy: Qt.StrongFocus
         Accessible.name: text
         Accessible.description: helpText
         ToolTip.visible: hovered && helpText.length > 0
         ToolTip.text: helpText
-        scale: down ? 0.975 : (hovered ? 1.01 : 1.0)
+        scale: down ? 0.985 : 1.0
         Behavior on scale {
             enabled: !window.reducedMotion
             NumberAnimation { duration: 100; easing.type: Easing.OutCubic }
         }
-        font.pixelSize: 13
-        font.bold: true
+        font.pixelSize: 12
+        font.weight: Font.DemiBold
         contentItem: Label {
             text: control.text
             color: control.selected ? backgroundPrimary : (control.hovered ? textPrimary : textSecondary)
@@ -606,36 +608,12 @@ ApplicationWindow {
             font: control.font
         }
         background: Rectangle {
-            radius: 10
+            radius: 8
             color: control.selected
                    ? control.accentColor
                    : (control.hovered ? hover : inputBackground)
             border.width: control.activeFocus ? 2 : (control.selected ? 0 : 1)
             border.color: control.activeFocus || control.hovered ? control.accentColor : borderTone
-            Rectangle {
-                visible: window.enhancedVisuals && (control.selected || control.hovered)
-                anchors.fill: parent
-                anchors.margins: control.selected ? -2 : 1
-                radius: parent.radius + 2
-                color: "transparent"
-                border.width: 1
-                border.color: Qt.rgba(control.accentColor.r,
-                                      control.accentColor.g,
-                                      control.accentColor.b,
-                                      control.selected ? 0.38 : 0.16)
-            }
-            Rectangle {
-                visible: window.enhancedVisuals && control.selected
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.leftMargin: 8
-                anchors.rightMargin: 8
-                anchors.topMargin: 1
-                height: 1
-                radius: 1
-                color: Qt.rgba(1, 1, 1, 0.34)
-            }
             Behavior on color { enabled: !window.reducedMotion; ColorAnimation { duration: 130 } }
             Behavior on border.color { enabled: !window.reducedMotion; ColorAnimation { duration: 130 } }
         }
@@ -955,7 +933,7 @@ ApplicationWindow {
 
     Rectangle {
         id: sidebar
-        width: window.compactSidebar ? 76 : 210
+        width: window.compactSidebar ? 76 : 238
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         color: backgroundSecondary
@@ -969,14 +947,15 @@ ApplicationWindow {
         }
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 20
-            spacing: 10
+            anchors.margins: 18
+            spacing: 8
             Label {
                 text: window.compactSidebar ? "EC" : "EDEC"
-                color: cyan
-                font.pixelSize: 23
+                color: accent
+                font.pixelSize: 25
                 font.bold: true
-                Layout.bottomMargin: 24
+                Layout.leftMargin: 4
+                Layout.bottomMargin: 20
             }
             ListView {
                 id: navigationList
@@ -996,41 +975,54 @@ ApplicationWindow {
                     required property var modelData
                     required property int index
                     width: ListView.view.width
-                    height: 52
+                    height: 54
                     property bool selectedNav: modelData.page === 5
                                                ? currentPage >= 5 && currentPage <= 7
                                                : currentPage === modelData.page
                     Rectangle {
                         id: navCard
-                        x: 0; y: 2; width: navTile.width; height: 48
+                        x: 0; y: 2; width: navTile.width; height: 50
                         z: navDrag.drag.active ? 100 : 1
                         activeFocusOnTab: true
                         Accessible.name: navTile.modelData.label
                         Accessible.role: Accessible.Button
-                        radius: 12
+                        radius: 9
                         color: navTile.selectedNav ? active
                                : navMouse.containsMouse ? inputBackground : "transparent"
                         Rectangle {
                             visible: navTile.selectedNav
-                            width: 4; height: 24; radius: 2; color: cyan
+                            width: 4; height: 28; radius: 2; color: accent
                             anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                         }
-                        Label {
+                        Row {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.left: window.compactSidebar ? undefined : parent.left
-                            anchors.leftMargin: window.compactSidebar ? 0 : 18
+                            anchors.leftMargin: window.compactSidebar ? 0 : 16
                             anchors.horizontalCenter: window.compactSidebar ? parent.horizontalCenter : undefined
-                            text: window.compactSidebar ? navTile.modelData.icon : navTile.modelData.label
-                            color: navTile.selectedNav ? textPrimary : muted
-                            font.pixelSize: window.compactSidebar ? 20 : 13
-                            font.bold: true
+                            spacing: 13
+                            Label {
+                                width: 24
+                                text: navTile.modelData.icon
+                                color: navTile.selectedNav ? accent : accentSecondary
+                                font.family: "Segoe Fluent Icons"
+                                font.pixelSize: 18
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                            Label {
+                                visible: !window.compactSidebar
+                                text: navTile.modelData.label
+                                color: navTile.selectedNav ? textPrimary : textSecondary
+                                font.pixelSize: 12
+                                font.weight: Font.DemiBold
+                            }
                         }
                         Label {
                             visible: !window.compactSidebar
                             anchors.right: parent.right; anchors.rightMargin: 7
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "⠿"; color: navTile.selectedNav ? cyan : muted
-                            font.pixelSize: 12; font.bold: true
+                            text: window.t("common.drag_handle", "⠿")
+                            color: navTile.selectedNav ? accent : textDisabled
+                            font.pixelSize: 11; font.bold: true
                         }
                         MouseArea {
                             id: navMouse
@@ -1230,69 +1222,30 @@ ApplicationWindow {
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: cockpit.operationAction.title || cockpit.nextAction
+                        text: cockpit.operationAction.shortTitle
+                              || cockpit.operationAction.title || cockpit.nextAction
                         color: textPrimary; font.pixelSize: 23; font.bold: true
                         wrapMode: Text.WordWrap
                     }
+                }
+                Label {
+                    visible: !!cockpit.operationAction.moduleName
+                    Layout.fillWidth: true
+                    text: [
+                        cockpit.operationAction.physicalSlotLabel || "",
+                        cockpit.operationAction.blueprintName || "",
+                        cockpit.operationAction.targetGrade > 0
+                            ? "G" + cockpit.operationAction.targetGrade : "",
+                        cockpit.operationAction.experimentalName || ""
+                    ].filter(function(value) { return !!value }).join("  ·  ")
+                    color: textSecondary; font.pixelSize: 13
+                    elide: Text.ElideRight
                 }
                 Label {
                     visible: !!cockpit.operationAction.detail
                     text: cockpit.operationAction.detail || ""
                     color: muted; font.pixelSize: 12
                     Layout.fillWidth: true; elide: Text.ElideRight
-                }
-                RowLayout {
-                    visible: !!cockpit.operationAction.moduleName
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 52
-                    spacing: 8
-                    Repeater {
-                        model: [
-                            {
-                                label: window.t("operations.module", "MODULE"),
-                                value: (cockpit.operationAction.moduleName || "")
-                                       + (cockpit.operationAction.targetGrade > 0
-                                          ? " · G" + cockpit.operationAction.targetGrade : ""),
-                                tone: cyan
-                            },
-                            {
-                                label: window.t("operations.blueprint", "BLUEPRINT"),
-                                value: cockpit.operationAction.blueprintName || "—",
-                                tone: textPrimary
-                            },
-                            {
-                                label: window.t("operations.experimental", "EXPERIMENTAL"),
-                                value: cockpit.operationAction.experimentalName || "—",
-                                tone: cockpit.operationAction.experimentalName ? green : muted
-                            }
-                        ]
-                        delegate: Rectangle {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 50
-                            radius: 8
-                            color: panelRaised
-                            border.width: 1
-                            border.color: borderTone
-                            ColumnLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 12; anchors.rightMargin: 12
-                                anchors.topMargin: 7; anchors.bottomMargin: 7
-                                spacing: 2
-                                Label {
-                                    text: modelData.label
-                                    color: muted; font.pixelSize: 9; font.bold: true
-                                    font.letterSpacing: 0.4
-                                }
-                                Label {
-                                    Layout.fillWidth: true
-                                    text: modelData.value
-                                    color: modelData.tone; font.pixelSize: 12; font.bold: true
-                                    elide: Text.ElideRight
-                                }
-                            }
-                        }
-                    }
                 }
                 ModernProgress {
                     Layout.fillWidth: true
@@ -1479,82 +1432,133 @@ ApplicationWindow {
         }
 
         ShadowCard {
-            visible: cockpit.trackedItems.length > 0
-            Layout.preferredWidth: visible ? 340 : 0
-            Layout.minimumWidth: visible ? 310 : 0
+            objectName: "qa-card-run-overview"
+            Layout.preferredWidth: window.compactSidebar ? 320 : 370
+            Layout.minimumWidth: window.compactSidebar ? 300 : 340
             Layout.fillHeight: true
             ColumnLayout {
                 anchors.fill: parent; anchors.margins: 15; spacing: 7
                 RowLayout {
                     Layout.fillWidth: true
                     Label {
-                        text: window.t("operations.tracked_work", "TRACKED WORK")
+                        text: window.t("operations.run_overview", "RUN OVERVIEW")
                         color: cyan; font.pixelSize: 13; font.bold: true
                     }
-                    Label {
-                        text: window.tf("status.active_count", "%1 ACTIVE", [cockpit.trackedItems.length])
-                        color: orange; font.pixelSize: 10; font.bold: true
-                    }
                     Item { Layout.fillWidth: true }
+                    Label {
+                        text: cockpit.engineeringRunPreflight.label || ""
+                        color: cockpit.engineeringRunPreflight.status === "BLOCKED" ? danger
+                               : cockpit.engineeringRunPreflight.status === "CAUTION" ? orange : green
+                        font.pixelSize: 11; font.bold: true
+                    }
                 }
-                ListView {
-                    id: trackedWorkList
-                    Layout.fillWidth: true; Layout.fillHeight: true
-                    orientation: ListView.Vertical
-                    model: cockpit.trackedItems
-                    spacing: 9; clip: true
-                    ScrollBar.vertical: CockpitScrollBar {}
-                    delegate: Rectangle {
+                Label {
+                    Layout.fillWidth: true
+                    text: cockpit.engineeringRunPreflight.summary || ""
+                    color: textPrimary; font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                }
+                Repeater {
+                    model: (cockpit.engineeringRunPreflight.blockers || []).slice(0, 2)
+                    Rectangle {
                         required property var modelData
-                        width: trackedWorkList.width; height: 124; radius: 10
-                        color: active; border.width: 1; border.color: cyan
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 48
+                        radius: 8; color: errorBackground
+                        border.width: 1; border.color: danger
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 10; spacing: 9
-                            ColumnLayout {
-                                Layout.fillWidth: true; spacing: 2
-                                Label {
-                                    text: modelData.kind + " · " + modelData.title
-                                    color: textPrimary; font.pixelSize: 11; font.bold: true
-                                    Layout.fillWidth: true; elide: Text.ElideRight
-                                }
-                                Label {
-                                    text: modelData.subtitle + " · " + modelData.status
-                                          + " · " + window.countLabel(modelData.missingKinds, "TYPE", "TYPES") + " MISSING"
-                                    color: modelData.missingKinds > 0 ? orange : green
-                                    font.pixelSize: 9; font.bold: true
-                                }
+                            anchors.fill: parent; anchors.margins: 8; spacing: 1
+                            Label {
+                                Layout.fillWidth: true; text: modelData.title
+                                color: danger; font.pixelSize: 10; font.bold: true
+                                elide: Text.ElideRight
                             }
-                            RowLayout {
-                                Layout.fillWidth: true
-                                CockpitButton {
-                                    text: window.t("common.details", "DETAILS")
-                                    Layout.fillWidth: true
-                                    implicitHeight: 34
-                                    onClicked: {
-                                        if (modelData.kind === "WISHLIST") {
-                                            window.currentPage = 1
-                                        } else {
-                                            window.requestGuardianPage(modelData)
-                                        }
-                                    }
-                                }
-                                CockpitButton {
-                                    text: window.t("common.untrack", "UNTRACK")
-                                    implicitWidth: 118
-                                    Layout.fillWidth: true; implicitHeight: 34
-                                    onClicked: {
-                                        if (modelData.kind === "WISHLIST")
-                                            cockpit.prioritizePinnedPlan(modelData.id)
-                                        else
-                                            cockpit.trackTechBrokerUnlock(
-                                                modelData.id,
-                                                modelData.brokerSubtype)
-                                    }
-                                }
+                            Label {
+                                Layout.fillWidth: true; text: modelData.detail
+                                color: textSecondary; font.pixelSize: 9
+                                elide: Text.ElideRight
                             }
                         }
                     }
                 }
+                Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: window.t("operations.active_route", "ACTIVE FLIGHT ROUTE")
+                        color: green; font.pixelSize: 10; font.bold: true
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: window.tf("operations.stop_count", "%1 STOPS", [cockpit.engineerMissionRoute.length])
+                        color: textPrimary; font.pixelSize: 10; font.bold: true
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: cockpit.engineerMissionRoute.length
+                          ? cockpit.engineerMissionRoute.map(function(row) {
+                                return row.sequence + ". " + row.name
+                            }).join("  ·  ")
+                          : window.t("operations.no_active_stops", "NO EXECUTABLE ENGINEER STOP")
+                    color: cockpit.engineerMissionRoute.length ? textSecondary : muted
+                    font.pixelSize: 10; wrapMode: Text.WordWrap
+                }
+                Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label {
+                        text: window.t("operations.unlock_tasks_short", "LATER · ACCESS TASKS")
+                        color: orange; font.pixelSize: 10; font.bold: true
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: String(cockpit.engineerUnlockTasks.length)
+                        color: orange; font.pixelSize: 10; font.bold: true
+                    }
+                }
+                Label {
+                    visible: cockpit.engineerUnlockTasks.length > 0
+                    Layout.fillWidth: true
+                    text: cockpit.engineerUnlockTasks.map(function(row) {
+                        return row.name + " (" + row.openJobs + ")"
+                    }).join("  ·  ")
+                    color: textSecondary; font.pixelSize: 10; wrapMode: Text.WordWrap
+                }
+                CockpitButton {
+                    visible: cockpit.engineerUnlockTasks.length > 0
+                    text: window.t("operations.open_unlocks", "OPEN ENGINEERS")
+                    Layout.fillWidth: true; implicitHeight: 34
+                    onClicked: window.currentPage = 4
+                }
+                Rectangle {
+                    visible: cockpit.trackedItems.length > 0
+                    Layout.fillWidth: true; height: 1; color: borderTone
+                }
+                RowLayout {
+                    visible: cockpit.trackedItems.length > 0
+                    Layout.fillWidth: true
+                    Label {
+                        text: window.t("operations.tracked_work", "TRACKED WORK")
+                        color: cyan; font.pixelSize: 10; font.bold: true
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: window.tf("status.active_count", "%1 ACTIVE", [cockpit.trackedItems.length])
+                        color: orange; font.pixelSize: 9; font.bold: true
+                    }
+                }
+                Label {
+                    visible: cockpit.trackedItems.length > 0
+                    Layout.fillWidth: true
+                    text: cockpit.trackedItems.map(function(row) {
+                        return row.title + " · " + row.status
+                    }).join("\n")
+                    color: textSecondary; font.pixelSize: 9
+                    wrapMode: Text.WordWrap
+                    maximumLineCount: 3; elide: Text.ElideRight
+                }
+                Item { Layout.fillHeight: true }
             }
         }
         }
@@ -2254,7 +2258,7 @@ ApplicationWindow {
                         required property int index
                         property bool materialsExpanded: window.wishlistMaterialsExpanded(modelData, index)
                         width: wishlistList.width - 12
-                        height: 280 + (materialsExpanded
+                        height: 280 + (modelData.targetConflict ? 54 : 0) + (materialsExpanded
                                        ? (modelData.materialProgress || []).length * 66 : 0)
                                 + (modelData.calculationWarning ? 34 : 0)
                         radius: 14
@@ -2356,6 +2360,27 @@ ApplicationWindow {
                                 }
                                 Item { Layout.fillWidth: true }
                                 Label { text: modelData.engineer; color: muted; font.pixelSize: 11 }
+                            }
+                            Rectangle {
+                                visible: !!modelData.targetConflict
+                                Layout.fillWidth: true; Layout.preferredHeight: 46
+                                radius: 9; color: dangerBackground
+                                border.width: 1; border.color: danger
+                                RowLayout {
+                                    anchors.fill: parent; anchors.margins: 7
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: modelData.targetConflictText
+                                        color: danger; font.pixelSize: 10; font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+                                    CockpitButton {
+                                        text: window.t("wishlist.accept_installed", "ACCEPT INSTALLED")
+                                        implicitHeight: 30
+                                        helpText: window.t("wishlist.accept_installed_help", "Keep the installed blueprint and remove this conflicting target")
+                                        onClicked: cockpit.acceptInstalledForPlan(modelData.index)
+                                    }
+                                }
                             }
                             RowLayout {
                                 visible: modelData.craftsPlanned > 0
@@ -3371,6 +3396,11 @@ ApplicationWindow {
                                 text: window.t("status.installed_prefix", "🔧 INSTALLED · ")
                                       + cockpit.selectedBlueprint.installedBlueprint
                                       + " · G" + cockpit.selectedBlueprint.installedGrade
+                                      + (cockpit.selectedBlueprint.installedQualityKnown
+                                         ? " · " + cockpit.selectedBlueprint.installedQualityPercent
+                                           + "% · ~" + cockpit.selectedBlueprint.installedRemainingRolls
+                                           + " ROLLS LEFT"
+                                         : " · PROGRESS UNKNOWN")
                                       + (cockpit.selectedBlueprint.installedExperimentalEffect
                                          ? " · " + cockpit.selectedBlueprint.installedExperimentalEffect : "")
                                       + (cockpit.selectedBlueprint.installedMatchesSelection
@@ -3862,8 +3892,7 @@ ApplicationWindow {
                         width: engineerList.width - 12; height: 120; radius: 13
                         color: engineerMouse.containsMouse ? hover : panelRaised
                         border.width: 1
-                        border.color: modelData.statusGroup === "unlocked" ? success
-                                      : modelData.statusGroup === "invited" ? warning : borderTone
+                        border.color: modelData.statusGroup === "invited" ? warning : borderTone
                         MouseArea {
                             id: engineerMouse
                             anchors.fill: parent
@@ -3883,8 +3912,7 @@ ApplicationWindow {
                                     radius: 10
                                     color: cardRaised
                                     border.width: 1
-                                    border.color: modelData.statusGroup === "unlocked" ? success
-                                                  : modelData.statusGroup === "invited" ? warning : borderTone
+                                    border.color: borderTone
                                     clip: true
                                     Image {
                                         id: engPortrait
@@ -3937,7 +3965,6 @@ ApplicationWindow {
                             }
                             CockpitButton {
                                 text: window.t("common.copy_system", "COPY SYSTEM")
-                                selected: true
                                 onClicked: cockpit.copySystem(modelData.system)
                             }
                         }

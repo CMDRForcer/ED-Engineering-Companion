@@ -180,6 +180,7 @@ from .state import (
     dismiss_historical_craft_tracking_issues,
     dismiss_selected_craft_tracking_issues,
     duplicate_ship_plan,
+    engineering_run_preflight,
     journal_dir,
     journal_change_signature,
     journal_craft_baseline,
@@ -193,6 +194,7 @@ from .state import (
     normalize,
     move_ship_plan,
     module_matches_type,
+    partition_engineer_assignments,
     planner_mode,
     real_engineers,
     read_json,
@@ -1344,57 +1346,72 @@ class CockpitController(QObject):
         )
 
     def _build_engineer_mission_route(self):
-        rows = assign_plans_to_nearest_engineers(
+        return self._engineer_assignment_routes()["route"]
+
+    def _engineer_unlock_tasks(self):
+        return self._engineer_assignment_routes()["unlocks"]
+
+    def _engineer_assignment_routes(self):
+        revision = (self._state_revision, tuple(sorted(self._deferred_engineers)))
+        return self._cached_derived(
+            "engineer_assignment_routes", revision,
+            self._build_engineer_assignment_routes,
+        )
+
+    def _build_engineer_assignment_routes(self):
+        assignments = assign_plans_to_nearest_engineers(
             self._state.get("blueprints", []),
             self._engineer_index(),
         )
-        origin = self._state.get("currentPosition")
-        ordered = []
-        remaining = list(rows)
-        while remaining:
-            def route_key(row):
+        route, unlocks = partition_engineer_assignments(assignments)
+        # Assignment already solves the complete route globally. Reordering it
+        # here with a nearest-neighbour pass can reintroduce zig-zag flights.
+        if self._deferred_engineers:
+            route = [
+                row for row in route
+                if row.get("name") not in self._deferred_engineers
+            ] + [
+                row for row in route
+                if row.get("name") in self._deferred_engineers
+            ]
+
+        def annotate(rows):
+            origin = self._state.get("currentPosition")
+            cumulative_distance = 0.0
+            result = []
+            for index, row in enumerate(rows, 1):
                 target = row.get("coordinates")
-                distance = -1.0
+                leg_distance = -1.0
                 if (
                     isinstance(origin, list) and len(origin) == 3
                     and isinstance(target, list) and len(target) == 3
                 ):
-                    distance = math.sqrt(sum(
+                    leg_distance = math.sqrt(sum(
                         (float(left) - float(right)) ** 2
                         for left, right in zip(origin, target)
                     ))
-                return (
-                    not bool(row.get("craftable")),
-                    distance < 0,
-                    distance if distance >= 0 else 0,
-                    -int(row.get("readyJobs", 0) or 0),
-                    str(row.get("name") or "").casefold(),
+                    cumulative_distance += leg_distance
+                    origin = target
+                row["legDistance"] = leg_distance
+                row["cumulativeDistance"] = (
+                    cumulative_distance if leg_distance >= 0 else -1.0
                 )
-            chosen = min(remaining, key=route_key)
-            ordered.append(chosen)
-            remaining.remove(chosen)
-            if isinstance(chosen.get("coordinates"), list):
-                origin = chosen["coordinates"]
-        rows = ordered
-        if self._deferred_engineers:
-            rows = [
-                row for row in rows
-                if row.get("name") not in self._deferred_engineers
-            ] + [
-                row for row in rows
-                if row.get("name") in self._deferred_engineers
-            ]
-        return [
-            {
-                **row,
-                "sequence": index,
-                "summary": (
-                    f"{row['openJobs']} job{'s' if row['openJobs'] != 1 else ''}"
-                    f" · {row['readyJobs']} material-ready"
-                ),
-            }
-            for index, row in enumerate(rows, 1)
-        ]
+                result.append({
+                    **row,
+                    "sequence": index,
+                    "summary": (
+                        f"{row['openJobs']} job{'s' if row['openJobs'] != 1 else ''}"
+                        f" · {row['readyJobs']} material-ready"
+                        + (
+                            f" · leg {leg_distance:.1f} ly"
+                            f" · total {cumulative_distance:.1f} ly"
+                            if leg_distance >= 0 else ""
+                        )
+                    ),
+                })
+            return result
+
+        return {"route": annotate(route), "unlocks": annotate(unlocks)}
 
     def _next_action(self):
         return str(self._operation_action().get("title") or "Open Engineering")
@@ -1406,7 +1423,7 @@ class CockpitController(QObject):
             ),
             lambda: select_operation_action(
                 self._state,
-                self._engineer_mission_route(),
+                self._engineer_mission_route() + self._engineer_unlock_tasks(),
                 self._engineer_index(),
                 [
                     record
@@ -2154,6 +2171,14 @@ class CockpitController(QObject):
         "QVariantList", lambda self: self._engineer_mission_route(),
         notify=operationsChanged,
     )
+    engineerUnlockTasks = Property(
+        "QVariantList", lambda self: self._engineer_unlock_tasks(),
+        notify=operationsChanged,
+    )
+    engineeringRunPreflight = Property(
+        "QVariantMap", lambda self: self._engineering_run_preflight(),
+        notify=operationsChanged,
+    )
     nextEngineerStop = Property(
         "QVariantMap",
         lambda self: (
@@ -2457,7 +2482,15 @@ class CockpitController(QObject):
             if not self._selected_experimental_id:
                 return False
         if self._plan_mode in {"grade_only", "combined"}:
-            if not any(
+            installed_partial_target = bool(
+                self._selected_blueprint.get("installedMatchesSelection")
+                and self._selected_blueprint.get("installedQualityKnown")
+                and int(self._selected_blueprint.get("installedGrade") or 0)
+                == self._target_grade
+                and float(self._selected_blueprint.get("installedQuality") or 0)
+                < 0.999
+            )
+            if not installed_partial_target and not any(
                 self._current_grade < int(row.get("Grade", 0) or 0)
                 <= self._target_grade
                 for row in grades if isinstance(row, dict)
@@ -3014,6 +3047,23 @@ class CockpitController(QObject):
             normalize(raw_blueprint), raw_blueprint.replace("_", " ")
         )
         installed_grade = int(selected.get("engineeringGrade") or 0)
+        installed_quality = max(0.0, min(1.0, float(
+            selected.get("engineeringQuality") or 0
+        )))
+        installed_quality_known = bool(
+            selected.get("engineeringQualityKnown")
+        )
+
+    def _engineering_run_preflight(self):
+        return self._cached_derived(
+            "engineering_run_preflight", (
+                self._state_revision, tuple(sorted(self._deferred_engineers))
+            ),
+            lambda: engineering_run_preflight(
+                self._state,
+                self._engineer_mission_route() + self._engineer_unlock_tasks(),
+            ),
+        )
         selected_name = str(self._selected_blueprint.get("name") or "")
         matches = bool(
             installed_grade > 0 and installed_name and selected_name
@@ -3023,12 +3073,28 @@ class CockpitController(QObject):
             "installedEngineeringKnown": installed_grade > 0,
             "installedBlueprint": installed_name,
             "installedGrade": installed_grade,
+            "installedQuality": installed_quality,
+            "installedQualityKnown": installed_quality_known,
+            "installedQualityPercent": round(installed_quality * 100),
+            "installedRemainingRolls": max(
+                0,
+                installed_grade - round(installed_quality * installed_grade),
+            ) if installed_quality_known else 0,
             "installedExperimentalEffect": str(
                 selected.get("experimentalEffect") or ""
             ),
             "installedMatchesSelection": matches,
         })
-        self._current_grade = min(installed_grade, self._target_grade) if matches else 0
+        if not matches:
+            self._current_grade = 0
+        elif installed_grade > self._target_grade:
+            self._current_grade = self._target_grade
+        elif installed_quality_known:
+            self._current_grade = min(installed_grade, self._target_grade)
+        else:
+            self._current_grade = max(
+                0, min(installed_grade, self._target_grade) - 1
+            )
 
     @Slot(int)
     def setCurrentGrade(self, grade):
@@ -3353,7 +3419,8 @@ class CockpitController(QObject):
                     tasks.append(plan)
             elif mode in {"grade_only", "combined"} and grades:
                 plan = build_engineering_plan(
-                    grades, 0, int(row.get("grade", 0) or 0),
+                    grades, int(row.get("currentGrade", 0) or 0),
+                    int(row.get("grade", 0) or 0),
                     instance=instance,
                     experimental_id=effect_id if mode == "combined" else "",
                     experimental_name=(
@@ -3362,8 +3429,13 @@ class CockpitController(QObject):
                     ),
                     plan_mode=mode, **binding,
                     journal_baseline=import_baseline,
+                    grade_progress=row.get("gradeProgress"),
+                    crafts_completed=row.get("craftsCompleted"),
                 )
                 if plan:
+                    plan[0]["_Planner"]["experimental_complete"] = bool(
+                        row.get("experimentalComplete")
+                    )
                     tasks.append(plan)
                     if mode == "combined" and effect:
                         effect_record = deepcopy(effect)
@@ -3456,6 +3528,32 @@ class CockpitController(QObject):
                 journal_baseline=plan_baseline, **binding,
             )
         else:
+            installed_grade = int(
+                self._selected_blueprint.get("installedGrade") or 0
+            )
+            installed_quality = float(
+                self._selected_blueprint.get("installedQuality") or 0
+            )
+            installed_quality_known = bool(
+                self._selected_blueprint.get("installedQualityKnown")
+            )
+            installed_matches = bool(
+                self._selected_blueprint.get("installedMatchesSelection")
+            )
+            initial_progress = {}
+            initial_completed = {}
+            if (
+                installed_matches and installed_quality_known
+                and 0 < installed_grade <= self._target_grade
+            ):
+                planned_rolls = installed_grade
+                initial_progress[str(installed_grade)] = installed_quality
+                initial_completed[str(installed_grade)] = max(
+                    0, min(
+                        planned_rolls,
+                        round(installed_quality * planned_rolls),
+                    ),
+                )
             plan = build_engineering_plan(
                 grades, self._current_grade, self._target_grade,
                 plan_id=old_plan_id, instance=self._module_instance,
@@ -3467,6 +3565,8 @@ class CockpitController(QObject):
                     if selected_effect and self._plan_mode == "combined" else ""
                 ),
                 plan_mode=self._plan_mode, journal_baseline=plan_baseline,
+                grade_progress=initial_progress,
+                crafts_completed=initial_completed,
                 **binding,
             )
         if not plan:
@@ -3529,6 +3629,30 @@ class CockpitController(QObject):
             index,
         ):
             self._engineering_status = "Pinned plan removed."
+            self.refresh()
+            self.engineeringChanged.emit()
+
+    @Slot(int)
+    def acceptInstalledForPlan(self, index):
+        """Explicitly discard a conflicting target in favour of Loadout."""
+        row = next((
+            value for value in self._state.get("blueprints", [])
+            if int(value.get("index", -1)) == int(index)
+        ), {})
+        if not row.get("targetConflict"):
+            self._engineering_status = (
+                "Installed state was not accepted: no verified target conflict."
+            )
+            self.engineeringChanged.emit()
+            return
+        if remove_ship_task(
+            self._data_dir / "ship_blueprints.json",
+            self._selected_ship, int(index),
+        ):
+            self._engineering_status = (
+                f"Installed {row.get('installedBlueprint', 'engineering')} "
+                "accepted; the conflicting target was removed."
+            )
             self.refresh()
             self.engineeringChanged.emit()
 

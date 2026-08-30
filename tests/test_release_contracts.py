@@ -23,13 +23,19 @@ from ed_companion.integrations.inara import (
 )
 from ed_companion.phase14.state import (
     assign_plans_to_nearest_engineers,
+    annotate_installed_target_conflicts,
     blueprint_rows,
     apply_engineer_craft,
+    build_engineering_plan,
     build_experimental_plan,
+    engineering_run_preflight,
     engineering_loadout_rows,
     latest_loadout_slots,
+    migrate_wishlist_bindings,
     module_matches_type,
+    partition_engineer_assignments,
     powerplay_journal_overview,
+    required_materials,
     select_operation_action,
     ship_slot_layout,
 )
@@ -40,6 +46,95 @@ from ed_companion.services import latest_delivery_proof
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_engineer_route_excludes_locked_access_tasks(self):
+        assignments = [
+            {
+                "name": "Unlocked Far", "craftable": True,
+                "distance": 30.0, "coordinates": [30.0, 0.0, 0.0],
+            },
+            {
+                "name": "Locked Near", "craftable": False,
+                "distance": 1.0, "coordinates": [1.0, 0.0, 0.0],
+            },
+            {
+                "name": "Unlocked Near", "craftable": True,
+                "distance": 5.0, "coordinates": [5.0, 0.0, 0.0],
+            },
+        ]
+
+        route, unlocks = partition_engineer_assignments(assignments)
+
+        self.assertEqual(
+            [row["name"] for row in route], ["Unlocked Near", "Unlocked Far"]
+        )
+        self.assertEqual([row["name"] for row in unlocks], ["Locked Near"])
+
+    def test_engineering_run_preflight_reports_global_readiness(self):
+        state = {"blueprints": [{
+            "targetStatus": "in_progress", "boundSlot": "PowerPlant",
+            "boundModule": "int_powerplant_size7_class5",
+            "installedModule": "int_powerplant_size7_class5",
+            "materialProgress": [{"key": "iron", "name": "Iron", "missing": 0}],
+            "rollEstimateReliable": True,
+        }]}
+        route = [{"name": "Hera Tani", "craftable": True, "openJobs": 1}]
+
+        result = engineering_run_preflight(state, route)
+
+        self.assertEqual(result["status"], "READY")
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["blockers"], [])
+
+    def test_engineering_run_preflight_lists_independent_blockers(self):
+        state = {"blueprints": [{
+            "targetStatus": "not_started", "bindingRequired": True,
+            "boundSlot": "TinyHardpoint1", "installedModule": "",
+            "materialProgress": [{
+                "key": "vanadium", "name": "Vanadium", "missing": 3,
+            }],
+            "rollEstimateReliable": False,
+        }]}
+        route = [{
+            "name": "Ram Tah", "craftable": False, "openJobs": 1,
+        }]
+
+        result = engineering_run_preflight(state, route)
+
+        self.assertEqual(result["status"], "BLOCKED")
+        self.assertEqual(
+            {row["code"] for row in result["blockers"]},
+            {"MATERIALS", "MODULE_BINDING", "ENGINEER_ACCESS"},
+        )
+        self.assertEqual(
+            [row["code"] for row in result["warnings"]], ["ROLL_ESTIMATE"],
+        )
+
+    def test_installed_blueprint_conflict_is_visible_but_not_auto_removed(self):
+        rows = [{
+            "index": 2, "boundSlot": "MediumHardpoint2",
+            "boundModule": "hpt_multicannon_gimbal_medium",
+            "blueprint": "Efficient Weapon", "targetGrade": 5,
+        }]
+        annotate_installed_target_conflicts(rows, [{
+            "slot": "MediumHardpoint2",
+            "moduleId": "hpt_multicannon_gimbal_medium",
+            "engineeringBlueprint": "Weapon_Overcharged",
+            "engineeringGrade": 5,
+        }])
+
+        self.assertTrue(rows[0]["targetConflict"])
+        self.assertEqual(rows[0]["installedBlueprint"], "Overcharged Weapon")
+        self.assertEqual(rows[0]["blueprint"], "Efficient Weapon")
+
+    def test_state_reconciles_wishlist_before_pending_craft_replay(self):
+        source = Path("ed_companion/phase14/state.py").read_text(encoding="utf-8")
+        build_state_source = source.split("def build_state(", 1)[1]
+        migration = build_state_source.index(
+            "migrate_wishlist_bindings(data_dir, fleet_state, profile_events)"
+        )
+        replay = build_state_source.index("reconcile_engineer_craft_batch(")
+        self.assertLess(migration, replay)
+
     def test_inara_accepts_material_snapshot_before_loadgame(self):
         events = [
             {
@@ -203,10 +298,43 @@ class ReleaseContractTests(unittest.TestCase):
         action = select_operation_action(state, route)
 
         self.assertEqual(action["kind"], "GRADE_CRAFT")
+        self.assertEqual(action["shortTitle"], "Continue Hull Reinforcement Package")
         self.assertEqual(action["moduleName"], "Hull Reinforcement Package")
         self.assertEqual(action["blueprintName"], "Heavy Duty Hull Reinforcement")
         self.assertEqual(action["targetGrade"], 5)
         self.assertEqual(action["experimentalName"], "Deep Plating")
+        self.assertEqual(action["physicalSlot"], "Slot03_Size5")
+        self.assertEqual(
+            action["physicalSlotLabel"], "OPTIONAL SLOT 3 · SIZE 5"
+        )
+        self.assertIn("OPTIONAL SLOT 3 · SIZE 5", action["title"])
+
+    def test_next_engineer_action_distinguishes_identical_hardpoints(self):
+        plan = {
+            "module": "Multi-cannon",
+            "blueprint": "High Capacity Magazine",
+            "targetGrade": 5,
+            "targetStatus": "not_started",
+            "canCraftNext": True,
+            "materialProgress": [],
+            "boundSlot": "MediumHardpoint2",
+        }
+        route = [{
+            "name": "Tod McQuinn", "system": "Wolf 397",
+            "station": "Trophy Camp", "craftable": True,
+            "jobNames": [
+                "Multi-cannon · High Capacity Magazine · G5"
+            ],
+        }]
+
+        action = select_operation_action(
+            {"blueprints": [plan], "materials": [], "trades": []}, route
+        )
+
+        self.assertEqual(
+            action["physicalSlotLabel"], "MEDIUM HARDPOINT 2 · SIZE 2"
+        )
+        self.assertIn("MEDIUM HARDPOINT 2 · SIZE 2", action["title"])
 
     def test_engineer_assignment_globally_minimizes_repeat_visits(self):
         plans = [
@@ -241,6 +369,54 @@ class ReleaseContractTests(unittest.TestCase):
 
         self.assertEqual([row["name"] for row in route], ["Shared"])
         self.assertEqual(route[0]["openJobs"], 3)
+
+    def test_engineer_route_minimizes_total_distance_not_each_next_leg(self):
+        plans = [{
+            "module": name, "blueprint": "Target", "grade": 5,
+            "eligibleEngineers": [name], "completion": 1,
+            "targetStatus": "not_started",
+        } for name in ("A", "B", "C", "D")]
+        positions = {
+            "A": [0, 1, 0], "B": [0, 2, 0],
+            "C": [0, 3, 0], "D": [1, 0, 0],
+        }
+        engineers = [{
+            "name": name, "statusGroup": "unlocked", "rank": 5,
+            "distance": (sum(value * value for value in position) ** 0.5),
+            "coordinates": position, "status": "UNLOCKED",
+        } for name, position in positions.items()]
+
+        route = assign_plans_to_nearest_engineers(plans, engineers)
+
+        # Nearest-neighbour chooses A-B-C-D (6.16 ly). The global optimum is
+        # D-A-B-C (4.41 ly), so no late cross-map return is introduced.
+        self.assertEqual([row["name"] for row in route], ["D", "A", "B", "C"])
+
+    def test_current_craftable_engineer_is_mandatory_first_stop(self):
+        plans = [{
+            "module": name, "blueprint": "Target", "grade": 1,
+            "eligibleEngineers": [name], "completion": 1,
+            "targetStatus": "not_started",
+        } for name in ("Ram Tah", "Tiana Fortune", "Mel Brandon")]
+        engineers = [
+            {
+                "name": "Ram Tah", "statusGroup": "unlocked", "rank": 2,
+                "distance": 0, "coordinates": [0, 0, 0], "status": "UNLOCKED",
+            },
+            {
+                "name": "Tiana Fortune", "statusGroup": "locked", "rank": 0,
+                "distance": 100, "coordinates": [100, 0, 0], "status": "LOCKED",
+            },
+            {
+                "name": "Mel Brandon", "statusGroup": "locked", "rank": 0,
+                "distance": 1000, "coordinates": [-1000, 0, 0], "status": "LOCKED",
+            },
+        ]
+
+        route = assign_plans_to_nearest_engineers(plans, engineers)
+
+        self.assertEqual(route[0]["name"], "Ram Tah")
+        self.assertTrue(route[0]["craftable"])
 
     def test_single_plan_uses_nearest_engineer_with_required_rank(self):
         plans = [{
@@ -322,6 +498,297 @@ class ReleaseContractTests(unittest.TestCase):
             path.write_text(json.dumps(payload), encoding="utf-8")
 
             self.assertEqual(_read_input(path.as_uri()), payload)
+
+    def test_build_import_preserves_matching_installed_grade_boundary(self):
+        payload = {
+            "Ship": "Krait_MkII",
+            "Modules": [{
+                "Slot": "LargeHardpoint1",
+                "Item": "hpt_multicannon_gimbal_large",
+                "Engineering": {
+                    "BlueprintName": "Weapon_Overcharged",
+                    "Level": 5,
+                    "ExperimentalEffect": "special_weapon_auto_loader",
+                },
+            }],
+        }
+        blueprints = [{
+            "Type": "Multi-cannon", "Name": "Overcharged Weapon", "Grade": 5,
+        }]
+        experimentals = [{
+            "Name": "Auto Loader",
+            "ExperimentalId": "multicannon::auto_loader",
+            "EdName": "special_weapon_auto_loader",
+            "ModuleTypes": ["Multi-cannon"],
+        }]
+        slots = [{
+            "slot": "LargeHardpoint1",
+            "moduleId": "hpt_multicannon_gimbal_large",
+            "engineeringGrade": 5,
+            "engineeringBlueprint": "Weapon_Overcharged",
+            "experimentalEffect": "special_weapon_auto_loader",
+        }]
+
+        preview = preview_build(
+            json.dumps(payload), "Krait Mk II", blueprints, experimentals,
+            module_matches_type, physical_slots=slots,
+        )
+
+        self.assertEqual(preview["rows"][0]["currentGrade"], 4)
+        self.assertTrue(preview["rows"][0]["experimentalComplete"])
+
+    def test_loadout_preserves_last_known_quality_for_unchanged_module(self):
+        events = [{
+            "timestamp": "2026-08-30T10:00:00Z", "event": "Loadout",
+            "ShipID": 37, "Modules": [{
+                "Slot": "LargeHardpoint1",
+                "Item": "hpt_multicannon_gimbal_large",
+                "Engineering": {
+                    "BlueprintName": "Weapon_Overcharged", "Level": 5,
+                },
+            }],
+        }, {
+            "timestamp": "2026-08-30T10:01:00Z", "event": "EngineerCraft",
+            "ShipID": 37, "Slot": "LargeHardpoint1",
+            "Module": "hpt_multicannon_gimbal_large",
+            "BlueprintName": "Weapon_Overcharged", "Level": 5,
+            "Quality": 0.6,
+        }, {
+            "timestamp": "2026-08-30T10:02:00Z", "event": "Loadout",
+            "ShipID": 37, "Modules": [{
+                "Slot": "LargeHardpoint1",
+                "Item": "hpt_multicannon_gimbal_large",
+                "Engineering": {
+                    "BlueprintName": "Weapon_Overcharged", "Level": 5,
+                },
+            }],
+        }]
+
+        installed = latest_loadout_slots(events, 37)[0]
+
+        self.assertTrue(installed["engineeringQualityKnown"])
+        self.assertEqual(installed["engineeringQuality"], 0.6)
+
+    def test_matching_installed_quality_reduces_remaining_materials(self):
+        with TemporaryDirectory() as directory:
+            data_dir = Path(directory)
+            plan = build_engineering_plan(
+                [{
+                    "Type": "Multi-cannon", "Name": "Overcharged Weapon",
+                    "Grade": 5, "Ingredients": [{"Name": "Zirconium", "Size": 1}],
+                }],
+                0, 5, ship_id=37, slot="LargeHardpoint1",
+                module_id="hpt_multicannon_gimbal_large",
+            )
+            (data_dir / "ship_blueprints.json").write_text(
+                json.dumps({"Krait": [plan]}), encoding="utf-8"
+            )
+            events = [{
+                "timestamp": "2026-08-30T10:00:00Z", "event": "Loadout",
+                "ShipID": 37, "Modules": [{
+                    "Slot": "LargeHardpoint1",
+                    "Item": "hpt_multicannon_gimbal_large",
+                    "Engineering": {
+                        "BlueprintName": "Weapon_Overcharged", "Level": 5,
+                        "Quality": 0.6,
+                    },
+                }],
+            }]
+            migrate_wishlist_bindings(
+                data_dir, {"ships": [{"label": "Krait", "id": "37"}]}, events,
+            )
+            saved = json.loads(
+                (data_dir / "ship_blueprints.json").read_text(encoding="utf-8")
+            )["Krait"]
+
+        planner = saved[0][0]["_Planner"]
+        self.assertEqual(planner["current_grade"], 5)
+        self.assertEqual(planner["crafts_completed"]["5"], 3)
+        self.assertEqual(required_materials(saved), {"zirconium": 2})
+
+    def test_partial_current_g5_can_target_g5_again(self):
+        plan = build_engineering_plan(
+            [{
+                "Type": "Multi-cannon", "Name": "Overcharged Weapon",
+                "Grade": 5, "Ingredients": [{"Name": "Zirconium", "Size": 1}],
+            }],
+            5, 5, ship_id=37, slot="MediumHardpoint2",
+            module_id="hpt_multicannon_gimbal_medium",
+            grade_progress={"5": 0.6}, crafts_completed={"5": 3},
+        )
+
+        self.assertEqual(len(plan), 1)
+        self.assertEqual(plan[0]["Grade"], 5)
+        self.assertEqual(required_materials([plan]), {"zirconium": 2})
+
+    def test_g1_target_calibrates_from_observed_quality(self):
+        plan = build_engineering_plan(
+            [{
+                "Type": "Heat Sink Launcher", "Name": "Ammo Capacity",
+                "Grade": 1, "Ingredients": [
+                    {"Name": "Vanadium", "Size": 1},
+                ],
+            }],
+            0, 1, ship_id=37, slot="TinyHardpoint4",
+            module_id="hpt_heatsinklauncher_turret_tiny",
+        )
+        self.assertEqual(required_materials([plan]), {"vanadium": 1})
+        planner = plan[0]["_Planner"]
+        planner["grade_progress"] = {"1": 0.25}
+        planner["crafts_completed"] = {"1": 1}
+        self.assertEqual(required_materials([plan]), {"vanadium": 1})
+
+    def test_roll_learning_is_scoped_to_exact_blueprint_and_grade(self):
+        with TemporaryDirectory() as directory:
+            data_dir = Path(directory)
+            heat_sink = build_engineering_plan(
+                [{
+                    "Type": "Heat Sink Launcher", "Name": "Ammo Capacity",
+                    "Grade": 1,
+                    "Ingredients": [{"Name": "Vanadium", "Size": 1}],
+                }],
+                0, 1, ship_id=37, slot="TinyHardpoint4",
+                module_id="hpt_heatsinklauncher_turret_tiny",
+            )
+            heat_sink[0]["_Planner"].update({
+                "grade_progress": {"1": 0.25},
+                "crafts_completed": {"1": 1},
+                "processed_crafts": ["current-craft"],
+            })
+            fsd = build_engineering_plan(
+                [{
+                    "Type": "Frame Shift Drive", "Name": "Increased Range",
+                    "Grade": 1,
+                    "Ingredients": [{"Name": "Atypical Wake Echoes", "Size": 1}],
+                }],
+                0, 1, ship_id=37, slot="FrameShiftDrive",
+                module_id="int_hyperdrive_size5_class5",
+            )
+            (data_dir / "ship_blueprints.json").write_text(json.dumps({
+                "Krait": [heat_sink, fsd],
+            }), encoding="utf-8")
+            events = [{
+                "timestamp": "2026-06-28T16:09:00Z", "event": "EngineerCraft",
+                "ShipID": 1, "BlueprintName": "Misc_HeatSinkCapacity",
+                "Level": 1, "Quality": 0.2,
+            }]
+            migrate_wishlist_bindings(
+                data_dir, {"ships": [{"label": "Krait", "id": "37"}]}, events,
+            )
+            saved = json.loads(
+                (data_dir / "ship_blueprints.json").read_text(encoding="utf-8")
+            )["Krait"]
+
+        self.assertEqual(saved[0][0]["_Rolls"], 5)
+        self.assertEqual(required_materials([saved[0]]), {"vanadium": 3})
+        self.assertEqual(saved[1][0]["_Rolls"], 1)
+
+    def test_different_installed_blueprint_grants_no_material_credit(self):
+        with TemporaryDirectory() as directory:
+            data_dir = Path(directory)
+            plan = build_engineering_plan(
+                [{
+                    "Type": "Multi-cannon", "Name": "Overcharged Weapon",
+                    "Grade": 5, "Ingredients": [{"Name": "Zirconium", "Size": 1}],
+                }],
+                0, 5, ship_id=37, slot="LargeHardpoint1",
+                module_id="hpt_multicannon_gimbal_large",
+            )
+            (data_dir / "ship_blueprints.json").write_text(
+                json.dumps({"Krait": [plan]}), encoding="utf-8"
+            )
+            events = [{
+                "timestamp": "2026-08-30T10:00:00Z", "event": "Loadout",
+                "ShipID": 37, "Modules": [{
+                    "Slot": "LargeHardpoint1",
+                    "Item": "hpt_multicannon_gimbal_large",
+                    "Engineering": {
+                        "BlueprintName": "Weapon_HighCapacity", "Level": 5,
+                        "Quality": 1.0,
+                    },
+                }],
+            }]
+            migrate_wishlist_bindings(
+                data_dir, {"ships": [{"label": "Krait", "id": "37"}]}, events,
+            )
+            saved = json.loads(
+                (data_dir / "ship_blueprints.json").read_text(encoding="utf-8")
+            )["Krait"]
+
+        planner = saved[0][0]["_Planner"]
+        self.assertEqual(planner["current_grade"], 0)
+        self.assertEqual(planner["crafts_completed"], {})
+        self.assertEqual(required_materials(saved), {"zirconium": 5})
+
+    def test_existing_wishlist_reconciles_installed_slot_without_recrafing_lower_grades(self):
+        with TemporaryDirectory() as directory:
+            data_dir = Path(directory)
+            planner = {
+                "plan_id": "plan-1", "ship_id": "37",
+                "slot": "LargeHardpoint1",
+                "module_id": "hpt_multicannon_gimbal_large",
+                "current_grade": 0, "target_grade": 5,
+                "grade_progress": {},
+                "experimental_id": "multicannon::auto_loader",
+                "experimental_name": "Auto Loader",
+                "experimental_complete": False,
+                "plan_mode": "combined",
+            }
+            payload = {
+                "Krait Mk II – Mechthild": [[{
+                    "Type": "Multi-cannon", "Name": "Overcharged Weapon",
+                    "Grade": 5, "Engineers": ["Tod McQuinn"],
+                    "_Planner": planner,
+                }]],
+            }
+            (data_dir / "ship_blueprints.json").write_text(
+                json.dumps(payload), encoding="utf-8"
+            )
+            events = [{
+                "timestamp": "2026-08-30T10:00:00Z", "event": "Loadout",
+                "ShipID": 37,
+                "Modules": [{
+                    "Slot": "LargeHardpoint1",
+                    "Item": "hpt_multicannon_gimbal_large",
+                    "Engineering": {
+                        "BlueprintName": "Weapon_Overcharged", "Level": 5,
+                        "ExperimentalEffect": "special_weapon_incendiary",
+                    },
+                }],
+            }]
+            fleet = {"ships": [{
+                "label": "Krait Mk II – Mechthild", "id": "37",
+            }]}
+
+            migrate_wishlist_bindings(data_dir, fleet, events)
+
+            saved = json.loads(
+                (data_dir / "ship_blueprints.json").read_text(encoding="utf-8")
+            )
+            saved_planner = saved["Krait Mk II – Mechthild"][0][0]["_Planner"]
+            self.assertEqual(saved_planner["current_grade"], 4)
+            self.assertEqual(saved_planner["grade_progress"], {})
+            self.assertFalse(saved_planner["experimental_complete"])
+
+            craft = {
+                "timestamp": "2026-08-30T10:05:00Z",
+                "event": "EngineerCraft", "Slot": "LargeHardpoint1",
+                "Module": "hpt_multicannon_gimbal_large",
+                "Engineer": "Tod 'The Blaster' McQuinn",
+                "BlueprintName": "Weapon_Overcharged",
+                "BlueprintID": 128673806, "Level": 5, "Quality": 0.2,
+                "Ingredients": [{"Name": "zirconium", "Count": 1}],
+            }
+            result = apply_engineer_craft(
+                data_dir / "ship_blueprints.json",
+                "Krait Mk II – Mechthild", craft, ship_id=37,
+            )
+            replayed = json.loads(
+                (data_dir / "ship_blueprints.json").read_text(encoding="utf-8")
+            )["Krait Mk II – Mechthild"][0][0]["_Planner"]
+
+            self.assertEqual(result["status"], "applied")
+            self.assertEqual(replayed["grade_progress"]["5"], 0.2)
 
     def test_qt_cache_and_runtime_data_share_the_canonical_app_directory(self):
         root = Path(__file__).resolve().parents[1]
@@ -757,6 +1224,77 @@ class ReleaseContractTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "applied")
         self.assertTrue(saved["Fer-de-Lance – Signe"][0][0]["_Planner"]["experimental_complete"])
+
+    def test_unique_identical_module_plan_follows_the_actually_crafted_slot(self):
+        plan = build_engineering_plan(
+            [{
+                "Type": "Multi-cannon", "Name": "High Capacity Magazine",
+                "Grade": 1, "Engineers": ["Tod McQuinn"],
+                "Ingredients": [{"Name": "Mechanical Scrap", "Size": 1}],
+            }],
+            0, 1, ship_id=37, slot="MediumHardpoint2",
+            module_id="hpt_multicannon_gimbal_medium",
+        )
+        event = {
+            "timestamp": "2026-08-30T06:35:59Z", "event": "EngineerCraft",
+            "Slot": "MediumHardpoint1",
+            "Module": "hpt_multicannon_gimbal_medium",
+            "Engineer": "Tod 'The Blaster' McQuinn",
+            "BlueprintID": 128673500,
+            "BlueprintName": "Weapon_HighCapacity",
+            "Level": 1, "Quality": 1.0,
+            "Ingredients": [{"Name": "mechanicalscrap", "Count": 1}],
+        }
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "ship_blueprints.json"
+            path.write_text(
+                json.dumps({"Krait Mk II – Mechthild": [plan]}),
+                encoding="utf-8",
+            )
+
+            result = apply_engineer_craft(
+                path, "Krait Mk II – Mechthild", event, ship_id=37,
+            )
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            planner = saved["Krait Mk II – Mechthild"][0][0]["_Planner"]
+
+        self.assertEqual(result["status"], "applied")
+        self.assertEqual(planner["slot"], "MediumHardpoint1")
+        self.assertEqual(planner["instance"], "MediumHardpoint1")
+
+    def test_weapon_machine_effect_without_localized_name_is_canonical(self):
+        plan = build_experimental_plan(
+            {
+                "ExperimentalId": "multi-cannon::corrosive_shell",
+                "Name": "Corrosive Shell",
+                "Ingredients": [{"Name": "Arsenic", "Size": 3}],
+            },
+            ship_id=37, slot="MediumHardpoint1",
+            module_id="hpt_multicannon_gimbal_medium",
+            module_type="Multi-cannon",
+        )
+        event = {
+            "timestamp": "2026-08-30T06:40:20Z",
+            "event": "EngineerCraft", "Slot": "MediumHardpoint1",
+            "Module": "hpt_multicannon_gimbal_medium",
+            "BlueprintID": 128673500,
+            "BlueprintName": "Weapon_HighCapacity",
+            "Level": 5, "Quality": 1.0,
+            "ApplyExperimentalEffect": "special_corrosive_shell",
+            "ExperimentalEffect": "special_corrosive_shell",
+            "Ingredients": [{"Name": "arsenic", "Count": 3}],
+        }
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "ship_blueprints.json"
+            path.write_text(
+                json.dumps({"Krait Mk II – Mechthild": [plan]}),
+                encoding="utf-8",
+            )
+            result = apply_engineer_craft(
+                path, "Krait Mk II – Mechthild", event, ship_id=37,
+            )
+
+        self.assertEqual(result["status"], "applied")
 
     def test_inara_safety_limits_remain_strict(self):
         self.assertEqual(INARA_MAX_REQUESTS_PER_MINUTE, 2)

@@ -104,12 +104,14 @@ JOURNAL_BLUEPRINT_NAMES = {
 # many suffixes do not resemble the displayed effect. Keep their canonical
 # catalog names in one place; localized text remains independent evidence.
 JOURNAL_EXPERIMENTAL_NAMES = {
+    "specialautoloader": "Auto Loader",
     "specialarmourchunky": "Deep Plating",
     "specialarmourexplosive": "Layered Plating",
     "specialarmourkinetic": "Angled Plating",
     "specialarmourthermic": "Reflective Plating",
     "specialenginecooled": "Thermal Spread",
     "specialengineoverloaded": "Drag Drives",
+    "specialcorrosiveshell": "Corrosive Shell",
     "specialfsdcooled": "Thermal Spread",
     "specialfsdfuelcapacity": "Deep Charge",
     "specialfsdheavy": "Mass Manager",
@@ -140,6 +142,7 @@ JOURNAL_EXPERIMENTAL_NAMES = {
     "specialweapondamage": "Oversized",
     "specialweaponlightweight": "Stripped Down",
     "specialweaponrateoffire": "Multi-Servos",
+    "specialincendiaryrounds": "Incendiary Rounds",
     "specialweaponstabilised": "Flow Control",
     "specialweapontoughened": "Double Braced",
 }
@@ -555,7 +558,7 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
     blueprint_types = {group[0] for group in groups if group[0]}
     rows, warnings = [], []
     installed_by_slot = {
-        str(row.get("slot") or ""): str(row.get("moduleId") or "")
+        str(row.get("slot") or ""): row
         for row in (physical_slots or []) if isinstance(row, dict)
     }
     for position, module in enumerate(selected["modules"], 1):
@@ -569,7 +572,8 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
             source_slot, physical_slots, selected["source"]
         )
         module_id = _module_identity(module)
-        installed_module = installed_by_slot.get(slot, "")
+        installed = installed_by_slot.get(slot, {})
+        installed_module = str(installed.get("moduleId") or "")
         module_change = bool(
             slot and module_id
             and _key(installed_module) != _key(module_id)
@@ -612,6 +616,52 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
                 if not types or not supported or supported.intersection(types):
                     effect_candidates.append(effect)
         effect = effect_candidates[0] if len(effect_candidates) == 1 else None
+        installed_blueprint = str(installed.get("engineeringBlueprint") or "")
+        installed_grade = int(installed.get("engineeringGrade") or 0)
+        installed_quality = max(0.0, min(1.0, float(
+            installed.get("engineeringQuality") or 0
+        )))
+        installed_quality_known = bool(
+            installed.get("engineeringQualityKnown")
+        )
+        blueprint_matches_installed = bool(
+            blueprint_group and not module_change and installed_grade > 0
+            and _blueprint_keys(installed_blueprint).intersection(
+                _blueprint_keys(blueprint_group[1])
+            )
+        )
+        # Loadout reports the installed grade, but not its within-grade
+        # Quality. Treat only the preceding grade as certainly complete; the
+        # next EngineerCraft supplies authoritative progress for this grade.
+        if not blueprint_matches_installed:
+            current_grade = 0
+        elif installed_grade > grade:
+            current_grade = grade
+        elif installed_quality_known:
+            current_grade = min(installed_grade, grade)
+        else:
+            current_grade = max(0, min(installed_grade, grade) - 1)
+        grade_progress = {}
+        crafts_completed = {}
+        if (
+            blueprint_matches_installed and installed_quality_known
+            and 0 < installed_grade <= grade
+        ):
+            planned_rolls = installed_grade
+            grade_progress[str(installed_grade)] = installed_quality
+            crafts_completed[str(installed_grade)] = max(
+                0, min(
+                    planned_rolls,
+                    round(installed_quality * planned_rolls),
+                ),
+            )
+        installed_experimental = str(installed.get("experimentalEffect") or "")
+        experimental_complete = bool(
+            effect and not module_change and installed_experimental
+            and _experimental_keys(installed_experimental).intersection(
+                _effect_keys(effect)
+            )
+        )
         issues = []
         if slot_issue:
             issues.append(slot_issue)
@@ -665,6 +715,12 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
                 effect.get("ExperimentalId") or effect.get("Name") or ""
             ) if effect else "",
             "planMode": plan_mode,
+            "currentGrade": current_grade,
+            "gradeProgress": grade_progress,
+            "craftsCompleted": crafts_completed,
+            "installedBlueprint": installed_blueprint,
+            "installedExperimental": installed_experimental,
+            "experimentalComplete": experimental_complete,
             "moduleChange": module_change,
             "installedModule": installed_module,
             "desiredModule": module_id,
