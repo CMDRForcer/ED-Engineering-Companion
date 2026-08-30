@@ -2687,7 +2687,21 @@ def assign_plans_to_nearest_engineers(plans, engineer_rows):
         ]
         selected = str(plan.get("selectedEngineer") or "")
         candidates = usable or eligible
-        if selected in candidates:
+        if usable:
+            # An Engineer in the commander's current system is a mandatory
+            # consolidation stop.  Complete every compatible job here before
+            # optimizing the remaining route, otherwise an equal or smaller
+            # global cover (or a stale prior selection) can send the commander
+            # away and back again.
+            current = [
+                name for name in usable
+                if 0 <= float(engineer_index[name].get("distance", -1)) < 0.05
+            ]
+            if current:
+                candidates = current
+            elif selected in candidates:
+                candidates = [selected]
+        elif selected in candidates:
             candidates = [selected]
         prepared.append((plan, target_grade, candidates, bool(usable)))
 
@@ -2957,7 +2971,21 @@ def select_operation_action(
             material for material in missing
             if str(material.get("key") or "") in planned_missing_keys
         ]
+    def assigned_stop_index(plan):
+        expected_job = (
+            f"{str(plan.get('module') or '')} · "
+            f"{str(plan.get('blueprint') or '')} · G"
+        )
+        for index, stop in enumerate(route):
+            if any(
+                str(job).startswith(expected_job)
+                for job in (stop.get("jobNames") or [])
+            ):
+                return index
+        return len(route)
+
     active_plans.sort(key=lambda row: (
+        assigned_stop_index(row),
         not bool(row.get("priority")),
         {
             "experimental_pending": 0,

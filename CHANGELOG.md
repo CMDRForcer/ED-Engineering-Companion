@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 21.190 — 2026-08-30
+
+### Fixed
+
+- Consolidate every compatible engineering job at the Engineer in the current system before routing to another stop.
+- Keep all jobs assigned to the active route stop ahead of unrelated plan priorities, preventing unnecessary departure and return flights.
+
 ## 21.189 — 2026-08-29
 
 ### Changed

@@ -268,6 +268,53 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertEqual([row["name"] for row in route], ["Near G5"])
         self.assertTrue(route[0]["craftable"])
 
+    def test_current_engineer_consolidates_all_compatible_jobs_before_departure(self):
+        plans = [
+            {
+                "module": "Frame Shift Drive", "blueprint": "Increased Range",
+                "grade": 5, "targetGrade": 5,
+                "eligibleEngineers": ["Felicity Farseer"],
+                "completion": 1, "canCraftNext": True,
+                "targetStatus": "not_started", "priority": True,
+                "materialProgress": [],
+            },
+            {
+                "module": "Shield Generator", "blueprint": "Thermal Resistant",
+                "grade": 5, "targetGrade": 5,
+                "eligibleEngineers": ["Lei Cheung", "Didi Vatermann"],
+                "selectedEngineer": "Didi Vatermann",
+                "completion": 1, "canCraftNext": True,
+                "targetStatus": "not_started", "priority": False,
+                "materialProgress": [],
+            },
+        ]
+        engineers = [
+            {
+                "name": "Lei Cheung", "statusGroup": "unlocked", "rank": 5,
+                "distance": 0, "status": "UNLOCKED", "system": "Laksak",
+            },
+            {
+                "name": "Didi Vatermann", "statusGroup": "unlocked", "rank": 5,
+                "distance": 40, "status": "UNLOCKED", "system": "Leesti",
+            },
+            {
+                "name": "Felicity Farseer", "statusGroup": "unlocked", "rank": 5,
+                "distance": 60, "status": "UNLOCKED", "system": "Deciat",
+            },
+        ]
+
+        route = assign_plans_to_nearest_engineers(plans, engineers)
+        route.sort(key=lambda row: float(row.get("distance", -1)))
+        action = select_operation_action(
+            {"blueprints": plans, "materials": [], "trades": []}, route
+        )
+
+        self.assertEqual(route[0]["name"], "Lei Cheung")
+        self.assertIn("Shield Generator", route[0]["jobNames"][0])
+        self.assertEqual(action["kind"], "GRADE_CRAFT")
+        self.assertEqual(action["moduleName"], "Shield Generator")
+        self.assertEqual(action["engineerName"], "Lei Cheung")
+
     def test_build_import_accepts_file_dialog_urls(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "Krait build.json"
