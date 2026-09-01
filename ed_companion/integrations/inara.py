@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from ed_companion import APP_VERSION
+from ed_companion import APP_VERSION, BUILD_CHANNEL, is_development_build
 
 INARA_API_URL = "https://inara.cz/inapi/v1/"
 INARA_APP_NAME = "ED Engineering Companion"
@@ -109,7 +109,9 @@ def build_event(name, data=None, timestamp=None):
     }
 
 
-def build_payload(config, events, app_version=APP_VERSION):
+def build_payload(
+    config, events, app_version=APP_VERSION, build_channel=BUILD_CHANNEL,
+):
     events = list(events)
     if not events or len(events) > MAX_EVENTS:
         raise InaraError("INARA requests require 1 to 50 events.")
@@ -117,7 +119,7 @@ def build_payload(config, events, app_version=APP_VERSION):
         "header": {
             "appName": INARA_APP_NAME,
             "appVersion": str(app_version),
-            "isBeingDeveloped": True,
+            "isBeingDeveloped": is_development_build(build_channel),
             "APIkey": str(config.get("api_key") or ""),
             "commanderName": str(config.get("commander_name") or ""),
             "commanderFrontierID": str(config.get("frontier_id") or ""),
