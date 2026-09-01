@@ -89,10 +89,76 @@ PRIVATE_FIELDS = {
     "Commander", "FID", "PrivateGroup", "Multicrew", "HappiestSystem",
     "HomeSystem", "MyReputation", "SquadronFaction",
 }
-JOURNAL_OMIT = {
-    "ActiveFine", "CockpitBreach", "BoostUsed", "FuelLevel", "FuelUsed",
-    "JumpDist", "Latitude", "Longitude", "Wanted", "IsNewEntry",
-    "NewTraitsDiscovered", "Traits", "VoucherAmount",
+JOURNAL_COMMON_ALLOWED = {
+    "timestamp", "event", "StarSystem", "StarPos", "SystemAddress",
+    "horizons", "odyssey",
+}
+JOURNAL_ALLOWED_BY_EVENT = {
+    "Docked": JOURNAL_COMMON_ALLOWED | {
+        "StationName", "StationType", "MarketID", "StationFaction",
+        "StationGovernment", "StationAllegiance", "StationServices",
+        "StationEconomy", "StationEconomies", "DistFromStarLS", "LandingPads",
+    },
+    "FSDJump": JOURNAL_COMMON_ALLOWED | {
+        "Body", "BodyID", "Powers", "PowerplayState", "SystemFaction",
+        "SystemAllegiance", "SystemEconomy", "SystemSecondEconomy",
+        "SystemGovernment", "SystemSecurity", "Population", "Factions",
+        "ThargoidWar",
+    },
+    "Scan": JOURNAL_COMMON_ALLOWED | {
+        "ScanType", "BodyName", "BodyID", "DistanceFromArrivalLS",
+        "TidalLock", "TerraformState", "PlanetClass", "Atmosphere",
+        "AtmosphereType", "AtmosphereComposition", "Volcanism", "MassEM",
+        "Radius", "SurfaceGravity", "SurfaceTemperature", "SurfacePressure",
+        "Landable", "Materials", "Composition", "SemiMajorAxis",
+        "Eccentricity", "OrbitalInclination", "Periapsis", "OrbitalPeriod",
+        "AscendingNode", "MeanAnomaly", "RotationPeriod", "AxialTilt", "Rings",
+        "ReserveLevel", "WasDiscovered", "WasMapped", "StarType", "Subclass",
+        "StellarMass", "AbsoluteMagnitude", "Age_MY", "Luminosity",
+    },
+    "Location": JOURNAL_COMMON_ALLOWED | {
+        "Body", "BodyID", "BodyType", "Docked", "StationName", "StationType",
+        "MarketID", "StationFaction", "StationGovernment", "StationAllegiance",
+        "StationServices", "StationEconomy", "StationEconomies", "DistFromStarLS",
+        "Powers", "PowerplayState", "SystemFaction", "SystemAllegiance",
+        "SystemEconomy", "SystemSecondEconomy", "SystemGovernment",
+        "SystemSecurity", "Population", "Factions", "Conflicts", "ThargoidWar",
+    },
+    "SAASignalsFound": JOURNAL_COMMON_ALLOWED | {
+        "BodyName", "BodyID", "Signals", "Genuses",
+    },
+    "CarrierJump": JOURNAL_COMMON_ALLOWED | {
+        "Body", "BodyID", "BodyType", "Docked", "StationName", "StationType",
+        "MarketID", "StationFaction", "StationGovernment", "StationAllegiance",
+        "StationServices", "StationEconomy", "StationEconomies", "DistFromStarLS",
+        "Powers", "PowerplayState", "SystemFaction", "SystemAllegiance",
+        "SystemEconomy", "SystemSecondEconomy", "SystemGovernment",
+        "SystemSecurity", "Population", "Factions", "Conflicts", "ThargoidWar",
+    },
+}
+JOURNAL_NESTED_ALLOWED = {
+    "StationFaction": {"Name", "FactionState"},
+    "StationEconomies": {"Name", "Proportion"},
+    "LandingPads": {"Small", "Medium", "Large"},
+    "SystemFaction": {"Name", "FactionState"},
+    "Factions": {
+        "Name", "FactionState", "Government", "Influence", "Allegiance",
+        "Happiness", "ActiveStates", "PendingStates", "RecoveringStates",
+        "State", "Trend",
+    },
+    "ThargoidWar": {
+        "CurrentState", "NextState", "SuccessState", "WarProgress",
+        "RemainingPorts", "EstimatedRemainingTime",
+    },
+    "AtmosphereComposition": {"Name", "Percent"},
+    "Materials": {"Name", "Percent"},
+    "Composition": {"Ice", "Rock", "Metal"},
+    "Rings": {"Name", "RingClass", "MassMT", "InnerRad", "OuterRad"},
+    "Signals": {"Type", "Count"},
+    "Genuses": {"Genus"},
+    "Conflicts": {
+        "WarType", "Status", "Faction1", "Faction2", "Name", "Stake", "WonDays",
+    },
 }
 
 
@@ -230,6 +296,19 @@ def validate_prepared(prepared):
                         f"EDDN outfitting/3 module {index} requires integer {field}.",
                         terminal=True,
                     )
+    if schema == "journal/1":
+        allowed = JOURNAL_ALLOWED_BY_EVENT.get(str(event_name or ""), set())
+        unknown = sorted(set(message) - allowed)
+        if unknown:
+            raise EddnError(
+                f"EDDN journal/1 {event_name} has unsupported fields: "
+                f"{', '.join(unknown)}.", terminal=True,
+            )
+        if _allowlisted_journal_message(message, str(event_name or "")) != message:
+            raise EddnError(
+                f"EDDN journal/1 {event_name} has unsupported nested fields.",
+                terminal=True,
+            )
     if schema == "scanorganic/1":
         unknown = sorted(set(message) - ALLOWED[schema])
         if unknown:
@@ -302,6 +381,37 @@ def sanitize(value):
     if isinstance(value, list):
         return [sanitize(item) for item in value]
     return value
+
+
+def _allowlisted_journal_nested(value, allowed):
+    if isinstance(value, dict):
+        return {
+            key: _allowlisted_journal_nested(item, allowed)
+            for key, item in value.items()
+            if item is not None and key in allowed
+            and key not in PRIVATE_FIELDS and not key.endswith("_Localised")
+        }
+    if isinstance(value, list):
+        return [_allowlisted_journal_nested(item, allowed) for item in value]
+    return value
+
+
+def _allowlisted_journal_message(event, event_name):
+    message = {}
+    for key in JOURNAL_ALLOWED_BY_EVENT.get(event_name, set()):
+        if key not in event or event[key] is None:
+            continue
+        value = event[key]
+        nested_allowed = JOURNAL_NESTED_ALLOWED.get(key)
+        if nested_allowed is not None:
+            value = _allowlisted_journal_nested(value, nested_allowed)
+        elif isinstance(value, dict) or (
+            isinstance(value, list) and any(isinstance(item, dict) for item in value)
+        ):
+            # Structured fields require their own explicit child-field contract.
+            continue
+        message[key] = value
+    return message
 
 
 def navroute_rejection_reason(event):
@@ -695,8 +805,7 @@ def prepare_event(event, context):
             "signals": [signal],
         }
     elif schema == "journal/1":
-        for key in JOURNAL_OMIT:
-            event.pop(key, None)
+        event = _allowlisted_journal_message(event, name)
     else:
         event = {
             key: value for key, value in event.items()
