@@ -23,7 +23,7 @@ from ed_companion import APP_VERSION
 from ed_companion.i18n import (
     DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES, TranslationCatalog,
 )
-from ed_companion.persistence import atomic_write
+from ed_companion.persistence import atomic_write, load_json_file
 from ed_companion.integrations.inara import (
     INARA_BATCH_WINDOW_SECONDS,
     INARA_MAX_REQUESTS_PER_MINUTE,
@@ -188,6 +188,7 @@ from .state import (
     latest_profile_location,
     latest_loadout_slots,
     profiled_journal_events,
+    ProfileContext,
     LOGBOOK_FILTERS,
     load_logbook_notes,
     logbook_entries,
@@ -198,14 +199,17 @@ from .state import (
     planner_mode,
     real_engineers,
     read_json,
+    read_journal_tail,
     remove_ship_task,
     replace_ship_plan,
     runtime_data_dir,
+    resolve_profile_context,
     set_journal_dir,
     reference_data_dir,
     select_operation_action,
     set_prioritized_ship_plan,
     set_tech_broker_track,
+    user_trader_catalog_path,
     write_logbook_note,
     write_ship_tasks,
 )
@@ -246,7 +250,7 @@ class CockpitController(QObject):
     uiChanged = Signal()
     connectionChanged = Signal()
     commanderCardsChanged = Signal()
-    inaraFinished = Signal(str, bool, str, object)
+    inaraFinished = Signal(object)
     eddnFinished = Signal(str, bool, str)
     eddnRelay = Signal(object)
     traderSyncFinished = Signal(bool, str)
@@ -258,11 +262,28 @@ class CockpitController(QObject):
     exitRequested = Signal()
     restartRequested = Signal()
 
+    def _bind_profile_paths(self, context: ProfileContext) -> None:
+        """Bind every Commander-local controller file to one context."""
+        self.profile_context = context
+        self.config_dir = runtime_data_dir(context)
+        self._data_dir = self.config_dir
+        self.config_file = self.config_dir / "phase14_graphics.json"
+        self.inara_config_file = self.config_dir / "inara_config.json"
+        self.inara_receipts_file = self.config_dir / "inara_receipts.json"
+        self.inara_journal_cache_file = self.config_dir / "inara_journal_cache.json"
+        self.eddn_config_file = self.config_dir / "eddn_config.json"
+        self.eddn_queue_file = self.config_dir / "community_upload_queue.json"
+        self.eddn_cursor_file = self.config_dir / "eddn_journal_cursor.json"
+        self.hge_cache_file = self.config_dir / "hge_live_sightings.json"
+        self.trader_catalog_file = user_trader_catalog_path(context)
+        self.tech_broker_catalog_file = self.config_dir / "tech_broker_catalog_user.json"
+
     def __init__(self):
         super().__init__()
         self.package_root = Path(__file__).resolve().parents[2]
-        self.config_dir = runtime_data_dir(self.package_root)
-        self.config_file = self.config_dir / "phase14_graphics.json"
+        self.profile_context = resolve_profile_context()
+        self._bind_profile_paths(self.profile_context)
+        self._profile_generation = 1
         ui_config = self._load_ui_config()
         configured_language = str(
             ui_config.get("interface_language") or DEFAULT_LANGUAGE
@@ -387,13 +408,11 @@ class CockpitController(QObject):
         self._selected_logbook_entry = {}
         self._logbook_revision = 0
         self._logbook_notes = load_logbook_notes(self.config_dir)
-        self.inara_config_file = self.config_dir / "inara_config.json"
-        self.inara_receipts_file = self.config_dir / "inara_receipts.json"
-        self.inara_journal_cache_file = (
-            self.config_dir / "inara_journal_cache.json"
-        )
         self._inara_config = self._load_inara_config()
-        journal_identity, journal_commander = active_profile_identity()
+        journal_identity = self.profile_context.identity
+        detected_identity, journal_commander = active_profile_identity()
+        if detected_identity != journal_identity:
+            journal_commander = ""
         if journal_commander:
             self._inara_config["commander_name"] = journal_commander
         if journal_identity.upper().startswith("F"):
@@ -401,6 +420,7 @@ class CockpitController(QObject):
         self._save_inara_config()
         self._inara_status = "Ready. No network request has been made."
         self._inara_busy = False
+        self._active_inara_request = None
         self._inara_pending_since = 0.0
         self._inara_request_times = []
         self._inara_last_request_at = 0.0
@@ -415,7 +435,7 @@ class CockpitController(QObject):
         )
         if not isinstance(self._inara_cache, dict):
             self._inara_cache = {}
-        if self._inara_cache.get("journal_root") != str(journal_dir().resolve()):
+        if self._inara_cache.get("journal_root") != self.profile_context.journal_root:
             self._inara_cache = {
                 key: self._inara_cache[key]
                 for key in ("last_request_at", "rate_limit_until")
@@ -436,21 +456,9 @@ class CockpitController(QObject):
         ]
         self._inara_receipts = self._load_inara_receipts()
         self.inaraFinished.connect(self._finish_inara)
-        self.eddn_config_file = self.config_dir / "eddn_config.json"
-        self.eddn_queue_file = self.config_dir / "community_upload_queue.json"
-        self.eddn_cursor_file = self.config_dir / "eddn_journal_cursor.json"
-        self._eddn_profile_identity = self._detected_eddn_identity()
-        self._eddn_profile_key = self._profile_key(
-            self._eddn_profile_identity
-        )
-        self._eddn_journal_root = str(journal_dir().resolve())
-        self.hge_cache_file = self.config_dir / "hge_live_sightings.json"
-        self.trader_catalog_file = (
-            self.config_dir / "material_trader_catalog_user.json"
-        )
-        self.tech_broker_catalog_file = (
-            self.config_dir / "tech_broker_catalog_user.json"
-        )
+        self._eddn_profile_identity = self.profile_context.identity
+        self._eddn_profile_key = self.profile_context.key
+        self._eddn_journal_root = self.profile_context.journal_root
         self._eddn_config = self._load_eddn_config()
         self._eddn_queue = normalize_upload_queue(
             self._read_local_json(self.eddn_queue_file, [])
@@ -479,26 +487,7 @@ class CockpitController(QObject):
         self._hge_candidate_cache_rows = []
         self._hge_material_filter_cache = ["ALL HGE MATERIALS"]
         self._eddn_context = {}
-        self._journal_offsets = self._read_local_json(
-            self.eddn_cursor_file, {}
-        )
-        if not isinstance(self._journal_offsets, dict):
-            self._journal_offsets = {}
-        self._station_fingerprints = self._journal_offsets.pop(
-            "__station_files__", {}
-        )
-        self._navroute_fingerprint = str(
-            self._journal_offsets.pop("__navroute_file__", "") or ""
-        )
-        stored_journal_root = str(
-            self._journal_offsets.pop("__journal_root__", "") or ""
-        )
-        if stored_journal_root != self._eddn_journal_root:
-            self._journal_offsets = {}
-            self._station_fingerprints = {}
-            self._navroute_fingerprint = ""
-        if not isinstance(self._station_fingerprints, dict):
-            self._station_fingerprints = {}
+        self._load_eddn_cursor_state()
         self._station_rejections: dict[str, str] = {}
         self._navroute_rejections: dict[str, str] = {}
         self._eddn_profile_paths_signature = None
@@ -520,7 +509,7 @@ class CockpitController(QObject):
         self.eddnRelay.connect(self._accept_eddn_relay)
         self.traderSyncFinished.connect(self._finish_trader_catalog_sync)
         self.techBrokerSyncFinished.connect(self._finish_tech_broker_catalog_sync)
-        self._data_dir = runtime_data_dir(self.package_root)
+        self._data_dir = runtime_data_dir(self.profile_context)
         self._reference_data_dir = reference_data_dir(self.package_root)
         self._ship_catalog = read_json(
             self._reference_data_dir / "ships.json", []
@@ -598,6 +587,13 @@ class CockpitController(QObject):
         if not isinstance(state, dict):
             self._fail_startup_state("Initial Journal state was not a mapping.")
             return
+        profile_context = state.pop("_profileContext", None)
+        if (
+            isinstance(profile_context, ProfileContext)
+            and not self._switch_profile_context(profile_context)
+        ):
+            self._fail_startup_state("Profile switch is waiting for EDDN upload.")
+            return
         self._logbook_entries = list(state.pop("_logbookEntries", []))
         state.pop("_craftBatch", None)
         self._logbook_revision += 1
@@ -641,11 +637,7 @@ class CockpitController(QObject):
         self.logbookChanged.emit()
 
     def _load_ui_config(self):
-        try:
-            data = json.loads(self.config_file.read_text(encoding="utf-8"))
-            return data if isinstance(data, dict) else {}
-        except (OSError, ValueError, TypeError):
-            return {}
+        return load_json_file(self.config_file, {}, encoding="utf-8")
 
     def _load_trader_sync_status(self):
         data = self._read_local_json(self.trader_catalog_file, {})
@@ -690,24 +682,16 @@ class CockpitController(QObject):
             "api_key": "", "commander_name": "", "frontier_id": "",
             "consent": False, "auto_sync": False, "request_times": [],
         }
-        try:
-            loaded = json.loads(
-                self.inara_config_file.read_text(encoding="utf-8")
-            )
-            if isinstance(loaded, dict):
-                defaults.update({
-                    key: loaded.get(key, defaults[key]) for key in defaults
-                })
-        except (OSError, ValueError, TypeError):
-            pass
+        loaded = load_json_file(self.inara_config_file, {}, encoding="utf-8")
+        if isinstance(loaded, dict):
+            defaults.update({
+                key: loaded.get(key, defaults[key]) for key in defaults
+            })
         return defaults
 
     @staticmethod
     def _read_local_json(path, fallback):
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError, TypeError):
-            return deepcopy(fallback)
+        return load_json_file(path, fallback, encoding="utf-8")
 
     def _load_eddn_config(self):
         defaults = {
@@ -724,6 +708,29 @@ class CockpitController(QObject):
                 key: loaded.get(key, defaults[key]) for key in defaults
             })
         return defaults
+
+    def _load_eddn_cursor_state(self) -> None:
+        cursor = self._read_local_json(self.eddn_cursor_file, {})
+        if not isinstance(cursor, dict):
+            cursor = {}
+        self._station_fingerprints = cursor.pop("__station_files__", {})
+        self._navroute_fingerprint = str(
+            cursor.pop("__navroute_file__", "") or ""
+        )
+        self._eddn_baseline_established = bool(
+            cursor.pop("__baseline_established__", False)
+        )
+        stored_root = str(cursor.pop("__journal_root__", "") or "")
+        self._journal_offsets = cursor if stored_root == self._eddn_journal_root else {}
+        if stored_root == self._eddn_journal_root:
+            # Pre-marker cursors with the same root already represent opt-in.
+            self._eddn_baseline_established = True
+        else:
+            self._station_fingerprints = {}
+            self._navroute_fingerprint = ""
+            self._eddn_baseline_established = False
+        if not isinstance(self._station_fingerprints, dict):
+            self._station_fingerprints = {}
 
     def _save_eddn(self):
         self._eddn_queue = compact_upload_queue(self._eddn_queue)
@@ -973,13 +980,8 @@ class CockpitController(QObject):
         atomic_write(self.inara_journal_cache_file, json.dumps(self._inara_cache, indent=2))
 
     def _load_inara_receipts(self):
-        try:
-            rows = json.loads(
-                self.inara_receipts_file.read_text(encoding="utf-8")
-            )
-            return rows[:100] if isinstance(rows, list) else []
-        except (OSError, ValueError, TypeError):
-            return []
+        rows = load_json_file(self.inara_receipts_file, [], encoding="utf-8")
+        return rows[:100]
 
     def _save_inara_receipts(self):
         atomic_write(self.inara_receipts_file, json.dumps(self._inara_receipts[:100], indent=2))
@@ -2606,8 +2608,17 @@ class CockpitController(QObject):
         if not isinstance(state, dict):
             self._fail_refresh_state((revision, "Journal state was not a mapping."))
             return
+        profile_context = state.pop("_profileContext", None)
+        if (
+            isinstance(profile_context, ProfileContext)
+            and profile_context != self.profile_context
+            and not self._switch_profile_context(profile_context)
+        ):
+            self._refresh_dirty = True
+            self.refreshDebounceTimer.start()
+            return
         previous = self._state
-        self._data_dir = runtime_data_dir(self.package_root)
+        self._data_dir = runtime_data_dir(self.profile_context)
         self._logbook_entries = list(state.pop("_logbookEntries", []))
         self._logbook_revision += 1
         craft_batch = dict(state.pop("_craftBatch", {}) or {})
@@ -3658,6 +3669,8 @@ class CockpitController(QObject):
 
     @Slot(str, str, bool, bool)
     def saveInaraConfig(self, api_key, commander, consent, auto_sync):
+        if not self._sync_eddn_profile():
+            return
         api_key = str(api_key or "").strip()
         # Only overwrite the stored key when the user actually provided one.
         # An empty field means "keep the existing key" (use CLEAR KEY to remove).
@@ -3686,6 +3699,8 @@ class CockpitController(QObject):
 
     @Slot()
     def clearInaraKey(self):
+        if not self._sync_eddn_profile():
+            return
         self._inara_config["api_key"] = ""
         self._inara_config["auto_sync"] = False
         self._save_inara_config()
@@ -3714,7 +3729,7 @@ class CockpitController(QObject):
         discarded.extend(self._inara_inflight_fingerprints)
         self._inara_cache.update({
             "initialized": True,
-            "journal_root": str(journal_dir().resolve()),
+            "journal_root": self.profile_context.journal_root,
             "fingerprints": discarded[-5000:],
         })
         self._inara_pending_events = []
@@ -3726,7 +3741,9 @@ class CockpitController(QObject):
         self._save_inara_journal_cache()
 
     def _scan_inara_journal(self):
-        identity, _commander = active_profile_identity()
+        if not self._sync_eddn_profile():
+            return False
+        identity = self.profile_context.identity
         paths = journal_paths_for_profile(identity)[-5:] if identity else []
         events = []
         for path in paths:
@@ -3745,7 +3762,7 @@ class CockpitController(QObject):
                             events.append(event)
             except OSError as exc:
                 LOGGER.warning("INARA Journal read failed for %s: %s", path, exc)
-        journal_root = str(journal_dir().resolve())
+        journal_root = self.profile_context.journal_root
         if self._inara_cache.get("journal_root") != journal_root:
             self._inara_cache = {
                 key: self._inara_cache[key]
@@ -3891,6 +3908,8 @@ class CockpitController(QObject):
         self._save_inara_journal_cache()
 
     def _start_inara(self, operation, now=None, rate_reserved=False):
+        if not self._sync_eddn_profile():
+            return False
         if self._inara_busy:
             return False
         now = time.monotonic() if now is None else float(now)
@@ -3944,6 +3963,13 @@ class CockpitController(QObject):
             batch_events = [profile_event(config.get("commander_name"))]
         if not rate_reserved:
             self._reserve_inara_request(now)
+        request_context = {
+            "request_id": uuid.uuid4().hex,
+            "profile_key": self.profile_context.key,
+            "path_generation": self._profile_generation,
+            "directory": str(self.profile_context.directory.resolve()),
+        }
+        self._active_inara_request = request_context
         self._inara_busy = True
         self._inara_status = "Contacting INARA…"
         self.connectionChanged.emit()
@@ -3966,23 +3992,38 @@ class CockpitController(QObject):
                     }
                 else:
                     result_data = []
-                self.inaraFinished.emit(
-                    operation, True, json.dumps(receipt), result_data
-                )
+                self.inaraFinished.emit({
+                    "context": request_context,
+                    "operation": operation,
+                    "success": True,
+                    "message": json.dumps(receipt),
+                    "ships": result_data,
+                })
             except InaraError as exc:
-                self.inaraFinished.emit(operation, False, json.dumps({
-                    "message": str(exc),
-                    "retryable": exc.retryable,
-                    "statusCode": exc.status_code,
-                    "schemaError": exc.schema_error,
-                }), [])
+                self.inaraFinished.emit({
+                    "context": request_context,
+                    "operation": operation,
+                    "success": False,
+                    "message": json.dumps({
+                        "message": str(exc),
+                        "retryable": exc.retryable,
+                        "statusCode": exc.status_code,
+                        "schemaError": exc.schema_error,
+                    }),
+                    "ships": [],
+                })
             except Exception as exc:
                 LOGGER.exception("INARA worker failed (%s)", operation)
-                self.inaraFinished.emit(
-                    operation, False,
-                    f"Unexpected local connector error: {type(exc).__name__}: {exc}",
-                    [],
-                )
+                self.inaraFinished.emit({
+                    "context": request_context,
+                    "operation": operation,
+                    "success": False,
+                    "message": (
+                        "Unexpected local connector error: "
+                        f"{type(exc).__name__}: {exc}"
+                    ),
+                    "ships": [],
+                })
 
         self._start_network_worker(worker, f"inara-{operation}")
         return True
@@ -4009,9 +4050,36 @@ class CockpitController(QObject):
     def importInaraFleet(self):
         self._start_inara("fleet")
 
-    @Slot(str, bool, str, object)
-    def _finish_inara(self, operation, success, message, ships):
+    @Slot(object)
+    def _finish_inara(self, result):
+        if not isinstance(result, dict):
+            LOGGER.warning("Discarded malformed INARA completion")
+            return
+        request_context = result.get("context")
+        active_context = self._active_inara_request
+        current_directory = str(self.profile_context.directory.resolve())
+        valid_context = bool(
+            isinstance(request_context, dict)
+            and isinstance(active_context, dict)
+            and request_context.get("request_id")
+            == active_context.get("request_id")
+            and request_context.get("profile_key") == self.profile_context.key
+            and request_context.get("path_generation") == self._profile_generation
+            and request_context.get("directory") == current_directory
+        )
+        if not valid_context:
+            LOGGER.warning(
+                "Discarded stale INARA completion for request %s",
+                request_context.get("request_id")
+                if isinstance(request_context, dict) else "unknown",
+            )
+            return
+        self._active_inara_request = None
         self._inara_busy = False
+        operation = result.get("operation")
+        success = bool(result.get("success"))
+        message = result.get("message", "")
+        ships = result.get("ships", [])
         if operation == "journal" and not self._inara_auto_enabled():
             self._inara_inflight_fingerprints = []
             self.connectionChanged.emit()
@@ -4083,7 +4151,7 @@ class CockpitController(QObject):
             delivered.extend(self._inara_inflight_fingerprints)
             self._inara_cache.update({
                 "initialized": True,
-                "journal_root": str(journal_dir().resolve()),
+                "journal_root": self.profile_context.journal_root,
                 "fingerprints": delivered[-5000:],
             })
             if isinstance(ships, dict) and ships.get("communityGoalsQueried"):
@@ -4131,12 +4199,11 @@ class CockpitController(QObject):
             "upload_enabled": consent and bool(upload_enabled),
             "listener_enabled": consent and bool(listener_enabled),
         })
-        if self._eddn_config["upload_enabled"] and not self._journal_offsets:
-            for path in self._eddn_profile_journal_paths():
-                try:
-                    self._journal_offsets[path.name] = path.stat().st_size
-                except OSError:
-                    LOGGER.warning("EDDN could not initialize cursor for %s", path)
+        if (
+            self._eddn_config["upload_enabled"]
+            and not self._eddn_baseline_established
+        ):
+            self._baseline_eddn_journal_files()
             for filename in ("Market.json", "Outfitting.json", "Shipyard.json"):
                 path = journal_dir() / filename
                 try:
@@ -4154,21 +4221,6 @@ class CockpitController(QObject):
         )
         self._ensure_eddn_listener()
         self.connectionChanged.emit()
-
-    @staticmethod
-    def _profile_key(identity: object) -> str:
-        value = str(identity or "").strip()
-        return (
-            hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
-            if value else "unidentified"
-        )
-
-    def _detected_eddn_identity(self) -> str:
-        requested = str(os.environ.get("EDOPS_PROFILE_FID") or "").strip()
-        if requested:
-            return requested
-        identity, _commander = active_profile_identity()
-        return identity
 
     def _eddn_profile_journal_paths(self) -> list[Path]:
         identity = str(self._eddn_profile_identity or "")
@@ -4206,59 +4258,88 @@ class CockpitController(QObject):
             )
         return context
 
-    def _sync_eddn_profile(self) -> bool:
-        profile_identity = self._detected_eddn_identity()
-        profile_key = self._profile_key(profile_identity)
-        journal_root = str(journal_dir().resolve())
-        if (
-            profile_key == self._eddn_profile_key
-            and journal_root == self._eddn_journal_root
-        ):
+    def _switch_profile_context(self, context: ProfileContext) -> bool:
+        if context == self.profile_context:
             return True
         if self._eddn_busy:
             LOGGER.warning("EDDN profile switch deferred while an upload is active")
             return False
-        profile_dir = runtime_data_dir(self.package_root)
-        self._eddn_profile_key = profile_key
-        self._eddn_profile_identity = profile_identity
-        self._eddn_journal_root = journal_root
-        self.eddn_config_file = profile_dir / "eddn_config.json"
-        self.eddn_queue_file = profile_dir / "community_upload_queue.json"
-        self.eddn_cursor_file = profile_dir / "eddn_journal_cursor.json"
+        self._active_inara_request = None
+        self._inara_busy = False
+        self._profile_generation += 1
+        self._bind_profile_paths(context)
+        self._eddn_profile_key = context.key
+        self._eddn_profile_identity = context.identity
+        self._eddn_journal_root = context.journal_root
+
+        self._logbook_notes = load_logbook_notes(self.config_dir)
+        self._inara_config = self._load_inara_config()
+        self._inara_cache = self._read_local_json(
+            self.inara_journal_cache_file, {}
+        )
+        if not isinstance(self._inara_cache, dict):
+            self._inara_cache = {}
+        self._inara_receipts = self._load_inara_receipts()
+        self._inara_pending_events = []
+        self._inara_pending_fingerprints = []
+        self._inara_inflight_fingerprints = []
+        self._inara_pending_since = 0.0
+        self._inara_retry_not_before = 0.0
+        self._inara_failure_count = 0
+        self._inara_material_fingerprint = ""
+        self._inara_request_times = []
+        self._inara_last_request_at = 0.0
+        now_wall = time.time()
+        self._inara_request_wall_times = [
+            float(value) for value in self._inara_config.get("request_times", [])
+            if isinstance(value, (int, float)) and now_wall - float(value) < 60
+        ]
+
         self._eddn_config = self._load_eddn_config()
         self._eddn_queue = normalize_upload_queue(
             self._read_local_json(self.eddn_queue_file, [])
         )
-        cursor = self._read_local_json(self.eddn_cursor_file, {})
-        if not isinstance(cursor, dict):
-            cursor = {}
-        stored_root = str(cursor.pop("__journal_root__", "") or "")
-        self._station_fingerprints = cursor.pop("__station_files__", {})
-        self._navroute_fingerprint = str(
-            cursor.pop("__navroute_file__", "") or ""
+        self._load_eddn_cursor_state()
+
+        self._hge_sightings = self._read_local_json(self.hge_cache_file, [])
+        if not isinstance(self._hge_sightings, list):
+            self._hge_sightings = []
+        self._trader_sync_status = self._load_trader_sync_status()
+        self._tech_broker_sync_status = self._load_tech_broker_sync_status()
+        self._engineer_unlock_catalog = load_unlock_catalog(
+            self._data_dir, self.package_root
         )
-        self._journal_offsets = cursor if stored_root == journal_root else {}
-        if stored_root != journal_root:
-            self._station_fingerprints = {}
-            self._navroute_fingerprint = ""
-        if not isinstance(self._station_fingerprints, dict):
-            self._station_fingerprints = {}
         self._station_rejections = {}
         self._navroute_rejections = {}
+        self._eddn_profile_paths_signature = None
+        self._eddn_profile_paths_cache = []
         self._eddn_context = self._rebuild_eddn_context()
         self._save_eddn()
         LOGGER.info(
             "EDDN context switched to isolated profile %s at %s",
-            profile_key, journal_root,
+            context.key, context.journal_root,
         )
         return True
+
+    def _sync_eddn_profile(self) -> bool:
+        return self._switch_profile_context(resolve_profile_context())
 
     def _save_eddn_cursor(self):
         cursor = dict(self._journal_offsets)
         cursor["__station_files__"] = dict(self._station_fingerprints)
         cursor["__navroute_file__"] = self._navroute_fingerprint
+        cursor["__baseline_established__"] = self._eddn_baseline_established
         cursor["__journal_root__"] = self._eddn_journal_root
         atomic_write(self.eddn_cursor_file, json.dumps(cursor, indent=2))
+
+    def _baseline_eddn_journal_files(self):
+        """Start opt-in after existing Journal bytes; rotations start at zero."""
+        for path in self._eddn_profile_journal_paths():
+            try:
+                self._journal_offsets[path.name] = path.stat().st_size
+            except OSError:
+                LOGGER.warning("EDDN could not initialize cursor for %s", path)
+        self._eddn_baseline_established = True
 
     def _enqueue_eddn(self, prepared):
         try:
@@ -4307,6 +4388,11 @@ class CockpitController(QObject):
         if not self._eddn_profile_identity:
             LOGGER.warning("EDDN upload skipped: no active Commander FID")
             return
+        if not self._eddn_baseline_established:
+            self._baseline_eddn_journal_files()
+            self._save_eddn_cursor()
+            self._scan_eddn_station_files()
+            return
         journal_signature = journal_change_signature()
         monitored_names = {
             row[0] for row in journal_signature[1]
@@ -4320,25 +4406,18 @@ class CockpitController(QObject):
         for path in paths:
             try:
                 size = path.stat().st_size
-                offset = int(self._journal_offsets.get(path.name, size))
+                # Files appearing after the opt-in baseline are Journal
+                # rotations and must be consumed from their first byte.
+                offset = int(self._journal_offsets.get(path.name, 0))
                 if offset > size:
                     offset = 0
-                with path.open("r", encoding="utf-8-sig", errors="replace") as handle:
-                    handle.seek(offset)
-                    lines = handle.readlines()
-                    self._journal_offsets[path.name] = handle.tell()
-                changed = changed or bool(lines)
+                committed, events = read_journal_tail(path, offset, [])
+                self._journal_offsets[path.name] = committed
+                changed = changed or committed != offset
             except OSError:
                 LOGGER.warning("EDDN Journal read failed for %s", path)
                 continue
-            for line in lines:
-                try:
-                    event = json.loads(line)
-                except (TypeError, ValueError):
-                    LOGGER.warning("EDDN skipped malformed Journal JSON in %s", path.name)
-                    continue
-                if not isinstance(event, dict):
-                    continue
+            for event in events:
                 self._eddn_context = update_eddn_context(
                     self._eddn_context, event
                 )

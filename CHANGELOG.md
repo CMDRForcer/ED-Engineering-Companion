@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Fixed
+
+- EDDN Journal cursors now retain incomplete trailing lines for the next poll
+  and read newly rotated Journal files from their first event without replaying
+  files that existed when upload was enabled.
+- Profile identity, storage key, Commander directory and Journal root now come
+  from one resolved context, keeping controller persistence and EDDN queue jobs
+  bound to the same profile across restarts and Commander switches.
+- INARA scans, manual syncs and asynchronous completions now remain bound to
+  their originating profile context; stale completions after a Commander switch
+  are discarded before they can update another profile's cache or receipts.
+- Spansh material-trader updates now use one profile-local catalog path for
+  both persistence and state projection; a legacy global catalog is assigned
+  to at most one profile instead of leaking into multiple Commanders.
+- INARA payloads now derive `isBeingDeveloped` from the centralized build
+  channel, reporting false for release builds and true for explicit development
+  or preview artifacts.
+- EDDN `journal/1` messages now use event-specific allowlists, dropping unknown,
+  localized and private fields before queueing and rejecting unsafe legacy queue
+  messages again before retry or send.
+- Corrupt persistent JSON files are now preserved with recovery copies and
+  protected from automatic empty-state writes, while their filenames and error
+  status are surfaced through state consistency diagnostics.
+
 ## 21.198 — 2026-08-30
 
 ### Fixed

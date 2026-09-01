@@ -10,6 +10,7 @@ import threading
 import uuid
 from copy import deepcopy
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -49,7 +50,7 @@ from ed_companion.navigation.trader import is_material_tradeable
 from ed_companion.navigation.trader_type_cache import normalize_timestamp
 from ed_companion.trader_config import HEURISTIC_TRADER_WARNING
 from ed_companion.material_integrity import material_key
-from ed_companion.persistence import atomic_write
+from ed_companion.persistence import atomic_write, load_json_file, persistence_issues
 from ed_companion.build_import import (
     JOURNAL_BLUEPRINT_NAMES,
     JOURNAL_EXPERIMENTAL_NAMES,
@@ -393,7 +394,7 @@ def journal_paths_for_profile(identity: str) -> list[Path]:
     return paths
 
 
-def _read_journal_tail(
+def read_journal_tail(
     path: Path, offset: int, existing: list[dict[str, Any]],
 ) -> tuple[int, list[dict[str, Any]]]:
     """Append complete JSON lines and retain an incomplete trailing line."""
@@ -479,7 +480,7 @@ def _journal_snapshot() -> tuple[int, list[dict[str, Any]]]:
                 # Same-size rewrites cannot be appended safely.
                 offset, existing = 0, []
             try:
-                offset, events = _read_journal_tail(path, offset, existing)
+                offset, events = read_journal_tail(path, offset, existing)
             except OSError:
                 continue
             cached_files[path.name] = {
@@ -518,14 +519,41 @@ def _journal_profile_identity() -> tuple[str, str]:
         match = max((row for row in candidates if row[1] == requested), default=None)
         if match:
             return match[1], match[2]
-        return "", ""
+        # Keep an explicitly requested but currently absent FID in its own
+        # deterministic namespace. No Journal events match it, so it cannot
+        # silently fall back to another Commander's files.
+        return requested, ""
     latest = max(candidates, default=None)
     return (latest[1], latest[2]) if latest else ("", "")
 
 
-def active_profile_key() -> str:
+@dataclass(frozen=True)
+class ProfileContext:
+    identity: str
+    key: str
+    directory: Path
+    journal_root: str
+
+
+def resolve_profile_context() -> ProfileContext:
+    """Resolve identity, key and paths once for one coherent operation."""
     identity, _name = _journal_profile_identity()
-    return hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16] if identity else "unidentified"
+    key = (
+        hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
+        if identity else "unidentified"
+    )
+    directory = app_data_dir() / f"profile-{key}"
+    directory.mkdir(parents=True, exist_ok=True)
+    return ProfileContext(
+        identity=identity,
+        key=key,
+        directory=directory,
+        journal_root=str(journal_dir().resolve()),
+    )
+
+
+def active_profile_key() -> str:
+    return resolve_profile_context().key
 
 
 def active_profile_identity() -> tuple[str, str]:
@@ -533,11 +561,41 @@ def active_profile_identity() -> tuple[str, str]:
     return _journal_profile_identity()
 
 
-def runtime_data_dir(package_root: Path | None = None) -> Path:
-    """Return a profile-isolated writable directory under LOCALAPPDATA."""
-    candidate = app_data_dir() / f"profile-{active_profile_key()}"
-    candidate.mkdir(parents=True, exist_ok=True)
-    return candidate
+def runtime_data_dir(context: ProfileContext) -> Path:
+    """Return the directory of an already resolved profile context."""
+    if not isinstance(context, ProfileContext):
+        raise TypeError("runtime_data_dir requires a ProfileContext")
+    context.directory.mkdir(parents=True, exist_ok=True)
+    return context.directory
+
+
+def user_trader_catalog_path(context: ProfileContext) -> Path:
+    """Return the sole writable trader catalog path for one profile."""
+    return runtime_data_dir(context) / "material_trader_catalog_user.json"
+
+
+def load_user_trader_catalog(context: ProfileContext) -> dict[str, Any]:
+    """Load the profile catalog, claiming the legacy global copy at most once."""
+    canonical = user_trader_catalog_path(context)
+    if canonical.is_file():
+        loaded = read_json(canonical, {})
+        return loaded if isinstance(loaded, dict) else {}
+
+    legacy = app_data_dir() / "material_trader_catalog_user.json"
+    migration_marker = app_data_dir() / "material_trader_catalog_user.migrated.json"
+    owner = read_json(migration_marker, {})
+    claimed_key = str(owner.get("profile_key") or "") \
+        if isinstance(owner, dict) else ""
+    if legacy.is_file() and (not claimed_key or claimed_key == context.key):
+        loaded = read_json(legacy, {})
+        if isinstance(loaded, dict):
+            atomic_write(canonical, json.dumps(loaded, indent=2))
+            atomic_write(migration_marker, json.dumps({
+                "profile_key": context.key,
+                "source": legacy.name,
+            }, indent=2))
+            return loaded
+    return {}
 
 
 def reference_data_dir(package_root: Path) -> Path:
@@ -574,10 +632,15 @@ def set_journal_dir(path: object) -> bool:
 
 
 def read_json(path, default):
+    path = Path(path)
     try:
-        return json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, ValueError, TypeError):
-        return default
+        path.resolve().relative_to(app_data_dir().resolve())
+    except ValueError:
+        try:
+            return json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError, TypeError):
+            return default
+    return load_json_file(path, default)
 
 
 def material_metadata(data_dir: Path) -> dict[str, dict[str, Any]]:
@@ -6049,11 +6112,17 @@ def build_state(
     package_root, selected_ship="", preferred_plan_id="",
     trader_preference="confirmed",
 ):
-    data_dir = runtime_data_dir(package_root)
-    profile_identity, commander_name = _journal_profile_identity()
+    profile_context = resolve_profile_context()
+    data_dir = runtime_data_dir(profile_context)
+    profile_identity = profile_context.identity
     journal_path_valid = journal_dir().is_dir()
     metadata = material_metadata(reference_data_dir(package_root))
     profile_events = profiled_journal_events()
+    commander_name = next((
+        str(event.get("Commander") or "")
+        for event in reversed(profile_events)
+        if event.get("event") == "LoadGame" and event.get("Commander")
+    ), "")
     commander_overview = commander_journal_overview(profile_events)
     powerplay_overview = powerplay_journal_overview(profile_events)
     learn_blueprint_id_catalog(
@@ -6063,6 +6132,7 @@ def build_state(
     events = journal_events(profile_events, include_current_cargo=True)
     unlock_events = journal_unlock_events(profile_events)
     consistency_issues = []
+    consistency_issues.extend(persistence_issues(data_dir))
     consistency_issues.extend(
         str(message) for message in read_json(
             data_dir / "blueprint_diagnostics.json", []
@@ -6261,13 +6331,7 @@ def build_state(
         trader_catalog.get("stations", [])
         if isinstance(trader_catalog, dict) else []
     )
-    user_catalog = read_json(
-        Path(
-            os.environ.get("LOCALAPPDATA")
-            or (Path.home() / "AppData" / "Local")
-        ) / "EDEngineeringCompanion" / "material_trader_catalog_user.json",
-        {},
-    )
+    user_catalog = load_user_trader_catalog(profile_context)
     stations = merge_trader_catalog(
         base_stations,
         user_catalog.get("stations", [])
@@ -6597,12 +6661,17 @@ def build_state(
     classified_craft_issues = classify_craft_tracking_issues(
         selected_craft_issues, blueprint_state
     )
+    consistency_issues.extend(
+        issue for issue in persistence_issues(data_dir)
+        if issue not in consistency_issues
+    )
 
     return {
+        "_profileContext": profile_context,
         "_craftBatch": craft_batch,
         "ship": ship or "No ship selected",
         "commander": commander_name,
-        "commanderKnown": bool(profile_identity),
+        "commanderKnown": bool(commander_name),
         "commanderOverview": commander_overview,
         "powerplayOverview": powerplay_overview,
         "fleetKnown": bool(ships),
@@ -6611,7 +6680,7 @@ def build_state(
             "No Journal directory found. Configure the path or start Elite Dangerous."
             if not journal_path_valid else
             "No Commander detected yet. Waiting for a LoadGame event."
-            if not profile_identity else
+            if not commander_name else
             "Commander detected. Waiting for a ShipID-bearing fleet event."
             if not ships else ""
         ),
@@ -6672,7 +6741,7 @@ def build_state(
         "materials": material_rows,
         "nextAction": (
             "Waiting for Commander Journal data"
-            if not profile_identity or not ships else
+            if not commander_name or not ships else
             f"Track Tech Broker unlock · {tracked_row.get('name')}"
             if tracked_row else
             f"Complete {len(cards)} material trade{'s' if len(cards) != 1 else ''}"
