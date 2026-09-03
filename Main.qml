@@ -4985,6 +4985,33 @@ ApplicationWindow {
                     text: window.t("state.evidence_help", "Local Journal evidence updates matching finds: LOCAL LIVE and LOCAL ENTERED are direct evidence. EDDN LIVE has verified remaining lifetime; RECENT REPORT and BGS CANDIDATE are weaker.")
                     color: muted; font.pixelSize: 10; wrapMode: Text.WordWrap
                 }
+                Label {
+                    Layout.fillWidth: true
+                    text: window.tf(
+                              "state.cache_summary",
+                              "LOCAL CACHE · %1 TOTAL · %2 BGS · %3 SIGNALS · OLDEST %4 · NEWEST %5 · MAX %6 H",
+                              [cockpit.stateFindCacheSummary.total,
+                               cockpit.stateFindCacheSummary.bgs,
+                               cockpit.stateFindCacheSummary.signals,
+                               cockpit.stateFindCacheSummary.oldestAt,
+                               cockpit.stateFindCacheSummary.newestAt,
+                               cockpit.stateFindCacheSummary.retentionHours])
+                    color: cyan; font.pixelSize: 10; font.bold: true
+                    elide: Text.ElideRight
+                }
+                Label {
+                    Layout.fillWidth: true
+                    visible: Boolean(cockpit.stateFindRefreshSummary.refreshedAt)
+                    text: window.tf(
+                              "state.refresh_result",
+                              "REFRESHED %1 · %2 BGS SNAPSHOTS APPLIED · %3 SIGNALS MERGED · %4 EXPIRED REMOVED",
+                              [cockpit.stateFindRefreshSummary.refreshedAt,
+                               cockpit.stateFindRefreshSummary.bgsApplied,
+                               cockpit.stateFindRefreshSummary.signalsMerged,
+                               cockpit.stateFindRefreshSummary.expiredRemoved])
+                    color: green; font.pixelSize: 10
+                    elide: Text.ElideRight
+                }
                 ListView {
                     id: hgeFinderList
                     Layout.fillWidth: true
@@ -5018,7 +5045,7 @@ ApplicationWindow {
                     delegate: Rectangle {
                         required property var modelData
                         width: hgeFinderList.width
-                        height: 118
+                        height: Math.max(118, stateFindCardContent.implicitHeight + 28)
                         radius: 12
                         color: panelRaised
                         border.width: 1
@@ -5027,7 +5054,10 @@ ApplicationWindow {
                                          || modelData.evidenceKind === "ENTERED")
                                         ? success : warning
                         RowLayout {
-                            anchors.fill: parent
+                            id: stateFindCardContent
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
                             anchors.margins: 14
                             spacing: 16
                             ColumnLayout {
@@ -5098,7 +5128,7 @@ ApplicationWindow {
                                            : window.t("status.distance_unknown", "Distance unknown"))
                                           + window.tf("state.reports_state", " · %1 reports · STATE: %2", [modelData.reportCount, modelData.state])
                                     color: cyan; font.pixelSize: 11
-                                    elide: Text.ElideRight; Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap; Layout.fillWidth: true
                                 }
                                 Label {
                                     visible: modelData.variantCount <= 1
@@ -5108,7 +5138,7 @@ ApplicationWindow {
                                              ? window.tf("state.intensity", " · INTENSITY: %1", [modelData.intensity]) : "")
                                     color: orange
                                     font.pixelSize: 10; font.bold: true
-                                    elide: Text.ElideRight; Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap; Layout.fillWidth: true
                                 }
                                 Label {
                                     visible: modelData.variantCount <= 1
@@ -5116,7 +5146,7 @@ ApplicationWindow {
                                           ? window.tf("state.hge_materials", "HGE MATERIALS: %1", [modelData.materials || window.t("state.no_prediction", "No reliable material prediction")])
                                           : window.tf("state.evidence", "EVIDENCE: %1", [hgeFinderPage.evidenceLabel(modelData.evidenceKind)])
                                     color: muted; font.pixelSize: 9
-                                    elide: Text.ElideRight; Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap; Layout.fillWidth: true
                                 }
                                 Label {
                                     visible: modelData.variantCount > 1
@@ -5135,7 +5165,7 @@ ApplicationWindow {
                                               + (modelData.materials
                                                  ? " → " + modelData.materials : "")
                                         color: orange; font.pixelSize: 10
-                                        elide: Text.ElideRight; Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap; Layout.fillWidth: true
                                     }
                                 }
                             }

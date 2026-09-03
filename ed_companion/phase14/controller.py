@@ -532,6 +532,13 @@ class CockpitController(QObject):
         self._eddn_thread = None
         self._pending_bgs_snapshots = []
         self._pending_hge_observations = []
+        self._last_hge_batch_stats = {
+            "bgsApplied": 0, "signalsMerged": 0, "expiredRemoved": 0,
+        }
+        self._last_state_find_refresh_stats = {
+            "refreshedAt": "", "bgsApplied": 0,
+            "signalsMerged": 0, "expiredRemoved": 0,
+        }
         self.eddnFinished.connect(self._finish_eddn)
         self.eddnRelay.connect(self._accept_eddn_relay)
         self.traderSyncFinished.connect(self._finish_trader_catalog_sync)
@@ -2002,6 +2009,41 @@ class CockpitController(QObject):
                 values.update(str(value) for value in source if value)
         return [all_label] + sorted(values, key=str.casefold)
 
+    def _state_find_cache_summary(self):
+        rows = [row for row in self._hge_sightings if isinstance(row, dict)]
+        bgs_count = sum(
+            row.get("evidence_kind") == "BGS_PREDICTION" for row in rows
+        )
+        signal_count = sum(
+            row.get("evidence_kind") in {
+                "EDDN_SIGNAL", "LOCAL_JOURNAL", "ENTERED",
+            }
+            for row in rows
+        )
+        timestamps = []
+        for row in rows:
+            value = row.get("signal_timestamp") or row.get("received_at")
+            timestamp = self._state_find_timestamp(value)
+            if timestamp >= 0:
+                timestamps.append(timestamp)
+
+        def display(value):
+            if value is None:
+                return "NONE"
+            return datetime.fromtimestamp(value, timezone.utc).strftime(
+                "%Y-%m-%d %H:%M UTC"
+            )
+
+        return {
+            "total": len(rows),
+            "bgs": bgs_count,
+            "signals": signal_count,
+            "other": max(0, len(rows) - bgs_count - signal_count),
+            "oldestAt": display(min(timestamps) if timestamps else None),
+            "newestAt": display(max(timestamps) if timestamps else None),
+            "retentionHours": 24,
+        }
+
     def _filtered_state_finds(self, find_type, state_filter, allegiance_filter,
                               nearby_ly, material_filter,
                               evidence_filter="ALL EVIDENCE"):
@@ -2544,6 +2586,14 @@ class CockpitController(QObject):
     )
     stateFindRefreshStatus = Property(
         str, lambda self: self._state_find_refresh_status,
+        notify=hgeChanged,
+    )
+    stateFindCacheSummary = Property(
+        "QVariantMap", lambda self: self._state_find_cache_summary(),
+        notify=hgeChanged,
+    )
+    stateFindRefreshSummary = Property(
+        "QVariantMap", lambda self: dict(self._last_state_find_refresh_stats),
         notify=hgeChanged,
     )
     eddnBusy = Property(
@@ -5261,6 +5311,7 @@ class CockpitController(QObject):
     def refreshStateFinds(self):
         """Refresh every local/live State Finds source without inventing history."""
         self.flushHgeObservationBatch()
+        batch = dict(self._last_hge_batch_stats)
         compacted, removed = compact_hge_observations(self._hge_sightings)
         if removed:
             self._hge_sightings = compacted[-HGE_OBSERVATION_LIMIT:]
@@ -5269,9 +5320,19 @@ class CockpitController(QObject):
         self._scan_eddn_journal()
         self.refresh()
         listener = self._eddn_listener_status
+        self._last_state_find_refresh_stats = {
+            "refreshedAt": time.strftime("%H:%M"),
+            "bgsApplied": int(batch.get("bgsApplied", 0) or 0),
+            "signalsMerged": int(batch.get("signalsMerged", 0) or 0),
+            "expiredRemoved": int(
+                batch.get("expiredRemoved", 0) or 0
+            ) + int(removed or 0),
+        }
         self._state_find_refresh_status = (
-            f"REFRESHED {time.strftime('%H:%M')} · {listener}"
-            + (f" · {removed} EXPIRED REMOVED" if removed else "")
+            f"REFRESHED {self._last_state_find_refresh_stats['refreshedAt']} · {listener}"
+            f" · {batch.get('bgsApplied', 0)} BGS SNAPSHOTS APPLIED"
+            f" · {batch.get('signalsMerged', 0)} SIGNALS MERGED"
+            f" · {batch.get('expiredRemoved', 0) + removed} EXPIRED REMOVED"
         )
         self.hgeChanged.emit()
 
@@ -5295,6 +5356,11 @@ class CockpitController(QObject):
             updated, hge_rows, HGE_OBSERVATION_LIMIT
         )
         updated, removed = compact_hge_observations(updated)
+        self._last_hge_batch_stats = {
+            "bgsApplied": int(applied or 0),
+            "signalsMerged": len(hge_rows) if hge_changed else 0,
+            "expiredRemoved": int(removed or 0),
+        }
         changed = bool(applied or hge_changed or removed)
         if changed:
             self._hge_sightings = updated[-HGE_OBSERVATION_LIMIT:]

@@ -170,6 +170,8 @@
   "state.evidence_help": "Lokale Journal-Daten aktualisieren passende Funde: LOKAL LIVE und LOKAL BETRETEN sind direkte Nachweise. EDDN LIVE besitzt eine bestätigte Restlaufzeit; AKTUELLER BERICHT und BGS-KANDIDAT sind schwächer.",
   "state.prediction_variants": "%1 PROGNOSEN FÜR DIESES SYSTEM",
   "state.bgs_updated_ago": "BGS VOR %1 MIN AKTUALISIERT",
+  "state.cache_summary": "LOKALER CACHE · %1 GESAMT · %2 BGS · %3 SIGNALE · ÄLTESTE %4 · NEUESTE %5 · MAX. %6 H",
+  "state.refresh_result": "AKTUALISIERT %1 · %2 BGS-SNAPSHOTS ÜBERNOMMEN · %3 SIGNALE ZUSAMMENGEFÜHRT · %4 ABGELAUFENE ENTFERNT",
   "status.value.possible": "MÖGLICH",
   "state.filter_material": "MATERIAL FILTERN",
   "state.load_more": "250 WEITERE FUNDE LADEN",
