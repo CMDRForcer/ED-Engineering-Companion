@@ -471,6 +471,34 @@ def _canonical_import_slot(value, physical_slots, source=""):
     }
     if _key(raw) in exact:
         return exact[_key(raw)], ""
+    legacy_optional = re.fullmatch(
+        r"Slot(\d+)_Size(\d+)", raw, re.IGNORECASE
+    )
+    if legacy_optional:
+        optional = [
+            row for row in slots
+            if row.get("group") == "OPTIONAL INTERNALS"
+        ]
+        position = int(legacy_optional.group(1))
+        declared_size = int(legacy_optional.group(2))
+        if 1 <= position <= len(optional):
+            candidate = optional[position - 1]
+            if int(candidate.get("slotSize") or 0) == declared_size:
+                return str(candidate.get("slot") or ""), ""
+    legacy_hardpoint = re.fullmatch(
+        r"(Small|Medium|Large|Huge)Hardpoint(\d+)", raw, re.IGNORECASE
+    )
+    if legacy_hardpoint:
+        sizes = {"small": 1, "medium": 2, "large": 3, "huge": 4}
+        wanted_size = sizes[legacy_hardpoint.group(1).casefold()]
+        position = int(legacy_hardpoint.group(2))
+        candidates = [
+            row for row in slots
+            if row.get("group") == "HARDPOINTS"
+            and int(row.get("slotSize") or 0) == wanted_size
+        ]
+        if 1 <= position <= len(candidates):
+            return str(candidates[position - 1].get("slot") or ""), ""
     if str(source or "").casefold() != "coriolis json":
         return "", f"Slot '{raw or '?'}' is not present on the selected hull."
 

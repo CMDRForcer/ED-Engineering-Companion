@@ -28,6 +28,8 @@ from ed_companion.journal import (
     material_event_changes,
     rebuild_fleet,
     trader_type_evidence_from_event,
+    project_vehicle_state,
+    project_latest_srv_mining_session,
 )
 from ed_companion.engineering import engineer_unlock_signals, load_unlock_catalog
 from ed_companion.navigation import (
@@ -169,23 +171,37 @@ def real_engineers(record):
     ]
 
 
+def blueprint_module_family(event: dict[str, Any]) -> str:
+    """Resolve the engineering family proven by an EngineerCraft module ID."""
+    symbol = normalize(event.get("Module") or "")
+    if not symbol:
+        return ""
+    for family, prefixes in ENGINEERING_MODULE_ID_PREFIXES.items():
+        if any(symbol.startswith(normalize(prefix)) for prefix in prefixes):
+            return family
+    # Preserve an unknown Frontier symbol as its own conservative scope.  Do
+    # not merge it with another family by guessing at suffix structure.
+    return symbol
+
+
 def load_blueprint_id_catalog(
     path: Path = BLUEPRINT_ID_CATALOG_PATH,
     learned_path: Path | None = None,
-) -> dict[tuple[str, int], dict[str, Any]]:
+) -> dict[tuple[str, int, str], dict[str, Any]]:
     """Load immutable bundled IDs plus one profile-isolated learned overlay."""
-    catalog: dict[tuple[str, int], dict[str, Any]] = {}
+    catalog: dict[tuple[str, int, str], dict[str, Any]] = {}
     for source_path in (path, learned_path):
         if source_path is None:
             continue
         records = read_json(source_path, [])
-        seen: set[tuple[str, int]] = set()
+        seen: set[tuple[str, int, str]] = set()
         for record in records if isinstance(records, list) else []:
             if not isinstance(record, dict):
                 continue
             key = (
                 str(record.get("blueprint_name") or ""),
                 int(record.get("level", 0) or 0),
+                str(record.get("module_family") or ""),
             )
             if (
                 not key[0] or key[1] <= 0
@@ -218,8 +234,8 @@ def learn_blueprint_id_catalog(
     existing_records = read_json(learned_path, [])
     existing_records = existing_records if isinstance(existing_records, list) else []
     existing = load_blueprint_id_catalog(learned_path) if learned_path.exists() else {}
-    evidence: dict[tuple[str, int], set[str]] = defaultdict(set)
-    raw_ids: dict[tuple[str, int, str], Any] = {}
+    evidence: dict[tuple[str, int, str], set[str]] = defaultdict(set)
+    raw_ids: dict[tuple[str, int, str, str], Any] = {}
     for event in events or []:
         if not isinstance(event, dict) or not is_completed_engineer_craft(event):
             continue
@@ -228,10 +244,13 @@ def learn_blueprint_id_catalog(
         blueprint_id = event.get("BlueprintID")
         if not name or level <= 0 or blueprint_id in (None, ""):
             continue
-        key = (name, level)
+        family = blueprint_module_family(event)
+        if not family:
+            continue
+        key = (name, level, family)
         identity = str(blueprint_id)
         evidence[key].add(identity)
-        raw_ids[(name, level, identity)] = blueprint_id
+        raw_ids[(name, level, family, identity)] = blueprint_id
 
     learned = conflicts = ambiguous = 0
     additions = []
@@ -256,7 +275,8 @@ def learn_blueprint_id_catalog(
             continue
         additions.append({
             "blueprint_name": key[0], "level": key[1],
-            "blueprint_id": raw_ids[(key[0], key[1], identity)],
+            "module_family": key[2],
+            "blueprint_id": raw_ids[(key[0], key[1], key[2], identity)],
             "source": "journal_confirmed",
         })
         learned += 1
@@ -265,6 +285,7 @@ def learn_blueprint_id_catalog(
         merged.sort(key=lambda row: (
             str(row.get("blueprint_name") or "").casefold(),
             int(row.get("level", 0) or 0),
+            str(row.get("module_family") or ""),
         ))
         _write_json_if_changed(learned_path, merged)
     return {"learned": learned, "conflicts": conflicts, "ambiguous": ambiguous}
@@ -272,13 +293,17 @@ def learn_blueprint_id_catalog(
 
 def blueprint_id_evidence(
     event: dict[str, Any],
-    catalog: dict[tuple[str, int], dict[str, Any]] | None = None,
+    catalog: dict[tuple[str, int, str], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Classify Journal BlueprintID evidence without mutating the catalog."""
     name = str(event.get("BlueprintName") or "")
     level = int(event.get("Level", 0) or 0)
     journal_id = event.get("BlueprintID")
-    entry = (catalog or load_blueprint_id_catalog()).get((name, level))
+    family = blueprint_module_family(event)
+    entries = catalog or load_blueprint_id_catalog()
+    entry = entries.get((name, level, family))
+    if entry is None:
+        entry = entries.get((name, level, ""))
     if entry is None:
         LOGGER.info(
             "Unknown BlueprintID learned from Journal: %s / G%s / %s",
@@ -322,7 +347,29 @@ def canonical_module_id(value: object) -> str:
     symbol = str(value or "").strip().strip("$;")
     if symbol.casefold().endswith("_name"):
         symbol = symbol[:-5]
-    return symbol.casefold()
+    symbol = symbol.casefold()
+    aliases = {
+        # Early Type-11 build exports used a descriptive Mk II token; the
+        # shipped Journal identifies the same controller as miningv2.
+        "int_multidronecontrol_mining_mkii_size5_class5":
+            "int_multidronecontrol_miningv2_size5_class5",
+        # Early build data used the display-oriented volley-repeater token;
+        # Frontier's shipped Journal identifies it as miningtoolv2.
+        "hpt_miningvolleyrepeater_fixed_large":
+            "hpt_miningtoolv2_fixed_large",
+        "hpt_heatsinklauncher_tiny":
+            "hpt_heatsinklauncher_turret_tiny",
+        "hpt_cloudscanner_size0_class5":
+            "hpt_mrascanner_size0_class5",
+    }
+    # Hull prefixes vary between Journal symbols and external build aliases.
+    # Inside the already ship-bound Armour slot, the observed grade is the
+    # stable module identity across every hull; do not generalize unknown
+    # armour suffixes.
+    armour = re.fullmatch(r".+_armour_(grade[1-5])", symbol)
+    if armour:
+        symbol = f"ship_armour_{armour.group(1)}"
+    return aliases.get(symbol, symbol)
 
 
 def app_data_dir() -> Path:
@@ -394,11 +441,11 @@ def journal_paths_for_profile(identity: str) -> list[Path]:
     return paths
 
 
-def read_journal_tail(
-    path: Path, offset: int, existing: list[dict[str, Any]],
-) -> tuple[int, list[dict[str, Any]]]:
-    """Append complete JSON lines and retain an incomplete trailing line."""
-    events = list(existing)
+def read_journal_tail_records(
+    path: Path, offset: int,
+) -> tuple[int, list[tuple[int, int, dict[str, Any] | None]]]:
+    """Read complete lines with offsets, retaining an incomplete trailing line."""
+    records = []
     with path.open("r", encoding="utf-8-sig", errors="replace") as handle:
         handle.seek(max(0, offset))
         committed = handle.tell()
@@ -414,9 +461,18 @@ def read_journal_tail(
             try:
                 event = json.loads(line)
             except (TypeError, ValueError):
-                continue
-            if isinstance(event, dict):
-                events.append(event)
+                event = None
+            records.append((line_start, committed, event if isinstance(event, dict) else None))
+    return committed, records
+
+
+def read_journal_tail(
+    path: Path, offset: int, existing: list[dict[str, Any]],
+) -> tuple[int, list[dict[str, Any]]]:
+    """Append complete JSON lines and retain an incomplete trailing line."""
+    committed, records = read_journal_tail_records(path, offset)
+    events = list(existing)
+    events.extend(event for _start, _end, event in records if event is not None)
     return committed, events
 
 
@@ -1760,6 +1816,73 @@ def engineering_loadout_rows(
     return result
 
 
+def module_purchase_identity(module_id: object) -> tuple[str, str]:
+    """Return a purchase label and only a rating proven by the module ID."""
+    symbol = canonical_module_id(module_id)
+    normalized = normalize(symbol)
+    identity = re.search(r"_size(\d+)_class(\d+)", symbol.casefold())
+    rating_letters = {1: "E", 2: "D", 3: "C", 4: "B", 5: "A"}
+    size_rating = ""
+    if identity and int(identity.group(2)) in rating_letters:
+        size_rating = (
+            f"{identity.group(1)}"
+            f"{rating_letters[int(identity.group(2))]}"
+        )
+    labels = (
+        ("miningvolleyrepeater", "MINING VOLLEY REPEATER"),
+        ("miningtoolv2", "MINING VOLLEY REPEATER"),
+        ("miningsubsurfdispmisle", "SUB-SURFACE DISPLACEMENT MISSILE"),
+        ("miningseismchrgwarhd", "SEISMIC CHARGE LAUNCHER"),
+        ("multidronecontrolminingmkii", "MK II MINING MULTI-LIMPET CONTROLLER"),
+        ("multidronecontrolminingv2", "MK II MINING MULTI-LIMPET CONTROLLER"),
+        ("buggybaymkii", "MK II PLANETARY VEHICLE HANGAR"),
+        ("hyperdriveovercharge", "FRAME SHIFT DRIVE (SCO)"),
+        ("cloudscanner", "PULSE WAVE ANALYSER"),
+        ("mrascanner", "PULSE WAVE ANALYSER"),
+        ("mininglaser", "MINING LASER"),
+        ("intpowerplant", "POWER PLANT"),
+        ("intengine", "THRUSTERS"),
+        ("inthyperdrive", "FRAME SHIFT DRIVE"),
+        ("intlifesupport", "LIFE SUPPORT"),
+        ("intpowerdistributor", "POWER DISTRIBUTOR"),
+        ("intsensors", "SENSORS"),
+        ("intfueltank", "FUEL TANK"),
+        ("intcargorack", "CARGO RACK"),
+        ("inthullreinforcement", "HULL REINFORCEMENT PACKAGE"),
+        ("intmodulereinforcement", "MODULE REINFORCEMENT PACKAGE"),
+        ("intshieldgenerator", "SHIELD GENERATOR"),
+        ("intfuelscoop", "FUEL SCOOP"),
+        ("intfighterbay", "FIGHTER HANGAR"),
+        ("intbuggybay", "PLANETARY VEHICLE HANGAR"),
+        ("planetaryapproachsuite", "PLANETARY APPROACH SUITE"),
+        ("dronecontrol", "LIMPET CONTROLLER"),
+        ("multicannon", "MULTI-CANNON"),
+        ("pulselaser", "PULSE LASER"),
+        ("beamlaser", "BEAM LASER"),
+        ("shieldbooster", "SHIELD BOOSTER"),
+        ("heatsink", "HEAT SINK LAUNCHER"),
+        ("armour", "ARMOUR"),
+    )
+    name = (
+        "BI-WEAVE SHIELD GENERATOR"
+        if normalized.startswith("intshieldgenerator")
+        and normalized.endswith("fast") else
+        next((label for marker, label in labels if marker in normalized), "")
+    )
+    mount = next((
+        label for marker, label in (
+            ("turret", "TURRETED"),
+            ("gimbal", "GIMBALLED"),
+            ("fixed", "FIXED"),
+        ) if marker in normalized
+    ), "")
+    if not name:
+        name = re.sub(r"[_-]+", " ", symbol).upper()
+    if mount:
+        name = f"{name} · {mount}"
+    return name, size_rating
+
+
 def ship_slot_layout(
     ship_data: object, module_slots: object, catalog_rows: object,
     desired_modules: object = None,
@@ -1775,10 +1898,51 @@ def ship_slot_layout(
         str(row.get("slot") or ""): row
         for row in engineering_loadout_rows(module_slots, catalog_rows)
     }
-    desired_by_slot = (
+    desired_by_slot = dict(
         desired_modules if isinstance(desired_modules, dict) else {}
     )
-    rating_letters = {1: "E", 2: "D", 3: "C", 4: "B", 5: "A"}
+    desired_source_by_slot = {
+        str(slot): str(slot) for slot in desired_by_slot
+    }
+    size_names = {1: "SMALL", 2: "MEDIUM", 3: "LARGE", 4: "HUGE"}
+    # Older projections numbered every optional row, even where Frontier uses
+    # a stable reserved-slot name. Translate those positional keys without
+    # merging or guessing across positions.
+    for index, spec in enumerate(ship.get("optional", []) or [], 1):
+        if not isinstance(spec, dict):
+            continue
+        size = int(spec.get("size") or 0)
+        legacy_slot = f"Slot{index:02d}_Size{size}"
+        physical_slot = str(spec.get("name") or legacy_slot)
+        if (
+            physical_slot != legacy_slot
+            and legacy_slot in desired_by_slot
+            and physical_slot not in desired_by_slot
+        ):
+            desired_by_slot[physical_slot] = desired_by_slot.pop(legacy_slot)
+            desired_source_by_slot[physical_slot] = (
+                desired_source_by_slot.pop(legacy_slot, legacy_slot)
+            )
+    hardpoint_counts: dict[int, int] = {}
+    for spec in ship.get("hardpoints", []) or []:
+        if not isinstance(spec, dict):
+            continue
+        size = int(spec.get("size") or 0)
+        hardpoint_counts[size] = hardpoint_counts.get(size, 0) + 1
+        legacy_slot = (
+            f"{size_names.get(size, 'UNKNOWN').title()}Hardpoint"
+            f"{hardpoint_counts[size]}"
+        )
+        physical_slot = str(spec.get("name") or legacy_slot)
+        if (
+            physical_slot != legacy_slot
+            and legacy_slot in desired_by_slot
+            and physical_slot not in desired_by_slot
+        ):
+            desired_by_slot[physical_slot] = desired_by_slot.pop(legacy_slot)
+            desired_source_by_slot[physical_slot] = (
+                desired_source_by_slot.pop(legacy_slot, legacy_slot)
+            )
     core_specs = (
         ("Armour", "ARMOUR", 0),
         ("PowerPlant", "POWER PLANT", ship.get("core", {}).get("powerPlant")),
@@ -1789,49 +1953,6 @@ def ship_slot_layout(
         ("Radar", "SENSORS", ship.get("core", {}).get("sensors")),
         ("FuelTank", "FUEL TANK", ship.get("core", {}).get("fuelTank")),
     )
-    size_names = {1: "SMALL", 2: "MEDIUM", 3: "LARGE", 4: "HUGE"}
-
-    def module_identity(module_id: str) -> tuple[str, str]:
-        symbol = canonical_module_id(module_id)
-        normalized = normalize(symbol)
-        identity = re.search(r"_size(\d+)_class(\d+)", symbol.casefold())
-        size_rating = ""
-        if identity:
-            size_rating = f"{identity.group(1)}{rating_letters.get(int(identity.group(2)), '')}"
-        labels = (
-            ("intpowerplant", "POWER PLANT"),
-            ("intengine", "THRUSTERS"),
-            ("inthyperdrive", "FRAME SHIFT DRIVE"),
-            ("intlifesupport", "LIFE SUPPORT"),
-            ("intpowerdistributor", "POWER DISTRIBUTOR"),
-            ("intsensors", "SENSORS"),
-            ("intfueltank", "FUEL TANK"),
-            ("intcargorack", "CARGO RACK"),
-            ("inthullreinforcement", "HULL REINFORCEMENT PACKAGE"),
-            ("intmodulereinforcement", "MODULE REINFORCEMENT PACKAGE"),
-            ("intshieldgenerator", "SHIELD GENERATOR"),
-            ("intfuelscoop", "FUEL SCOOP"),
-            ("intfighterbay", "FIGHTER HANGAR"),
-            ("intbuggybay", "PLANETARY VEHICLE HANGAR"),
-            ("planetaryapproachsuite", "PLANETARY APPROACH SUITE"),
-            ("dronecontrol", "LIMPET CONTROLLER"),
-            ("multicannon", "MULTI-CANNON"),
-            ("pulselaser", "PULSE LASER"),
-            ("beamlaser", "BEAM LASER"),
-            ("shieldbooster", "SHIELD BOOSTER"),
-            ("heatsink", "HEAT SINK LAUNCHER"),
-            ("armour", "ARMOUR"),
-        )
-        name = (
-            "BI-WEAVE SHIELD GENERATOR"
-            if normalized.startswith("intshieldgenerator")
-            and normalized.endswith("fast") else
-            next((label for marker, label in labels if marker in normalized), "")
-        )
-        if not name:
-            name = re.sub(r"[_-]+", " ", symbol).upper()
-        return name, size_rating
-
     rows: list[dict[str, Any]] = []
 
     def append_slot(
@@ -1840,11 +1961,13 @@ def ship_slot_layout(
     ) -> None:
         installed = installed_rows.get(slot, {})
         module_id = str(installed.get("moduleId") or "")
-        module_name, size_rating = module_identity(module_id) if module_id else ("", "")
+        module_name, size_rating = (
+            module_purchase_identity(module_id) if module_id else ("", "")
+        )
         engineering = engineerable.get(slot, {})
         desired_module_id = str(desired_by_slot.get(slot) or "")
         desired_name, desired_size_rating = (
-            module_identity(desired_module_id)
+            module_purchase_identity(desired_module_id)
             if desired_module_id else ("", "")
         )
         module_change = bool(
@@ -1881,6 +2004,9 @@ def ship_slot_layout(
             "bindingKey": f"{slot}\u241f{module_id}" if module_id else slot,
             "moduleChange": module_change,
             "desiredModuleId": desired_module_id,
+            "desiredSourceSlot": str(
+                desired_source_by_slot.get(slot) or slot
+            ) if desired_module_id else "",
             "desiredModule": desired_name,
             "desiredSizeRating": desired_size_rating,
             "planPending": False,
@@ -1895,19 +2021,24 @@ def ship_slot_layout(
         if not isinstance(spec, dict):
             continue
         size = int(spec.get("size") or 0)
+        slot = str(spec.get("name") or f"Slot{index:02d}_Size{size}")
         append_slot(
-            "OPTIONAL INTERNALS", f"Slot{index:02d}_Size{size}", size,
+            "OPTIONAL INTERNALS", slot, size,
             restriction=str(spec.get("restriction") or ""),
         )
-    hardpoint_counts: dict[int, int] = {}
+    hardpoint_counts = {}
     for spec in ship.get("hardpoints", []) or []:
         if not isinstance(spec, dict):
             continue
         size = int(spec.get("size") or 0)
         hardpoint_counts[size] = hardpoint_counts.get(size, 0) + 1
+        fallback_slot = (
+            f"{size_names.get(size, 'UNKNOWN').title()}Hardpoint"
+            f"{hardpoint_counts[size]}"
+        )
         append_slot(
             "HARDPOINTS",
-            f"{size_names.get(size, 'UNKNOWN').title()}Hardpoint{hardpoint_counts[size]}",
+            str(spec.get("name") or fallback_slot),
             size,
         )
     for index in range(1, int(ship.get("utility") or 0) + 1):
@@ -6125,9 +6256,26 @@ def build_state(
     ), "")
     commander_overview = commander_journal_overview(profile_events)
     powerplay_overview = powerplay_journal_overview(profile_events)
-    learn_blueprint_id_catalog(
+    vehicle_state = project_vehicle_state(profile_events)
+    vehicle_state["latestMiningSession"] = project_latest_srv_mining_session(
+        profile_events
+    )
+    blueprint_learning = learn_blueprint_id_catalog(
         profile_events, data_dir / "blueprint_id_catalog_learned.json"
     )
+    if (
+        not blueprint_learning["conflicts"]
+        and not blueprint_learning["ambiguous"]
+        and (data_dir / "blueprint_diagnostics.json").exists()
+    ):
+        diagnostic_path = data_dir / "blueprint_diagnostics.json"
+        diagnostics = read_json(diagnostic_path, [])
+        if isinstance(diagnostics, list):
+            diagnostics = [
+                message for message in diagnostics
+                if "(journal_override_conflict)" not in str(message)
+            ]
+            _write_json_if_changed(diagnostic_path, diagnostics)
     sessions = session_statistics(data_dir)
     events = journal_events(profile_events, include_current_cargo=True)
     unlock_events = journal_unlock_events(profile_events)
@@ -6674,6 +6822,7 @@ def build_state(
         "commanderKnown": bool(commander_name),
         "commanderOverview": commander_overview,
         "powerplayOverview": powerplay_overview,
+        "vehicleState": vehicle_state,
         "fleetKnown": bool(ships),
         "journalPathValid": journal_path_valid,
         "emptyStateReason": (

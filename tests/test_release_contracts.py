@@ -25,12 +25,15 @@ from ed_companion.phase14.state import (
     assign_plans_to_nearest_engineers,
     annotate_installed_target_conflicts,
     blueprint_rows,
+    blueprint_id_evidence,
     apply_engineer_craft,
     build_engineering_plan,
     build_experimental_plan,
     engineering_run_preflight,
     engineering_loadout_rows,
     latest_loadout_slots,
+    learn_blueprint_id_catalog,
+    load_blueprint_id_catalog,
     migrate_wishlist_bindings,
     module_matches_type,
     partition_engineer_assignments,
@@ -47,6 +50,72 @@ from ed_companion.services import latest_delivery_proof
 
 
 class ReleaseContractTests(unittest.TestCase):
+    def test_blueprint_ids_are_scoped_by_module_family(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "blueprint_id_catalog_learned.json"
+            plasma = {
+                "event": "EngineerCraft", "BlueprintName": "Weapon_Overcharged",
+                "BlueprintID": 128673540, "Level": 1, "Quality": 1.0,
+                "Module": "hpt_plasmaaccelerator_fixed_huge",
+                "Ingredients": [{"Name": "nickel", "Count": 1}],
+            }
+            pulse = {
+                "event": "EngineerCraft", "BlueprintName": "Weapon_Overcharged",
+                "BlueprintID": 128673580, "Level": 1, "Quality": 1.0,
+                "Module": "hpt_pulselaser_gimbal_large",
+                "Ingredients": [{"Name": "nickel", "Count": 1}],
+            }
+
+            result = learn_blueprint_id_catalog([plasma, pulse], path)
+            catalog = load_blueprint_id_catalog(learned_path=path)
+
+        self.assertEqual(result["learned"], 2)
+        self.assertEqual(result["conflicts"], 0)
+        self.assertEqual(blueprint_id_evidence(plasma, catalog)["status"], "confirmed")
+        self.assertEqual(blueprint_id_evidence(pulse, catalog)["status"], "confirmed")
+
+    def test_legacy_blueprint_id_record_is_preserved_during_family_migration(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "blueprint_id_catalog_learned.json"
+            path.write_text(json.dumps([{
+                "blueprint_name": "Weapon_Overcharged", "level": 1,
+                "blueprint_id": 128673540, "source": "journal_confirmed",
+            }]), encoding="utf-8")
+            pulse = {
+                "event": "EngineerCraft", "BlueprintName": "Weapon_Overcharged",
+                "BlueprintID": 128673580, "Level": 1, "Quality": 1.0,
+                "Module": "hpt_pulselaser_gimbal_large",
+                "Ingredients": [{"Name": "nickel", "Count": 1}],
+            }
+
+            result = learn_blueprint_id_catalog([pulse], path)
+            rows = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result["learned"], 1)
+        self.assertEqual(result["conflicts"], 0)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(
+            {str(row.get("module_family") or "") for row in rows},
+            {"", "pulselaser"},
+        )
+
+    def test_different_id_in_same_module_family_remains_a_conflict(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "blueprint_id_catalog_learned.json"
+            first = {
+                "event": "EngineerCraft", "BlueprintName": "Weapon_Overcharged",
+                "BlueprintID": 128673580, "Level": 1, "Quality": 1.0,
+                "Module": "hpt_pulselaser_gimbal_large",
+                "Ingredients": [{"Name": "nickel", "Count": 1}],
+            }
+            learn_blueprint_id_catalog([first], path)
+            contradiction = {**first, "BlueprintID": 999999999}
+
+            result = learn_blueprint_id_catalog([contradiction], path)
+
+        self.assertEqual(result["learned"], 0)
+        self.assertEqual(result["conflicts"], 1)
+
     def test_workspace_design_system_covers_secondary_pages_and_dialogs(self):
         root = Path(__file__).resolve().parents[1]
         main_qml = (root / "Main.qml").read_text(encoding="utf-8")

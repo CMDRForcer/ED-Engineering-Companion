@@ -167,6 +167,50 @@ class EddnJournalCursorTests(unittest.TestCase):
                 ["First", "Second"],
             )
 
+    def test_full_queue_pauses_cursor_then_retains_every_event(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "Journal.01.log"
+            events = [
+                {
+                    "timestamp": f"2026-08-30T10:0{index}:00Z",
+                    "event": "FSDJump", "StarSystem": f"Queued {index}",
+                    "StarPos": [index, 2, 3], "SystemAddress": 100 + index,
+                }
+                for index in range(2)
+            ]
+            path.write_text("".join(map(_line, events)), encoding="utf-8")
+            controller = self._controller([path])
+            controller._eddn_queue = [
+                {"id": f"existing-{index}", "status": "queued"}
+                for index in range(2000)
+            ]
+            controller._save_eddn = lambda: None
+            controller._publish_eddn_delivery_change = lambda: None
+            controller.connectionChanged = mock.Mock()
+            controller._enqueue_eddn = CockpitController._enqueue_eddn.__get__(
+                controller, CockpitController
+            )
+
+            self._scan(controller, [path])
+            self.assertEqual(controller._journal_offsets[path.name], 0)
+
+            controller._eddn_queue.pop()
+            self._scan(controller, [path])
+            first_offset = controller._journal_offsets[path.name]
+            self.assertGreater(first_offset, 0)
+            self.assertLess(first_offset, path.stat().st_size)
+
+            controller._eddn_queue.pop(0)
+            self._scan(controller, [path])
+            self.assertEqual(
+                controller._journal_offsets[path.name], path.stat().st_size
+            )
+            queued_systems = [
+                row.get("event", {}).get("message", {}).get("StarSystem")
+                for row in controller._eddn_queue
+            ]
+            self.assertEqual(queued_systems[-2:], ["Queued 0", "Queued 1"])
+
 
 if __name__ == "__main__":
     unittest.main()

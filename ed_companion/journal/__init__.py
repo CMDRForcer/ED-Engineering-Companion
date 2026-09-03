@@ -11,6 +11,11 @@ from .trader_types import (
     JournalTraderTypeEvidence,
     trader_type_evidence_from_event,
 )
+from .vehicles import project_vehicle_state, vehicle_display_name
+from .mining import (
+    mining_commodity_display_name,
+    project_latest_srv_mining_session,
+)
 
 __all__ = [
     "read_fleet_events",
@@ -21,4 +26,8 @@ __all__ = [
     "MATERIAL_TRADER_SERVICE",
     "JournalTraderTypeEvidence",
     "trader_type_evidence_from_event",
+    "project_vehicle_state",
+    "vehicle_display_name",
+    "mining_commodity_display_name",
+    "project_latest_srv_mining_session",
 ]

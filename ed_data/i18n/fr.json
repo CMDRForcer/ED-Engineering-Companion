@@ -519,5 +519,18 @@
   "wishlist.track_help": "Appliquer la prochaine embarcation Journal correspondante à ce plan",
   "wishlist.unrelated_crafts_suffix": "NOUVEAU · PAS DE PLAN / CRAFT(S) NON RELATIVE(S)",
   "engineering.install_module": "INSTALLER",
-  "engineering.target_plan": "CIBLE"
+  "engineering.target_plan": "CIBLE",
+  "overlay.title": "Overlay d’ingénierie EDEC",
+  "overlay.engineering": "INGÉNIERIE",
+  "overlay.no_ship": "AUCUN VAISSEAU",
+  "overlay.locked": "VERROUILLÉ",
+  "overlay.move": "DÉPLACER",
+  "overlay.fullscreen_warning": "Le plein écran exclusif peut masquer l’overlay ; utilisez le mode fenêtré sans bordure.",
+  "overlay.opacity_down": "− OPACITÉ",
+  "overlay.opacity_up": "+ OPACITÉ",
+  "overlay.scale_down": "− ÉCHELLE",
+  "overlay.scale_up": "+ ÉCHELLE",
+  "overlay.click_through": "IGNORER LES CLICS",
+  "engineering.accept_current": "ACCEPTER",
+  "engineering.accept_current_help": "Accepter le module installé ou l’emplacement vide et supprimer cette demande d’équipement."
 }

@@ -519,5 +519,18 @@
   "status.value.sent": "GESENDET",
   "status.value.warning": "WARNUNG",
   "engineering.install_module": "EINBAUEN",
-  "engineering.target_plan": "ZIEL"
+  "engineering.target_plan": "ZIEL",
+  "overlay.title": "EDEC Engineering-Overlay",
+  "overlay.engineering": "ENGINEERING",
+  "overlay.no_ship": "KEIN SCHIFF",
+  "overlay.locked": "GESPERRT",
+  "overlay.move": "VERSCHIEBEN",
+  "overlay.fullscreen_warning": "Exklusives Vollbild kann Overlays verdecken; nutze den randlosen Fenstermodus.",
+  "overlay.opacity_down": "− DECKKRAFT",
+  "overlay.opacity_up": "+ DECKKRAFT",
+  "overlay.scale_down": "− SKALIERUNG",
+  "overlay.scale_up": "+ SKALIERUNG",
+  "overlay.click_through": "KLICKDURCHLÄSSIG",
+  "engineering.accept_current": "ÜBERNEHMEN",
+  "engineering.accept_current_help": "Den eingebauten oder leeren Slot übernehmen und diesen Umbauwunsch entfernen."
 }

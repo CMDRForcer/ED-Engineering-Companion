@@ -1,5 +1,39 @@
 # Changelog
 
+## 21.200 — 2026-09-03
+
+### Added
+
+- Added a presentation-only Engineering overlay window that shares the existing
+  Operations state, remembers monitor-safe geometry and display preferences,
+  and can be shown or locked from the existing tray menu.
+- Added a generic SRV lifecycle projection from `RestockVehicle`, `LaunchSRV`
+  and `DockSRV`, including the Journal-confirmed Rhino identifier without
+  inferring vehicle inventory from an installed hangar module.
+- Added a read-only summary of the latest SRV mining trip for the observed
+  Haematite, Samarium and Thortveitite cargo, while keeping refined cargo
+  separate from Engineering materials and outside the EDDN contract.
+
+### Fixed
+
+- Normalize wrapped `MiningRefined` commodity identifiers to the same cargo
+  keys used by `MarketSell`, so sold mined cargo is removed from subsequent
+  INARA inventory snapshots.
+- Bind INARA cargo-snapshot deduplication to its Journal timestamp, allowing a
+  later legitimately empty inventory to replace an older non-empty state.
+- Use Frontier's itemized `Cargo.json` as the authoritative final INARA cargo
+  snapshot when compact post-sale Journal events contain only a total count.
+- Read only the final complete Journal record for health diagnostics instead
+  of repeatedly loading the entire active Journal file from QML properties.
+- Persist EDDN jobs once per Journal scan batch instead of deep-copying and
+  atomically rewriting a full offline queue after every individual event.
+- Pause the EDDN Journal cursor before an event when the durable queue reaches
+  capacity, resume without replay after space becomes available, and quarantine
+  invalid legacy jobs separately while valid deliveries continue.
+- Scope learned Journal BlueprintIDs by blueprint, grade and module family,
+  allowing Frontier's distinct IDs for the same weapon modification while
+  retaining legacy catalog records and genuine same-family contradictions.
+
 ## 21.199 — 2026-09-01
 
 ### Fixed

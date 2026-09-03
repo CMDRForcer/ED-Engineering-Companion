@@ -199,7 +199,7 @@ from .state import (
     planner_mode,
     real_engineers,
     read_json,
-    read_journal_tail,
+    read_journal_tail_records,
     remove_ship_task,
     replace_ship_plan,
     runtime_data_dir,
@@ -231,6 +231,32 @@ ENGINEER_SYSTEMS = {
 }
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _last_complete_json_record(path: Path) -> dict[str, Any]:
+    """Read only the final newline-complete Journal record."""
+    with path.open("rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        end = handle.tell()
+        if end <= 0:
+            return {}
+        handle.seek(end - 1)
+        if handle.read(1) not in {b"\n", b"\r"}:
+            return {}
+        position = end
+        buffer = b""
+        while position > 0:
+            chunk_size = min(65536, position)
+            position -= chunk_size
+            handle.seek(position)
+            buffer = handle.read(chunk_size) + buffer
+            lines = buffer.splitlines()
+            if position == 0 or len(lines) >= 2:
+                line = lines[-1] if lines else b""
+                if line:
+                    record = json.loads(line.decode("utf-8-sig", errors="replace"))
+                    return record if isinstance(record, dict) else {}
+        return {}
 
 
 class CockpitController(QObject):
@@ -273,6 +299,7 @@ class CockpitController(QObject):
         self.inara_journal_cache_file = self.config_dir / "inara_journal_cache.json"
         self.eddn_config_file = self.config_dir / "eddn_config.json"
         self.eddn_queue_file = self.config_dir / "community_upload_queue.json"
+        self.eddn_quarantine_file = self.config_dir / "community_upload_quarantine.json"
         self.eddn_cursor_file = self.config_dir / "eddn_journal_cursor.json"
         self.hge_cache_file = self.config_dir / "hge_live_sightings.json"
         self.trader_catalog_file = user_trader_catalog_path(context)
@@ -460,9 +487,7 @@ class CockpitController(QObject):
         self._eddn_profile_key = self.profile_context.key
         self._eddn_journal_root = self.profile_context.journal_root
         self._eddn_config = self._load_eddn_config()
-        self._eddn_queue = normalize_upload_queue(
-            self._read_local_json(self.eddn_queue_file, [])
-        )
+        self._eddn_queue = self._load_eddn_queue()
         self._hge_sightings = self._read_local_json(self.hge_cache_file, [])
         if not isinstance(self._hge_sightings, list):
             self._hge_sightings = []
@@ -737,6 +762,57 @@ class CockpitController(QObject):
         atomic_write(self.eddn_config_file, json.dumps(self._eddn_config, indent=2))
         atomic_write(self.eddn_queue_file, json.dumps(self._eddn_queue, indent=2))
 
+    def _load_eddn_queue(self):
+        """Recover restart work and isolate legacy jobs that cannot be sent."""
+        jobs = normalize_upload_queue(
+            self._read_local_json(self.eddn_queue_file, [])
+        )
+        valid = []
+        invalid = []
+        for job in jobs:
+            try:
+                if str(job.get("target") or "EDDN") != "EDDN":
+                    raise EddnError("Queue target is not EDDN.", terminal=True)
+                if str(job.get("status") or "queued") not in {
+                    "queued", "retry", "sending", "sent", "failed",
+                }:
+                    raise EddnError("Queue status is unknown.", terminal=True)
+                validate_eddn_prepared(job.get("event"))
+            except (EddnError, AttributeError, TypeError) as exc:
+                invalid.append({
+                    "quarantined_at": datetime.now(timezone.utc).isoformat(
+                        timespec="seconds"
+                    ),
+                    "reason": str(exc),
+                    "job": job,
+                })
+            else:
+                valid.append(job)
+        previous = self._read_local_json(self.eddn_quarantine_file, [])
+        if not isinstance(previous, list):
+            previous = []
+        quarantined = previous + invalid
+        if invalid:
+            atomic_write(
+                self.eddn_quarantine_file,
+                json.dumps(quarantined, indent=2),
+            )
+            LOGGER.warning(
+                "EDDN quarantined %d invalid persisted queue job(s); valid jobs continue",
+                len(invalid),
+            )
+        self._eddn_quarantine_error_groups = {}
+        for row in quarantined:
+            if not isinstance(row, dict):
+                continue
+            job = row.get("job") if isinstance(row.get("job"), dict) else {}
+            prepared = job.get("event") if isinstance(job.get("event"), dict) else {}
+            key = f"{prepared.get('schema') or 'unknown'} | {row.get('reason') or 'unknown'}"
+            self._eddn_quarantine_error_groups[key] = (
+                self._eddn_quarantine_error_groups.get(key, 0) + 1
+            )
+        return valid
+
     def _publish_eddn_delivery_change(self):
         self._eddn_revision += 1
         self._derived_cache.clear()
@@ -777,10 +853,19 @@ class CockpitController(QObject):
 
     def _eddn_delivery_summary(self):
         counts = {key: 0 for key in ("queued", "retry", "sending", "sent", "failed")}
+        schema_counts = {}
+        error_groups = {}
         for job in self._eddn_queue:
             status = str(job.get("status") or "")
             if status in counts:
                 counts[status] += 1
+            prepared = job.get("event") if isinstance(job.get("event"), dict) else {}
+            schema = str(prepared.get("schema") or "unknown")
+            schema_counts[schema] = schema_counts.get(schema, 0) + 1
+            error = str(job.get("last_error") or "").strip()
+            if error:
+                key = f"{schema} | {error}"
+                error_groups[key] = error_groups.get(key, 0) + 1
         queued_sent = next((
             job for job in reversed(self._eddn_queue)
             if job.get("status") == "sent"
@@ -814,6 +899,15 @@ class CockpitController(QObject):
             "lastError": str(failed.get("last_error") or ""),
             "lastNotShareable": str(self._eddn_config.get("last_not_shareable") or ""),
             "nextRetryAt": next_retry_at,
+            "schemaCounts": schema_counts,
+            "errorGroups": error_groups,
+            "quarantineErrorGroups": dict(
+                getattr(self, "_eddn_quarantine_error_groups", {})
+            ),
+            "quarantined": sum(
+                getattr(self, "_eddn_quarantine_error_groups", {}).values()
+            ),
+            "cooldownActive": bool(next_retry_epoch > time.time()),
         }
 
     def _eddn_station_snapshot_view(self, directory=None):
@@ -1152,11 +1246,8 @@ class CockpitController(QObject):
                 stat = latest.stat()
                 age = max(0, int(time.time() - stat.st_mtime))
                 size = int(stat.st_size)
-                lines = latest.read_text(
-                    encoding="utf-8-sig", errors="replace"
-                ).splitlines()
-                if lines:
-                    record = json.loads(lines[-1])
+                record = _last_complete_json_record(latest)
+                if record:
                     parser_ok = isinstance(record, dict)
                     last_event = str(record.get("event") or "")
             except (OSError, ValueError, TypeError) as exc:
@@ -3343,6 +3434,45 @@ class CockpitController(QObject):
         self._build_import_target = ""
         self.engineeringChanged.emit()
 
+    @Slot(str)
+    def acceptCurrentOutfittingSlot(self, slot):
+        """Remove one explicit outfitting delta without touching plans."""
+        slot = str(slot or "").strip()
+        ship_id = str(self._state.get("selectedShipId") or "")
+        row = next((
+            item for item in self._state.get("engineeringShipSlots", [])
+            if isinstance(item, dict)
+            and str(item.get("slot") or "") == slot
+        ), {})
+        source_slot = str(row.get("desiredSourceSlot") or slot)
+        if not ship_id or not slot or not row.get("moduleChange"):
+            return
+        desired_path = self._data_dir / "desired_outfitting.json"
+        payload = read_json(desired_path, {})
+        payload = payload if isinstance(payload, dict) else {}
+        desired_slots = payload.get(ship_id, {})
+        desired_slots = desired_slots if isinstance(desired_slots, dict) else {}
+        if source_slot not in desired_slots:
+            return
+        desired_slots.pop(source_slot, None)
+        if desired_slots:
+            payload[ship_id] = desired_slots
+        else:
+            payload.pop(ship_id, None)
+        if not atomic_write(
+            desired_path,
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        ):
+            self._engineering_status = (
+                "Outfitting change could not be saved."
+            )
+            self.engineeringChanged.emit()
+            return
+        self._engineering_status = (
+            f"Current state accepted for {slot}; outfitting request removed."
+        )
+        self.refresh()
+
     @Slot()
     def applyBuildImport(self):
         preview = self._build_import_preview
@@ -3762,6 +3892,24 @@ class CockpitController(QObject):
                             events.append(event)
             except OSError as exc:
                 LOGGER.warning("INARA Journal read failed for %s: %s", path, exc)
+        # Cargo.json is Frontier's authoritative itemized current snapshot.
+        # Compact Cargo Journal events emitted after sales may contain only a
+        # total Count, so replaying deltas alone cannot prove the final items.
+        cargo_path = Path(self.profile_context.journal_root) / "Cargo.json"
+        try:
+            cargo_snapshot = json.loads(cargo_path.read_text(
+                encoding="utf-8-sig", errors="strict"
+            ))
+            if (
+                isinstance(cargo_snapshot, dict)
+                and cargo_snapshot.get("event") == "Cargo"
+                and isinstance(cargo_snapshot.get("Inventory"), list)
+            ):
+                events.append(cargo_snapshot)
+        except FileNotFoundError:
+            pass
+        except (OSError, TypeError, ValueError) as exc:
+            LOGGER.warning("INARA Cargo snapshot read failed: %s", exc)
         journal_root = self.profile_context.journal_root
         if self._inara_cache.get("journal_root") != journal_root:
             self._inara_cache = {
@@ -4296,9 +4444,7 @@ class CockpitController(QObject):
         ]
 
         self._eddn_config = self._load_eddn_config()
-        self._eddn_queue = normalize_upload_queue(
-            self._read_local_json(self.eddn_queue_file, [])
-        )
+        self._eddn_queue = self._load_eddn_queue()
         self._load_eddn_cursor_state()
 
         self._hge_sightings = self._read_local_json(self.hge_cache_file, [])
@@ -4353,13 +4499,24 @@ class CockpitController(QObject):
             prepared, sort_keys=True, separators=(",", ":")
         ).encode()).hexdigest()
         job_id = f"EDDN-{digest}"
-        if any(job.get("id") == job_id for job in self._eddn_queue):
+        scan_ids = getattr(self, "_eddn_scan_job_ids", None)
+        if (
+            job_id in scan_ids if isinstance(scan_ids, set) else
+            any(job.get("id") == job_id for job in self._eddn_queue)
+        ):
             return
-        pending_count = sum(
+        scan_pending = getattr(self, "_eddn_scan_pending_count", None)
+        pending_count = int(scan_pending) if isinstance(scan_pending, int) else sum(
             row.get("status") != "sent" for row in self._eddn_queue
             if isinstance(row, dict)
         )
         if pending_count >= EDDN_PENDING_JOB_LIMIT:
+            if (
+                getattr(self, "_eddn_batching_scan", False)
+                and getattr(self, "_eddn_scan_queue_full_reported", False)
+            ):
+                return False
+            self._eddn_scan_queue_full_reported = True
             self._eddn_status = (
                 f"EDDN offline queue full ({EDDN_PENDING_JOB_LIMIT}); "
                 "this event was not queued. Upload or clear reviewed failures "
@@ -4375,9 +4532,13 @@ class CockpitController(QObject):
             "status": "queued",
             "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         })
-        self._save_eddn()
-        self._publish_eddn_delivery_change()
-        self.connectionChanged.emit()
+        if isinstance(scan_ids, set):
+            scan_ids.add(job_id)
+            self._eddn_scan_pending_count = pending_count + 1
+        if not getattr(self, "_eddn_batching_scan", False):
+            self._save_eddn()
+            self._publish_eddn_delivery_change()
+            self.connectionChanged.emit()
         return True
 
     def _scan_eddn_journal(self):
@@ -4403,7 +4564,22 @@ class CockpitController(QObject):
             if path.name in monitored_names
         ]
         changed = False
+        queue_changed = False
+        self._eddn_batching_scan = True
+        self._eddn_scan_queue_full_reported = False
+        scan_queue = getattr(self, "_eddn_queue", [])
+        self._eddn_scan_job_ids = {
+            str(job.get("id") or "") for job in scan_queue
+            if isinstance(job, dict)
+        }
+        self._eddn_scan_pending_count = sum(
+            job.get("status") != "sent" for job in scan_queue
+            if isinstance(job, dict)
+        )
+        saturated = False
         for path in paths:
+            if saturated:
+                break
             try:
                 size = path.stat().st_size
                 # Files appearing after the opt-in baseline are Journal
@@ -4411,13 +4587,15 @@ class CockpitController(QObject):
                 offset = int(self._journal_offsets.get(path.name, 0))
                 if offset > size:
                     offset = 0
-                committed, events = read_journal_tail(path, offset, [])
-                self._journal_offsets[path.name] = committed
-                changed = changed or committed != offset
+                _tail_committed, records = read_journal_tail_records(path, offset)
             except OSError:
                 LOGGER.warning("EDDN Journal read failed for %s", path)
                 continue
-            for event in events:
+            committed = offset
+            for line_start, line_end, event in records:
+                if event is None:
+                    committed = line_end
+                    continue
                 self._eddn_context = update_eddn_context(
                     self._eddn_context, event
                 )
@@ -4436,10 +4614,24 @@ class CockpitController(QObject):
                         LOGGER.debug(
                             "EDDN ignored unchanged NavRoute.json revision"
                         )
+                        committed = line_end
                         continue
                 prepared = prepare_eddn_event(event, self._eddn_context)
                 if prepared:
-                    self._enqueue_eddn(prepared)
+                    if int(self._eddn_scan_pending_count or 0) >= EDDN_PENDING_JOB_LIMIT:
+                        self._eddn_status = (
+                            f"EDDN offline queue full ({EDDN_PENDING_JOB_LIMIT}); "
+                            "Journal cursor paused before the next unsaved event."
+                        )
+                        if not self._eddn_scan_queue_full_reported:
+                            LOGGER.warning(self._eddn_status)
+                            self._eddn_scan_queue_full_reported = True
+                        self.connectionChanged.emit()
+                        committed = line_start
+                        saturated = True
+                        break
+                    queued = self._enqueue_eddn(prepared)
+                    queue_changed = queued is True or queue_changed
                     if navroute_fingerprint:
                         self._navroute_fingerprint = navroute_fingerprint
                         self._navroute_rejections.pop("NavRoute.json", None)
@@ -4462,9 +4654,21 @@ class CockpitController(QObject):
                         "EDDN intentionally ignores unsupported event %s",
                         event.get("event"),
                     )
+                committed = line_end
+            self._journal_offsets[path.name] = committed
+            changed = changed or committed != offset
+        self._eddn_batching_scan = False
+        self._eddn_scan_job_ids = None
+        self._eddn_scan_pending_count = None
+        self._eddn_scan_queue_full_reported = False
         if changed:
             self._save_eddn_cursor()
-        self._scan_eddn_station_files()
+        if queue_changed:
+            self._save_eddn()
+            self._publish_eddn_delivery_change()
+            self.connectionChanged.emit()
+        if not saturated:
+            self._scan_eddn_station_files()
 
     def _scan_eddn_station_files(self):
         directory = journal_dir()
@@ -4501,7 +4705,9 @@ class CockpitController(QObject):
                         kind, reason,
                     )
                 continue
-            self._enqueue_eddn(prepared)
+            queued = self._enqueue_eddn(prepared)
+            if queued is not True:
+                continue
             self._station_fingerprints[filename] = fingerprint
             self._station_rejections.pop(filename, None)
             count = len(

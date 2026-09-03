@@ -519,5 +519,18 @@
   "status.value.sent": "SENT",
   "status.value.warning": "WARNING",
   "engineering.install_module": "INSTALL",
-  "engineering.target_plan": "TARGET"
+  "engineering.target_plan": "TARGET",
+  "overlay.title": "EDEC Engineering Overlay",
+  "overlay.engineering": "ENGINEERING",
+  "overlay.no_ship": "NO SHIP",
+  "overlay.locked": "LOCKED",
+  "overlay.move": "MOVE",
+  "overlay.fullscreen_warning": "Exclusive fullscreen may cover overlays; use Borderless Windowed.",
+  "overlay.opacity_down": "− OPACITY",
+  "overlay.opacity_up": "+ OPACITY",
+  "overlay.scale_down": "− SCALE",
+  "overlay.scale_up": "+ SCALE",
+  "overlay.click_through": "CLICK-THROUGH",
+  "engineering.accept_current": "ACCEPT",
+  "engineering.accept_current_help": "Accept the installed or empty slot and remove this outfitting request."
 }

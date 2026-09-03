@@ -49,6 +49,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QStyle, QSystemTrayIcon
 from ed_companion import APP_VERSION
 
 from ed_companion.phase14 import CockpitController
+from ed_companion.overlay import OverlaySettings, OverlayWindowRuntime
 from ed_companion.diagnostics import (
     clean_diagnostic_log,
     is_benign_qt_message,
@@ -174,12 +175,17 @@ class SmokeTestRunner(QObject):
         ("dialog-about", "qa-dialog-about"),
     ]
 
-    def __init__(self, app, window, qml_messages, screenshot=None, parent=None):
+    def __init__(
+        self, app, window, qml_messages, screenshot=None,
+        overlay_window=None, controller=None, parent=None,
+    ):
         super().__init__(parent)
         self.app = app
         self.window = window
         self.qml_messages = qml_messages
         self.screenshot = screenshot
+        self.overlay_window = overlay_window
+        self.controller = controller
         self.results = []
         self.steps = []
         self.step_index = 0
@@ -194,6 +200,7 @@ class SmokeTestRunner(QObject):
             ("engineers-tech-brokers", lambda: self._engineer_state(False, True)),
             ("connections-preview", self._connection_states),
             ("lazy-page-state-persistence", self._lazy_page_state),
+            ("engineering-overlay", self._engineering_overlay),
         ])
         for label, object_name in self.DIALOG_STEPS:
             self.steps.append((label, lambda n=object_name: self._dialog(n)))
@@ -241,6 +248,30 @@ class SmokeTestRunner(QObject):
             if int(self.window.property("connectionPreviewMode")) != mode:
                 return False
         return True
+
+    def _engineering_overlay(self):
+        if not self.overlay_window or not self.controller:
+            return False
+        self.overlay_window.show()
+        action = self.overlay_window.findChild(QObject, "overlay-next-action")
+        readiness = self.overlay_window.findChild(
+            QObject, "overlay-material-readiness"
+        )
+        expected_action = (
+            self.controller.operationAction.get("title")
+            or self.controller.nextAction
+        )
+        expected_readiness = (
+            f"{self.controller.materialStatus} · "
+            f"{self.controller.covered} / {self.controller.required}"
+        )
+        valid = bool(
+            action and readiness
+            and action.property("text") == expected_action
+            and readiness.property("text") == expected_readiness
+        )
+        self.overlay_window.hide()
+        return valid
 
     def _lazy_page_state(self):
         """Prove an unloaded page restores its transient controls."""
@@ -350,11 +381,12 @@ def cleanup_startup_persistence_temps():
 class TrayRuntime(QObject):
     """Own the optional Windows tray lifecycle without changing app logic."""
 
-    def __init__(self, app, window, controller):
+    def __init__(self, app, window, controller, overlay_settings):
         super().__init__(app)
         self.app = app
         self.window = window
         self.controller = controller
+        self.overlay_settings = overlay_settings
         self.quitting = False
         self.available = QSystemTrayIcon.isSystemTrayAvailable()
         self.controller.setSystemTrayAvailable(self.available)
@@ -364,12 +396,22 @@ class TrayRuntime(QObject):
         self.menu = QMenu()
         self.open_action = QAction("Open ED\u00b7OPS", self.menu)
         self.refresh_action = QAction("Refresh Journal now", self.menu)
+        self.overlay_action = QAction("Show Engineering Overlay", self.menu)
+        self.overlay_action.setCheckable(True)
+        self.overlay_lock_action = QAction("Lock Overlay", self.menu)
+        self.overlay_lock_action.setCheckable(True)
+        self.overlay_click_action = QAction("Click-through Overlay", self.menu)
+        self.overlay_click_action.setCheckable(True)
         self.status_action = QAction("Status", self.menu)
         self.status_action.setEnabled(False)
         self.exit_action = QAction("Exit ED\u00b7OPS", self.menu)
         self.restart_action = QAction("Restart ED\u00b7OPS", self.menu)
         self.menu.addAction(self.open_action)
         self.menu.addAction(self.refresh_action)
+        self.menu.addSeparator()
+        self.menu.addAction(self.overlay_action)
+        self.menu.addAction(self.overlay_lock_action)
+        self.menu.addAction(self.overlay_click_action)
         self.menu.addSeparator()
         self.menu.addAction(self.status_action)
         self.menu.addSeparator()
@@ -378,6 +420,11 @@ class TrayRuntime(QObject):
         self.tray.setContextMenu(self.menu)
         self.open_action.triggered.connect(self.show_window)
         self.refresh_action.triggered.connect(controller.reloadJournalNow)
+        self.overlay_action.triggered.connect(overlay_settings.toggleVisible)
+        self.overlay_lock_action.triggered.connect(overlay_settings.toggleLocked)
+        self.overlay_click_action.triggered.connect(
+            overlay_settings.toggleClickThrough
+        )
         self.exit_action.triggered.connect(self.exit_app)
         self.restart_action.triggered.connect(self.restart_app)
         self.menu.aboutToShow.connect(self.update_status)
@@ -385,6 +432,7 @@ class TrayRuntime(QObject):
         self.window.installEventFilter(self)
         self.controller.uiChanged.connect(self.sync)
         self.controller.activityChanged.connect(self.update_status)
+        self.overlay_settings.changed.connect(self.update_status)
         self.sync()
         self.restart_requested = False
 
@@ -398,6 +446,9 @@ class TrayRuntime(QObject):
         self.update_status()
 
     def update_status(self):
+        self.overlay_action.setChecked(self.overlay_settings.visible)
+        self.overlay_lock_action.setChecked(self.overlay_settings.locked)
+        self.overlay_click_action.setChecked(self.overlay_settings.clickThrough)
         if not self.available:
             mode = "TRAY UNAVAILABLE"
         else:
@@ -464,9 +515,11 @@ def run():
         return 3
 
     controller = CockpitController()
+    overlay_settings = OverlaySettings(parent=app)
     app.aboutToQuit.connect(controller.shutdown)
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("cockpit", controller)
+    engine.rootContext().setContextProperty("overlaySettings", overlay_settings)
     engine.rootContext().setContextProperty(
         "smokeInjectQmlError",
         smoke_test and os.environ.get("PHASE14_SMOKE_INJECT_QML_ERROR") == "1",
@@ -477,7 +530,18 @@ def run():
     if not engine.rootObjects():
         return 2
     window = engine.rootObjects()[0]
-    tray_runtime = TrayRuntime(app, window, controller)
+    overlay_qml = Path(__file__).resolve().parent / "qml" / "Overlay.qml"
+    engine.load(QUrl.fromLocalFile(str(overlay_qml)))
+    overlay_window = next((
+        root for root in engine.rootObjects()
+        if root.objectName() == "engineering-overlay-window"
+    ), None)
+    if overlay_window is None:
+        return 2
+    overlay_runtime = OverlayWindowRuntime(
+        overlay_window, overlay_settings, parent=app
+    )
+    tray_runtime = TrayRuntime(app, window, controller, overlay_settings)
     single_instance.activationRequested.connect(tray_runtime.show_window)
     controller.exitRequested.connect(tray_runtime.exit_app)
     controller.restartRequested.connect(tray_runtime.restart_app)
@@ -553,7 +617,8 @@ def run():
     smoke_runner = None
     if smoke_test:
         smoke_runner = SmokeTestRunner(
-            app, window, smoke_messages, screenshot=screenshot, parent=app
+            app, window, smoke_messages, screenshot=screenshot,
+            overlay_window=overlay_window, controller=controller, parent=app,
         )
         smoke_runner.start()
     elif screenshot:

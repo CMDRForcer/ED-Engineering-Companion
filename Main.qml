@@ -3291,7 +3291,7 @@ ApplicationWindow {
                             delegate: Rectangle {
                                 required property var modelData
                                 width: ListView.view.width - 8
-                                height: (modelData.moduleChange || modelData.planPending) ? 52 : 38
+                                height: (modelData.moduleChange || modelData.planPending) ? 66 : 38
                                 radius: 8
                                 property bool exactSelection:
                                     engineeringPage.selectedInstalledSlot === String(modelData.slot || "")
@@ -3325,15 +3325,21 @@ ApplicationWindow {
                                     elide: Text.ElideRight
                                 }
                                 Label {
+                                    id: purchaseLabel
                                     visible: modelData.moduleChange || modelData.planPending
                                     anchors.left: parent.left; anchors.leftMargin: 45
-                                    anchors.right: parent.right; anchors.rightMargin: 8
+                                    anchors.right: acceptCurrentButton.visible
+                                                   ? acceptCurrentButton.left
+                                                   : parent.right
+                                    anchors.rightMargin: 8
                                     anchors.bottom: parent.bottom; anchors.bottomMargin: 5
                                     text: modelData.moduleChange
                                           ? window.t("engineering.install_module", "INSTALL")
                                             + ": "
                                             + (modelData.desiredSizeRating
                                                ? modelData.desiredSizeRating + " " : "")
+                                            + (!modelData.desiredSizeRating
+                                               ? modelData.slotBadge + "? " : "")
                                             + modelData.desiredModule
                                           : window.t("engineering.target_plan", "TARGET")
                                             + ": G" + modelData.planTargetGrade
@@ -3341,7 +3347,34 @@ ApplicationWindow {
                                             + (modelData.planExperimental
                                                ? " · " + modelData.planExperimental : "")
                                     color: orange; font.pixelSize: 9; font.bold: true
+                                    wrapMode: Text.Wrap
+                                    maximumLineCount: 2
                                     elide: Text.ElideRight
+                                    ToolTip.visible: purchaseHover.hovered
+                                    ToolTip.text: text
+                                    HoverHandler { id: purchaseHover }
+                                }
+                                Button {
+                                    id: acceptCurrentButton
+                                    z: 2
+                                    visible: modelData.moduleChange
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 6
+                                    anchors.bottom: parent.bottom
+                                    anchors.bottomMargin: 4
+                                    width: 66; height: 24
+                                    text: window.t(
+                                        "engineering.accept_current", "ACCEPT"
+                                    )
+                                    font.pixelSize: 8; font.bold: true
+                                    onClicked: cockpit.acceptCurrentOutfittingSlot(
+                                        String(modelData.slot || "")
+                                    )
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: window.t(
+                                        "engineering.accept_current_help",
+                                        "Accept the installed or empty slot and remove this outfitting request."
+                                    )
                                 }
                                 Label {
                                     id: slotStatus
@@ -3358,7 +3391,14 @@ ApplicationWindow {
                                 }
                                 MouseArea {
                                     id: slotMouse
-                                    anchors.fill: parent; hoverEnabled: true
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    anchors.right: acceptCurrentButton.visible
+                                                   ? acceptCurrentButton.left
+                                                   : parent.right
+                                    anchors.rightMargin: acceptCurrentButton.visible ? 4 : 0
+                                    hoverEnabled: true
                                     enabled: modelData.engineerable
                                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                     onClicked: engineeringPage.selectPhysicalSlot(modelData)

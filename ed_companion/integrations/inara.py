@@ -245,6 +245,16 @@ def _reputation_data(event):
     ]
 
 
+def _cargo_item_name(value):
+    """Normalize equivalent wrapped/plain Frontier cargo identifiers."""
+    symbol = str(value or "").strip()
+    if symbol.startswith("$") and symbol.endswith(";"):
+        symbol = symbol[1:-1]
+    if symbol.casefold().endswith("_name"):
+        symbol = symbol[:-5]
+    return symbol.casefold()
+
+
 def _cargo_data(event):
     inventory = {}
     for item in event.get("Inventory", []) or []:
@@ -253,7 +263,7 @@ def _cargo_data(event):
         count = max(0, int(item.get("Count", 0) or 0))
         if count:
             key = (
-                str(item["Name"]),
+                _cargo_item_name(item["Name"]),
                 int(item["MissionID"]) if item.get("MissionID") is not None else None,
                 bool(item.get("Stolen", False)),
             )
@@ -620,7 +630,7 @@ def prepare_journal_batch(events, known_fingerprints=(), expected_identity="",
             return False
         if remaining <= 0:
             return False
-        item_name = str(item_name)
+        item_name = _cargo_item_name(item_name)
         mission_id = int(mission_id) if mission_id is not None else None
         if direction > 0:
             key = (item_name, mission_id, bool(is_stolen) if is_stolen is not None else False)
@@ -662,9 +672,18 @@ def prepare_journal_batch(events, known_fingerprints=(), expected_identity="",
             if mission_id is not None:
                 row["missionGameID"] = mission_id
             rows.append(row)
-        append("setCommanderInventoryCargo", sorted(rows, key=lambda row: (
-            row["itemName"], row.get("missionGameID", 0), row.get("isStolen", False),
-        )), timestamp, allow_empty=True)
+        rows = sorted(rows, key=lambda row: (
+            row["itemName"], row.get("missionGameID", 0),
+            row.get("isStolen", False),
+        ))
+        append(
+            "setCommanderInventoryCargo", rows, timestamp, allow_empty=True,
+            fingerprint_data={
+                "contract": "cargo_snapshot_v2",
+                "timestamp": timestamp,
+                "eventData": rows,
+            },
+        )
 
     def storage_location(source):
         return {
@@ -955,7 +974,15 @@ def prepare_journal_batch(events, known_fingerprints=(), expected_identity="",
                 ): int(row["itemCount"])
                 for row in cargo_rows
             }
-            append("setCommanderInventoryCargo", cargo_rows, timestamp, allow_empty=True)
+            append(
+                "setCommanderInventoryCargo", cargo_rows, timestamp,
+                allow_empty=True,
+                fingerprint_data={
+                    "contract": "cargo_snapshot_v2",
+                    "timestamp": timestamp,
+                    "eventData": cargo_rows,
+                },
+            )
         elif name in {"MarketBuy", "MarketSell"} and cargo_inventory is not None:
             stolen = bool(source.get("StolenGoods")) if name == "MarketSell" else False
             if adjust_cargo(
