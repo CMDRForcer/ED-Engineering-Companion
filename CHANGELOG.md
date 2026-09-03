@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Group HGE BGS predictions into one travel card per system while preserving
+  each faction, state and predicted material variant inside that destination.
+- Label BGS observation age as an update and its HGE outcome as possible,
+  reserving reported/live wording for directly observed signals, and describe
+  the rolling local observation cache by its 24-hour retention.
 - Rebuild legacy EDDN `journal/1` queue records through the current public
   allowlist, preserving completed receipts without resending them and keeping
   only irrecoverable records in quarantine.

@@ -228,6 +228,7 @@ ApplicationWindow {
             "FORTIFIED": "powerplay.state.fortified", "STRONGHOLD": "powerplay.state.stronghold",
             "HOMESYSTEM": "powerplay.state.home_system",
             "LIVE": "status.value.live", "RECENT": "status.value.recent",
+            "POSSIBLE": "status.value.possible",
             "STALE": "status.value.stale", "EXACT_MATCH": "status.value.exact_match",
             "FAMILY_MATCH": "status.value.family_match", "UNRESOLVED": "status.unresolved",
             "EDDN_LIVE": "status.value.eddn_live", "EDDN_SENT": "status.value.eddn_sent",
@@ -2885,7 +2886,8 @@ ApplicationWindow {
                         required property var modelData
                         property var source: modelData.farmSource || ({})
                         width: farmMissingList.width - 10
-                        height: 118
+                        height: modelData.variantCount > 1
+                                ? 104 + modelData.variantCount * 28 : 118
                         radius: 12
                         color: farmMissingMouse.containsMouse ? hover : panelRaised
                         border.width: modelData.grade === 4 ? 2 : 1
@@ -5054,7 +5056,9 @@ ApplicationWindow {
                                     }
                                     Item { Layout.fillWidth: true }
                                     Label {
-                                        text: modelData.freshness === "LIVE"
+                                        text: modelData.evidenceKind === "BGS_PREDICTION"
+                                              ? window.tf("state.bgs_updated_ago", "BGS UPDATED %1 MIN AGO", [modelData.lastReportedMinutes])
+                                              : modelData.freshness === "LIVE"
                                               ? window.tf("state.minutes_left", "%1 MIN LEFT", [Math.max(1, Math.floor(modelData.remainingSeconds / 60))])
                                               : window.tf("state.reported_ago", "REPORTED %1 MIN AGO", [modelData.lastReportedMinutes])
                                         color: modelData.freshness === "LIVE" ? green
@@ -5088,6 +5092,7 @@ ApplicationWindow {
                                     }
                                 }
                                 Label {
+                                    visible: modelData.variantCount <= 1
                                     text: (modelData.distance >= 0
                                            ? modelData.distance.toFixed(1) + " ly"
                                            : window.t("status.distance_unknown", "Distance unknown"))
@@ -5096,6 +5101,7 @@ ApplicationWindow {
                                     elide: Text.ElideRight; Layout.fillWidth: true
                                 }
                                 Label {
+                                    visible: modelData.variantCount <= 1
                                     text: window.tf("status.allegiance", "ALLEGIANCE: %1", [modelData.allegiance])
                                           + window.tf("state.faction", " · FACTION: %1", [modelData.faction])
                                           + (modelData.intensity !== "UNKNOWN"
@@ -5105,11 +5111,32 @@ ApplicationWindow {
                                     elide: Text.ElideRight; Layout.fillWidth: true
                                 }
                                 Label {
+                                    visible: modelData.variantCount <= 1
                                     text: modelData.findType === "HGE"
                                           ? window.tf("state.hge_materials", "HGE MATERIALS: %1", [modelData.materials || window.t("state.no_prediction", "No reliable material prediction")])
                                           : window.tf("state.evidence", "EVIDENCE: %1", [hgeFinderPage.evidenceLabel(modelData.evidenceKind)])
                                     color: muted; font.pixelSize: 9
                                     elide: Text.ElideRight; Layout.fillWidth: true
+                                }
+                                Label {
+                                    visible: modelData.variantCount > 1
+                                    text: (modelData.distance >= 0
+                                           ? modelData.distance.toFixed(1) + " ly · " : "")
+                                          + window.tf("state.prediction_variants", "%1 PREDICTIONS FOR THIS SYSTEM", [modelData.variantCount])
+                                    color: cyan; font.pixelSize: 11; font.bold: true
+                                    Layout.fillWidth: true
+                                }
+                                Repeater {
+                                    model: modelData.variantCount > 1 ? modelData.variants : []
+                                    delegate: Label {
+                                        required property var modelData
+                                        text: modelData.state + " · " + modelData.faction
+                                              + " · " + modelData.allegiance
+                                              + (modelData.materials
+                                                 ? " → " + modelData.materials : "")
+                                        color: orange; font.pixelSize: 10
+                                        elide: Text.ElideRight; Layout.fillWidth: true
+                                    }
                                 }
                             }
                             CockpitButton {

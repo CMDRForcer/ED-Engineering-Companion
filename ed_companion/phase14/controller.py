@@ -1932,7 +1932,7 @@ class CockpitController(QObject):
             evidence = str(candidate.get("evidence_kind") or "BGS_PREDICTION")
             remaining = int(candidate.get("remaining_seconds", 0) or 0)
             status = {
-                "BGS_PREDICTION": "PREDICTED",
+                "BGS_PREDICTION": "POSSIBLE",
                 "EDDN_SIGNAL": "EDDN LIVE" if remaining > 0 else "RECENT REPORT",
                 "LOCAL_JOURNAL": "LOCAL LIVE",
                 "ENTERED": "LOCAL ENTERED",
@@ -2064,21 +2064,62 @@ class CockpitController(QObject):
         # keeping the system the Commander is currently visiting at the top.
         return sorted(rows, key=lambda row: not bool(row.get("isCurrentSystem")))
 
+    @staticmethod
+    def _group_state_find_travel_targets(rows):
+        """Group BGS predictions by destination without merging their meaning."""
+        grouped = []
+        prediction_groups = {}
+        for source in rows:
+            if not (
+                source.get("findType") == "HGE"
+                and source.get("evidenceKind") == "BGS_PREDICTION"
+            ):
+                row = dict(source)
+                row["variantCount"] = 1
+                row["variants"] = []
+                grouped.append(row)
+                continue
+            key = str(source.get("system") or "").strip().casefold()
+            row = prediction_groups.get(key)
+            if row is None:
+                row = dict(source)
+                row["variantCount"] = 0
+                row["variants"] = []
+                row["reportCount"] = 0
+                prediction_groups[key] = row
+                grouped.append(row)
+            variant = {
+                "state": str(source.get("state") or "State not reported"),
+                "faction": str(source.get("faction") or "Faction not reported"),
+                "allegiance": str(source.get("allegiance") or "Not relevant"),
+                "materials": str(source.get("materials") or ""),
+                "reportCount": int(source.get("reportCount", 0) or 0),
+            }
+            if variant not in row["variants"]:
+                row["variants"].append(variant)
+                row["variantCount"] += 1
+            row["reportCount"] += int(source.get("reportCount", 0) or 0)
+        return grouped
+
     @Slot(str, str, str, int, str, str, int, result="QVariantList")
     def stateFindPage(self, find_type, state_filter, allegiance_filter,
                       nearby_ly, material_filter, evidence_filter, limit):
-        return self._filtered_state_finds(
+        rows = self._filtered_state_finds(
             find_type, state_filter, allegiance_filter, nearby_ly,
             material_filter, evidence_filter,
-        )[:max(1, int(limit or 250))]
+        )
+        return self._group_state_find_travel_targets(rows)[
+            :max(1, int(limit or 250))
+        ]
 
     @Slot(str, str, str, int, str, str, result=int)
     def stateFindCount(self, find_type, state_filter, allegiance_filter,
                        nearby_ly, material_filter, evidence_filter):
-        return len(self._filtered_state_finds(
+        rows = self._filtered_state_finds(
             find_type, state_filter, allegiance_filter, nearby_ly,
             material_filter, evidence_filter,
-        ))
+        )
+        return len(self._group_state_find_travel_targets(rows))
 
     def _material_source_routes(self, material):
         """Add live, distance-sorted collection routes to a material card."""
@@ -5262,7 +5303,7 @@ class CockpitController(QObject):
             if self._selected_material:
                 self.selectMaterial(str(self._selected_material.get("key") or ""))
         self._eddn_listener_status = (
-            f"Connected · {len(self._hge_sightings)} cached HGE/BGS observations"
+            f"Connected · {len(self._hge_sightings)} local observations · max 24 h"
         )
         if snapshots or hge_rows or removed:
             self.connectionChanged.emit()
