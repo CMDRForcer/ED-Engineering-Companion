@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- Define the evidence and source contract for a future Mining Finder without
+  connecting it to UI, persistence or network operations.
+- Add pure, offline projections for locally confirmed ring/hotspot evidence,
+  unbound prospector samples and documented Spansh dump catalog candidates.
+
 ### Fixed
 
 - Group HGE BGS predictions into one travel card per system while preserving
@@ -9,6 +16,11 @@
 - Label BGS observation age as an update and its HGE outcome as possible,
   reserving reported/live wording for directly observed signals, and describe
   the rolling local observation cache by its 24-hour retention.
+- Split State Finds cache diagnostics into BGS and signal observations, expose
+  oldest/newest timestamps, and report applied, merged and expired counts after
+  a manual refresh.
+- Size State Finds cards from their wrapped content so long faction, state and
+  material variants remain inside the card at every supported window width.
 - Rebuild legacy EDDN `journal/1` queue records through the current public
   allowlist, preserving completed receipts without resending them and keeping
   only irrecoverable records in quarantine.

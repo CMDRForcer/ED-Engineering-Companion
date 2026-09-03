@@ -1,0 +1,80 @@
+{
+  "local_events": [
+    {
+      "timestamp": "2026-09-03T10:00:00Z",
+      "event": "Location",
+      "StarSystem": "Synthetic Mining System",
+      "SystemAddress": 123456789,
+      "StarPos": [10.0, 20.0, 30.0],
+      "Commander": "must-not-project"
+    },
+    {
+      "timestamp": "2026-09-03T10:01:00Z",
+      "event": "Scan",
+      "BodyName": "Synthetic Mining System 1",
+      "BodyID": 4,
+      "DistanceFromArrivalLS": 1250.5,
+      "ReserveLevel": "PristineResources",
+      "Rings": [
+        {
+          "Name": "Synthetic Mining System 1 A Ring",
+          "RingClass": "eRingClass_Metalic",
+          "MassMT": 1000.0,
+          "InnerRad": 1.0,
+          "OuterRad": 2.0,
+          "FuturePrivateField": "must-not-project"
+        }
+      ]
+    },
+    {
+      "timestamp": "2026-09-03T10:02:00Z",
+      "event": "SAASignalsFound",
+      "BodyName": "Synthetic Mining System 1 A Ring",
+      "BodyID": 4,
+      "Signals": [
+        {"Type": "$Platinum_Name;", "Count": 2},
+        {"Type": "$Painite_Name;", "Count": 1, "Type_Localised": "private display"}
+      ]
+    },
+    {
+      "timestamp": "2026-09-03T10:03:00Z",
+      "event": "ProspectedAsteroid",
+      "Content": "High",
+      "Remaining": 73.5,
+      "Materials": [
+        {"Name": "$Platinum_Name;", "Proportion": 22.4}
+      ],
+      "MotherlodeMaterial": "$Alexandrite_Name;"
+    }
+  ],
+  "spansh_dump": {
+    "system": {
+      "id64": 987654321,
+      "name": "Synthetic Catalog System",
+      "coords": {"x": 13.0, "y": 24.0, "z": 30.0},
+      "date": "2026-09-02T12:00:00Z",
+      "bodies": [
+        {
+          "bodyId": 7,
+          "name": "Synthetic Catalog System 2",
+          "distanceToArrival": 850.0,
+          "reserveLevel": "MajorResources",
+          "updateTime": "2026-09-02T12:30:00Z",
+          "rings": [
+            {
+              "name": "Synthetic Catalog System 2 A Ring",
+              "type": "Metallic",
+              "mass": 500.0,
+              "innerRadius": 10.0,
+              "outerRadius": 20.0,
+              "signals": {
+                "signals": {"$Platinum_Name;": 1},
+                "updateTime": "2026-09-02T13:00:00Z"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
