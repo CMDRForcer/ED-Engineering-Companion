@@ -1,8 +1,11 @@
 import json
+from pathlib import Path
 import unittest
 
 from ed_companion.integrations.eddn import (
     EddnError,
+    EDDN_SCHEMA_VALIDATED_AT,
+    JOURNAL_ALLOWED_BY_EVENT,
     envelope,
     prepare_event,
     validate_prepared,
@@ -102,6 +105,60 @@ class EddnJournalAllowlistTests(unittest.TestCase):
         self.assertEqual(prepared["message"]["PowerplayState"], "Exploited")
         self.assertTrue(validate_prepared(prepared))
 
+    def test_useful_observed_astronomy_bgs_and_powerplay_fields_are_preserved(self):
+        prepared = prepare_event({
+            "timestamp": "2026-08-30T10:00:00Z",
+            "event": "FSDJump",
+            "StarSystem": "Public System",
+            "StarPos": [1.0, 2.0, 3.0],
+            "SystemAddress": 123456,
+            "BodyType": "Star",
+            "ControllingPower": "Public Power",
+            "PowerplayConflictProgress": 0.25,
+            "PowerplayStateControlProgress": 0.5,
+            "PowerplayStateReinforcement": 10,
+            "PowerplayStateUndermining": 20,
+            "Conflicts": [{
+                "WarType": "war", "Status": "active",
+                "Faction1": {"Name": "not explicitly allowed"},
+                "FutureNestedField": "must-not-survive",
+            }],
+            "Taxi": True,
+        }, self.context)
+
+        message = prepared["message"]
+        for field in (
+            "BodyType", "ControllingPower", "PowerplayConflictProgress",
+            "PowerplayStateControlProgress", "PowerplayStateReinforcement",
+            "PowerplayStateUndermining", "Conflicts",
+        ):
+            self.assertIn(field, message)
+        self.assertNotIn("Taxi", message)
+        self.assertNotIn("FutureNestedField", json.dumps(message))
+        self.assertTrue(validate_prepared(prepared))
+
+    def test_scan_parents_and_footfall_survive_with_explicit_nested_keys(self):
+        prepared = prepare_event({
+            "timestamp": "2026-08-30T10:00:00Z",
+            "event": "Scan",
+            "StarSystem": "Public System",
+            "StarPos": [1.0, 2.0, 3.0],
+            "SystemAddress": 123456,
+            "BodyName": "Public System 1 a",
+            "BodyID": 4,
+            "Parents": [
+                {"Planet": 3, "Commander": "must-not-survive"},
+                {"Star": 1, "FutureParent": 99},
+            ],
+            "WasFootfalled": False,
+        }, self.context)
+
+        self.assertEqual(
+            prepared["message"]["Parents"], [{"Planet": 3}, {"Star": 1}]
+        )
+        self.assertIs(prepared["message"]["WasFootfalled"], False)
+        self.assertTrue(validate_prepared(prepared))
+
     def test_journal_validation_rejects_unknown_fields_from_old_queue_data(self):
         prepared = {
             "schema": "journal/1",
@@ -122,6 +179,19 @@ class EddnJournalAllowlistTests(unittest.TestCase):
             validate_prepared(prepared)
         with self.assertRaises(EddnError):
             envelope(prepared, self.context, "anonymous-uploader")
+
+    def test_local_allowlists_honor_checked_live_schema_contract(self):
+        contract = json.loads((
+            Path(__file__).parent / "fixtures" / "eddn_journal1_contract.json"
+        ).read_text(encoding="utf-8"))
+
+        self.assertEqual(contract["checked_at"], EDDN_SCHEMA_VALIDATED_AT)
+        required = set(contract["required"])
+        disallowed = set(contract["explicitly_disallowed"])
+        for event, allowed in JOURNAL_ALLOWED_BY_EVENT.items():
+            self.assertTrue(required.issubset(allowed), event)
+            self.assertTrue(set(allowed).isdisjoint(disallowed), event)
+            self.assertIn(event, contract["events"])
 
 
 if __name__ == "__main__":

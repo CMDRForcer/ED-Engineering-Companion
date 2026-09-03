@@ -54,6 +54,7 @@ from ed_companion.engineering import (
 from ed_companion.engineering.portraits import engineer_portrait_url
 from ed_companion.integrations.eddn import (
     EDDN_PENDING_JOB_LIMIT,
+    EDDN_REPLAY_DELAY_MS,
     EDDN_RELAY_URL,
     EddnError,
     EddnRelayDecodeError,
@@ -62,6 +63,7 @@ from ed_companion.integrations.eddn import (
     navroute_rejection_reason,
     prepare_event as prepare_eddn_event,
     prepare_station_snapshot,
+    repair_legacy_prepared as repair_legacy_eddn_prepared,
     rebuild_context as rebuild_eddn_context,
     send as send_eddn_event,
     supports_event as supports_eddn_event,
@@ -763,13 +765,21 @@ class CockpitController(QObject):
         atomic_write(self.eddn_queue_file, json.dumps(self._eddn_queue, indent=2))
 
     def _load_eddn_queue(self):
-        """Recover restart work and isolate legacy jobs that cannot be sent."""
-        jobs = normalize_upload_queue(
-            self._read_local_json(self.eddn_queue_file, [])
+        """Repair safe legacy jobs and isolate only irrecoverable records."""
+        stored = self._read_local_json(self.eddn_queue_file, [])
+        jobs = normalize_upload_queue(stored)
+        previous = self._read_local_json(self.eddn_quarantine_file, [])
+        if not isinstance(previous, list):
+            previous = []
+        candidates = [(job, None) for job in jobs]
+        candidates.extend(
+            (row.get("job"), row)
+            for row in previous if isinstance(row, dict)
         )
-        valid = []
-        invalid = []
-        for job in jobs:
+        valid_by_id = {}
+        quarantine = []
+        repaired_count = 0
+        for job, quarantine_row in candidates:
             try:
                 if str(job.get("target") or "EDDN") != "EDDN":
                     raise EddnError("Queue target is not EDDN.", terminal=True)
@@ -779,30 +789,56 @@ class CockpitController(QObject):
                     raise EddnError("Queue status is unknown.", terminal=True)
                 validate_eddn_prepared(job.get("event"))
             except (EddnError, AttributeError, TypeError) as exc:
-                invalid.append({
-                    "quarantined_at": datetime.now(timezone.utc).isoformat(
-                        timespec="seconds"
-                    ),
-                    "reason": str(exc),
-                    "job": job,
-                })
-            else:
-                valid.append(job)
-        previous = self._read_local_json(self.eddn_quarantine_file, [])
-        if not isinstance(previous, list):
-            previous = []
-        quarantined = previous + invalid
-        if invalid:
+                repaired = repair_legacy_eddn_prepared(
+                    job.get("event") if isinstance(job, dict) else None
+                )
+                if repaired is None:
+                    quarantine.append(quarantine_row or {
+                        "quarantined_at": datetime.now(timezone.utc).isoformat(
+                            timespec="seconds"
+                        ),
+                        "reason": str(exc),
+                        "job": job,
+                    })
+                    continue
+                job = dict(job)
+                job["event"] = repaired
+                digest = hashlib.sha256(json.dumps(
+                    repaired, sort_keys=True, separators=(",", ":")
+                ).encode()).hexdigest()
+                job["id"] = f"EDDN-{digest}"
+                job.pop("last_error", None)
+                job.pop("terminal_error", None)
+                repaired_count += 1
+            job_id = str(job.get("id") or "")
+            if not job_id:
+                digest = hashlib.sha256(json.dumps(
+                    job["event"], sort_keys=True, separators=(",", ":")
+                ).encode()).hexdigest()
+                job_id = f"EDDN-{digest}"
+                job["id"] = job_id
+            existing = valid_by_id.get(job_id)
+            if existing is None or (
+                existing.get("status") != "sent" and job.get("status") == "sent"
+            ):
+                valid_by_id[job_id] = job
+        valid = list(valid_by_id.values())
+        queue_changed = valid != stored
+        quarantine_changed = quarantine != previous
+        if queue_changed:
+            atomic_write(self.eddn_queue_file, json.dumps(valid, indent=2))
+        if quarantine_changed:
             atomic_write(
                 self.eddn_quarantine_file,
-                json.dumps(quarantined, indent=2),
+                json.dumps(quarantine, indent=2),
             )
+        if repaired_count:
             LOGGER.warning(
-                "EDDN quarantined %d invalid persisted queue job(s); valid jobs continue",
-                len(invalid),
+                "EDDN repaired %d legacy queue job(s) with the current public allowlist",
+                repaired_count,
             )
         self._eddn_quarantine_error_groups = {}
-        for row in quarantined:
+        for row in quarantine:
             if not isinstance(row, dict):
                 continue
             job = row.get("job") if isinstance(row.get("job"), dict) else {}
@@ -851,6 +887,22 @@ class CockpitController(QObject):
             })
         return rows
 
+    def _eddn_quarantine_view(self):
+        """Expose grouped reasons only; quarantined payloads remain private."""
+        rows = []
+        for key, count in sorted(
+            getattr(self, "_eddn_quarantine_error_groups", {}).items(),
+            key=lambda item: (-item[1], item[0]),
+        ):
+            schema, separator, reason = key.partition(" | ")
+            rows.append({
+                "schema": schema,
+                "reason": reason if separator else "Validation failed",
+                "count": int(count),
+                "status": "IRREPARABLE",
+            })
+        return rows
+
     def _eddn_delivery_summary(self):
         counts = {key: 0 for key in ("queued", "retry", "sending", "sent", "failed")}
         schema_counts = {}
@@ -879,6 +931,27 @@ class CockpitController(QObject):
         persisted = self._eddn_config.get("last_success")
         if not isinstance(persisted, dict):
             persisted = {}
+        last_success_at = str(
+            persisted.get("sentAt") or queued_sent.get("sent_at") or ""
+        )
+        last_not_shareable = str(
+            self._eddn_config.get("last_not_shareable") or ""
+        )
+        last_not_shareable_at = str(
+            self._eddn_config.get("last_not_shareable_at") or ""
+        )
+        if last_success_at and last_not_shareable_at:
+            try:
+                success_time = datetime.fromisoformat(
+                    last_success_at.replace("Z", "+00:00")
+                )
+                rejected_time = datetime.fromisoformat(
+                    last_not_shareable_at.replace("Z", "+00:00")
+                )
+                if success_time >= rejected_time:
+                    last_not_shareable = ""
+            except (TypeError, ValueError):
+                pass
         next_retry_epoch = min((
             float(job.get("next_retry_at", 0) or 0)
             for job in self._eddn_queue
@@ -890,14 +963,43 @@ class CockpitController(QObject):
                 timespec="seconds"
             ) if next_retry_epoch else ""
         )
+        sent_times = []
+        for job in self._eddn_queue:
+            if job.get("status") != "sent" or not job.get("sent_at"):
+                continue
+            try:
+                sent_times.append(datetime.fromisoformat(
+                    str(job["sent_at"]).replace("Z", "+00:00")
+                ).timestamp())
+            except (TypeError, ValueError, OverflowError):
+                continue
+        sent_times = sorted(sent_times)[-30:]
+        throughput = 0.0
+        if len(sent_times) >= 2 and sent_times[-1] > sent_times[0]:
+            throughput = 60.0 * (len(sent_times) - 1) / (
+                sent_times[-1] - sent_times[0]
+            )
+        waiting = counts["queued"] + counts["retry"] + counts["sending"]
+        eta_seconds = int(waiting * 60 / throughput) if throughput > 0 else 0
+        current = next((
+            job for job in self._eddn_queue if job.get("status") == "sending"
+        ), {})
+        current_event = current.get("event") if isinstance(current.get("event"), dict) else {}
+        profile_consistent = (
+            self.eddn_queue_file.parent == self.config_dir
+            and all(
+                job.get("profile_key") in {None, "", self._eddn_profile_key}
+                for job in self._eddn_queue if isinstance(job, dict)
+            )
+        )
         return {
             **counts,
-            "waiting": counts["queued"] + counts["retry"] + counts["sending"],
-            "lastSuccessAt": str(persisted.get("sentAt") or queued_sent.get("sent_at") or ""),
+            "waiting": waiting,
+            "lastSuccessAt": last_success_at,
             "lastSuccessSchema": str(persisted.get("schema") or sent_event.get("schema") or ""),
             "lastSuccessEvent": str(persisted.get("eventName") or sent_message.get("event") or ""),
             "lastError": str(failed.get("last_error") or ""),
-            "lastNotShareable": str(self._eddn_config.get("last_not_shareable") or ""),
+            "lastNotShareable": last_not_shareable,
             "nextRetryAt": next_retry_at,
             "schemaCounts": schema_counts,
             "errorGroups": error_groups,
@@ -908,16 +1010,22 @@ class CockpitController(QObject):
                 getattr(self, "_eddn_quarantine_error_groups", {}).values()
             ),
             "cooldownActive": bool(next_retry_epoch > time.time()),
+            "currentSchema": str(current_event.get("schema") or ""),
+            "throughputPerMinute": round(throughput, 1),
+            "etaSeconds": eta_seconds,
+            "profileKey": self._eddn_profile_key,
+            "storageFile": f"profile-{self._eddn_profile_key}/community_upload_queue.json",
+            "profileConsistent": profile_consistent,
         }
 
     def _eddn_station_snapshot_view(self, directory=None):
         """Describe the three Elite station snapshots without exposing contents."""
         directory = Path(directory) if directory is not None else journal_dir()
         rows = []
-        for kind, filename, schema in (
-            ("MARKET", "Market.json", "commodity/3"),
-            ("OUTFITTING", "Outfitting.json", "outfitting/2"),
-            ("SHIPYARD", "Shipyard.json", "shipyard/2"),
+        for kind, filename, schemas in (
+            ("MARKET", "Market.json", ("commodity/3",)),
+            ("OUTFITTING", "Outfitting.json", ("outfitting/2", "outfitting/3")),
+            ("SHIPYARD", "Shipyard.json", ("shipyard/2",)),
         ):
             path = directory / filename
             row = {
@@ -968,7 +1076,7 @@ class CockpitController(QObject):
             job = next((
                 job for job in reversed(self._eddn_queue)
                 if isinstance(job.get("event"), dict)
-                and job["event"].get("schema") == schema
+                and job["event"].get("schema") in schemas
                 and isinstance(job["event"].get("message"), dict)
                 and str(job["event"]["message"].get("stationName") or "").casefold()
                     == row["station"].casefold()
@@ -982,7 +1090,14 @@ class CockpitController(QObject):
                 })
             else:
                 receipts = self._eddn_config.get("station_receipts")
-                receipt = receipts.get(schema, {}) if isinstance(receipts, dict) else {}
+                receipt = next((
+                    receipts.get(schema, {}) for schema in schemas
+                    if isinstance(receipts, dict)
+                    and isinstance(receipts.get(schema), dict)
+                    and str(receipts[schema].get("stationName") or "").casefold()
+                        == row["station"].casefold()
+                    and str(receipts[schema].get("timestamp") or "") == timestamp
+                ), {})
                 if (
                     isinstance(receipt, dict)
                     and str(receipt.get("stationName") or "").casefold() == row["station"].casefold()
@@ -2395,6 +2510,10 @@ class CockpitController(QObject):
     )
     eddnQueue = Property(
         "QVariantList", lambda self: self._eddn_queue_view(),
+        notify=connectionChanged,
+    )
+    eddnQuarantine = Property(
+        "QVariantList", lambda self: self._eddn_quarantine_view(),
         notify=connectionChanged,
     )
     eddnDeliverySummary = Property(
@@ -4811,6 +4930,8 @@ class CockpitController(QObject):
                 "result": job["last_result"],
             }
             self._eddn_config["last_success"] = proof
+            self._eddn_config["last_not_shareable"] = ""
+            self._eddn_config["last_not_shareable_at"] = ""
             if proof["schema"] in {
                 "commodity/3", "outfitting/2", "outfitting/3", "shipyard/2",
             }:
@@ -4849,6 +4970,8 @@ class CockpitController(QObject):
         self._save_eddn()
         self._publish_eddn_delivery_change()
         self.connectionChanged.emit()
+        if success or job.get("status") == "failed":
+            QTimer.singleShot(EDDN_REPLAY_DELAY_MS, self._process_eddn_queue)
 
     @Slot()
     def retryEddnFailed(self):

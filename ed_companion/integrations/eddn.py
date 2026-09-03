@@ -12,9 +12,11 @@ from ed_companion import APP_VERSION
 
 EDDN_UPLOAD_URL = "https://eddn.edcd.io:4430/upload/"
 EDDN_RELAY_URL = "tcp://eddn.edcd.io:9500"
-EDDN_SCHEMA_VALIDATED_AT = "2026-08-21"
+EDDN_SCHEMA_VALIDATED_AT = "2026-09-03"
 EDDN_CAPI_ONLY_SCHEMAS = frozenset({"blackmarket/1", "fcmaterials_capi/1"})
 EDDN_PENDING_JOB_LIMIT = 2000
+# EDMC's established replay cadence is roughly two sequential messages/second.
+EDDN_REPLAY_DELAY_MS = 400
 
 
 def should_log_rejection(
@@ -100,10 +102,13 @@ JOURNAL_ALLOWED_BY_EVENT = {
         "StationEconomy", "StationEconomies", "DistFromStarLS", "LandingPads",
     },
     "FSDJump": JOURNAL_COMMON_ALLOWED | {
-        "Body", "BodyID", "Powers", "PowerplayState", "SystemFaction",
+        "Body", "BodyID", "BodyType", "Powers", "PowerplayState",
+        "ControllingPower", "PowerplayConflictProgress",
+        "PowerplayStateControlProgress", "PowerplayStateReinforcement",
+        "PowerplayStateUndermining", "SystemFaction",
         "SystemAllegiance", "SystemEconomy", "SystemSecondEconomy",
         "SystemGovernment", "SystemSecurity", "Population", "Factions",
-        "ThargoidWar",
+        "Conflicts", "ThargoidWar",
     },
     "Scan": JOURNAL_COMMON_ALLOWED | {
         "ScanType", "BodyName", "BodyID", "DistanceFromArrivalLS",
@@ -115,12 +120,16 @@ JOURNAL_ALLOWED_BY_EVENT = {
         "AscendingNode", "MeanAnomaly", "RotationPeriod", "AxialTilt", "Rings",
         "ReserveLevel", "WasDiscovered", "WasMapped", "StarType", "Subclass",
         "StellarMass", "AbsoluteMagnitude", "Age_MY", "Luminosity",
+        "Parents", "WasFootfalled",
     },
     "Location": JOURNAL_COMMON_ALLOWED | {
         "Body", "BodyID", "BodyType", "Docked", "StationName", "StationType",
         "MarketID", "StationFaction", "StationGovernment", "StationAllegiance",
         "StationServices", "StationEconomy", "StationEconomies", "DistFromStarLS",
         "Powers", "PowerplayState", "SystemFaction", "SystemAllegiance",
+        "ControllingPower", "PowerplayConflictProgress",
+        "PowerplayStateControlProgress", "PowerplayStateReinforcement",
+        "PowerplayStateUndermining",
         "SystemEconomy", "SystemSecondEconomy", "SystemGovernment",
         "SystemSecurity", "Population", "Factions", "Conflicts", "ThargoidWar",
     },
@@ -132,6 +141,9 @@ JOURNAL_ALLOWED_BY_EVENT = {
         "MarketID", "StationFaction", "StationGovernment", "StationAllegiance",
         "StationServices", "StationEconomy", "StationEconomies", "DistFromStarLS",
         "Powers", "PowerplayState", "SystemFaction", "SystemAllegiance",
+        "ControllingPower", "PowerplayConflictProgress",
+        "PowerplayStateControlProgress", "PowerplayStateReinforcement",
+        "PowerplayStateUndermining",
         "SystemEconomy", "SystemSecondEconomy", "SystemGovernment",
         "SystemSecurity", "Population", "Factions", "Conflicts", "ThargoidWar",
     },
@@ -159,6 +171,7 @@ JOURNAL_NESTED_ALLOWED = {
     "Conflicts": {
         "WarType", "Status", "Faction1", "Faction2", "Name", "Stake", "WonDays",
     },
+    "Parents": {"Null", "Ring", "Star", "Planet"},
 }
 
 
@@ -412,6 +425,28 @@ def _allowlisted_journal_message(event, event_name):
             continue
         message[key] = value
     return message
+
+
+def repair_legacy_prepared(prepared):
+    """Rebuild an old journal/1 job from today's explicit public allowlist."""
+    if not isinstance(prepared, dict) or prepared.get("schema") != "journal/1":
+        return None
+    source = prepared.get("message")
+    if not isinstance(source, dict):
+        return None
+    source = sanitize(source)
+    event_name = str(source.get("event") or "")
+    if event_name not in JOURNAL_ALLOWED_BY_EVENT:
+        return None
+    repaired = {
+        "schema": "journal/1",
+        "message": _allowlisted_journal_message(source, event_name),
+    }
+    try:
+        validate_prepared(repaired)
+    except EddnError:
+        return None
+    return repaired
 
 
 def navroute_rejection_reason(event):

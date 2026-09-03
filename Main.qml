@@ -6148,6 +6148,26 @@ ApplicationWindow {
                                 color: textPrimary; font.bold: true; font.pixelSize: 10
                             }
                             Label {
+                                text: cockpit.eddnDeliverySummary.storageFile
+                                      + (cockpit.eddnDeliverySummary.profileConsistent
+                                         ? window.t("connections.profile_match", " · PROFILE MATCH")
+                                         : window.t("connections.profile_mismatch", " · PROFILE MISMATCH"))
+                                color: cockpit.eddnDeliverySummary.profileConsistent ? green : error
+                                font.pixelSize: 9; elide: Text.ElideMiddle; Layout.fillWidth: true
+                            }
+                            Label {
+                                visible: cockpit.eddnDeliverySummary.waiting > 0
+                                text: window.tf("connections.queue_rate", "%1 JOBS/MIN", [cockpit.eddnDeliverySummary.throughputPerMinute])
+                                      + (cockpit.eddnDeliverySummary.etaSeconds > 0
+                                         ? window.tf("connections.queue_eta", " · ABOUT %1 MIN REMAINING", [Math.max(1, Math.ceil(cockpit.eddnDeliverySummary.etaSeconds / 60))])
+                                         : "")
+                                      + (cockpit.eddnDeliverySummary.currentSchema
+                                         ? " · " + cockpit.eddnDeliverySummary.currentSchema
+                                         : "")
+                                color: cyan; font.pixelSize: 9
+                                wrapMode: Text.WordWrap; Layout.fillWidth: true
+                            }
+                            Label {
                                 text: cockpit.eddnDeliverySummary.lastSuccessAt
                                       ? "LAST ACCEPTED · " + cockpit.eddnDeliverySummary.lastSuccessAt
                                         + " · " + (cockpit.eddnDeliverySummary.lastSuccessEvent || cockpit.eddnDeliverySummary.lastSuccessSchema)
@@ -6171,6 +6191,21 @@ ApplicationWindow {
                                 visible: Boolean(cockpit.eddnDeliverySummary.lastNotShareable)
                                 text: window.tf("status.not_shareable", "NOT SHAREABLE · %1", [cockpit.eddnDeliverySummary.lastNotShareable])
                                 color: orange; wrapMode: Text.WordWrap; Layout.fillWidth: true; font.pixelSize: 10
+                            }
+                            Label {
+                                visible: cockpit.eddnDeliverySummary.quarantined > 0
+                                text: window.tf("connections.quarantine_count", "QUARANTINE · %1 IRREPARABLE", [cockpit.eddnDeliverySummary.quarantined])
+                                color: error; font.bold: true; font.pixelSize: 10
+                            }
+                            Repeater {
+                                model: cockpit.eddnQuarantine
+                                delegate: Label {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    text: modelData.schema + " · " + modelData.count + " · " + modelData.reason
+                                    color: error; font.pixelSize: 9
+                                    elide: Text.ElideRight
+                                }
                             }
                         }
                     }

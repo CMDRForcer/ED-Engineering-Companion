@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Rebuild legacy EDDN `journal/1` queue records through the current public
+  allowlist, preserving completed receipts without resending them and keeping
+  only irrecoverable records in quarantine.
+- Preserve schema-valid public astronomy, BGS and Powerplay fields observed in
+  `Scan`, `FSDJump`, `Location` and `CarrierJump`, while continuing to omit
+  transient Commander-mode flags and all private or localized data.
+- Align EDDN queue diagnostics with the active profile storage, expose
+  payload-free quarantine groups, delivery rate, cooldown and ETA, verify the
+  journal allowlist against a pinned public-schema contract, and drain valid
+  backlog sequentially at the established replay cadence.
+- Clear an obsolete EDDN not-shareable notice after a later event is accepted
+  by the gateway, without making the rejected local event uploadable.
+- Recognize both supported Outfitting schema versions when matching station
+  snapshots to delivery receipts, avoiding a false `FRESH` status after send.
+
 ## 21.200 — 2026-09-03
 
 ### Added

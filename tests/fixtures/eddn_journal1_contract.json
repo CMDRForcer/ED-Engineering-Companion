@@ -1,0 +1,13 @@
+{
+  "source": "https://eddn.edcd.io/schemas/journal/1",
+  "checked_at": "2026-09-03",
+  "sha256": "5fe73b26eda01b219248b3de64ad84cebc77b262969f6271e9303c97afac5857",
+  "required": ["timestamp", "event", "StarSystem", "StarPos", "SystemAddress"],
+  "events": ["Docked", "FSDJump", "Scan", "Location", "SAASignalsFound", "CarrierJump", "CodexEntry"],
+  "explicitly_disallowed": [
+    "ActiveFine", "CockpitBreach", "BoostUsed", "FuelLevel", "FuelUsed",
+    "JumpDist", "Latitude", "Longitude", "Wanted", "IsNewEntry",
+    "NewTraitsDiscovered", "Traits", "VoucherAmount"
+  ],
+  "localized_suffix": "_Localised"
+}
