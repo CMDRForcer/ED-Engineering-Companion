@@ -278,7 +278,7 @@
   "import.no_preview": "AUCUNE PRÉVUE",
   "import.partial": "PARTIEL",
   "import.placeholder": "Déposez un fichier .json ici ou collez Coriolis JSON / EDSY-SLEF / lien intégré",
-  "import.safety": "Les plans existants restent intacts; les duplicatas exacts sont ignorés. Les modules cibles importés restent non liés jusqu'à ce que Journal les confirme.",
+  "import.safety": "Les plans existants restent intacts ; les doublons exacts sont ignorés. Les plans importés restent liés au vaisseau, à l'emplacement et au module cibles jusqu'à confirmation de l'installation par le Journal.",
   "logbook.current_session": "SESSION ACTUELLE",
   "logbook.day_ago": "%1 il y a jour",
   "logbook.days_ago": "%1 il y a des jours",

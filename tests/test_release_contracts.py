@@ -7,7 +7,12 @@ from unittest import mock
 
 import requests
 
-from ed_companion.build_import import _read_input, preview_build
+from ed_companion.build_import import (
+    JOURNAL_BLUEPRINT_NAMES,
+    JOURNAL_EXPERIMENTAL_NAMES,
+    _read_input,
+    preview_build,
+)
 from ed_companion.integrations.eddn import (
     prepare_event,
     schema_parity_report,
@@ -1043,6 +1048,100 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertTrue(desired["moduleChange"])
         self.assertEqual(desired["desiredModule"], "FUEL SCOOP")
         self.assertEqual(desired["desiredSizeRating"], "5A")
+
+    def test_slef_machine_aliases_and_intrinsic_guardian_mods_import_globally(self):
+        root = Path(__file__).resolve().parents[1]
+        ships = json.loads((root / "ed_data" / "ships.json").read_text(encoding="utf-8"))
+        ship = next(row for row in ships if row["symbol"] == "Mandalay")
+        slots = ship_slot_layout(ship, [], [])
+        payload = {
+            "header": {"appName": "EDSY", "appVersion": "test"},
+            "data": {"Ship": "mandalay", "Modules": [
+                {
+                    "Slot": "MainEngines", "Item": "int_engine_size4_class2",
+                    "Engineering": {
+                        "BlueprintName": "Dirty_Drive_Tuning", "Level": 5,
+                        "ExperimentalEffect": "special_engine_lightweight",
+                    },
+                },
+                {
+                    "Slot": "PowerDistributor",
+                    "Item": "int_powerdistributor_size5_class2",
+                    "Engineering": {
+                        "BlueprintName": "PowerDistributor_EngineFocused",
+                        "Level": 5,
+                        "ExperimentalEffect": "special_powerdistributor_lightweight",
+                    },
+                },
+                {
+                    "Slot": "Radar", "Item": "int_sensors_size5_class2",
+                    "Engineering": {
+                        "BlueprintName": "Sensor_LightWeight", "Level": 5,
+                    },
+                },
+                {
+                    "Slot": "Slot02_Size5",
+                    "Item": "int_guardianfsdbooster_size5",
+                    "Engineering": {
+                        "BlueprintName": "GuardianModule_Sturdy", "Level": 1,
+                    },
+                },
+                {
+                    "Slot": "Slot03_Size4",
+                    "Item": "int_shieldgenerator_size3_class2",
+                    "Engineering": {
+                        "BlueprintName": "ShieldGenerator_Optimised",
+                        "Level": 5,
+                        "ExperimentalEffect": "special_shield_lightweight",
+                    },
+                },
+            ]},
+        }
+
+        preview = preview_build(
+            json.dumps(payload), "Mandalay",
+            json.loads((root / "ed_data" / "blueprints.json").read_text(encoding="utf-8")),
+            json.loads((root / "ed_data" / "experimental_effects.json").read_text(encoding="utf-8")),
+            module_matches_type, physical_slots=slots,
+        )
+
+        self.assertEqual(preview["status"], "COMPLETE")
+        self.assertEqual(preview["partial"], 0)
+        self.assertEqual(preview["warnings"], [])
+        rows = {row["slot"]: row for row in preview["rows"]}
+        self.assertEqual(rows["MainEngines"]["experimental"], "Stripped Down")
+        self.assertEqual(rows["PowerDistributor"]["experimental"], "Stripped Down")
+        self.assertEqual(rows["Radar"]["blueprint"], "Light Weight Scanner")
+        self.assertEqual(rows["Slot02_Size5"]["planMode"], "module_only")
+        self.assertTrue(rows["Slot02_Size5"]["moduleChange"])
+        self.assertTrue(rows["Slot02_Size5"]["intrinsicEngineering"])
+        self.assertEqual(
+            rows["Slot03_Size4"]["blueprint"],
+            "Enhanced, Low Power Shields",
+        )
+        self.assertEqual(rows["Slot03_Size4"]["experimental"], "Stripped Down")
+
+    def test_all_declared_import_aliases_resolve_to_packaged_catalog_entries(self):
+        root = Path(__file__).resolve().parents[1]
+        blueprint_names = {
+            str(row.get("Name") or "") for row in json.loads(
+                (root / "ed_data" / "blueprints.json").read_text(encoding="utf-8")
+            )
+        }
+        experimental_names = {
+            str(row.get("Name") or "") for row in json.loads(
+                (root / "ed_data" / "experimental_effects.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+        }
+
+        self.assertEqual(
+            sorted(set(JOURNAL_BLUEPRINT_NAMES.values()) - blueprint_names), []
+        )
+        self.assertEqual(
+            sorted(set(JOURNAL_EXPERIMENTAL_NAMES.values()) - experimental_names), []
+        )
 
     def test_coriolis_component_path_maps_only_through_hull_schema(self):
         root = Path(__file__).resolve().parents[1]

@@ -41,9 +41,12 @@ JOURNAL_BLUEPRINT_NAMES = {
     "dirty": "Dirty Drive Tuning",
     "dirtydrives": "Dirty Drive Tuning",
     "engineclean": "Clean Drive Tuning",
+    "enginetuned": "Clean Drive Tuning",
     "enginedirty": "Dirty Drive Tuning",
     "enginereinforced": "Drive Strengthening",
     "fsdfastboot": "Faster FSD Boot Sequence",
+    "fsdinterdictorexpanded": "Expanded FSD Interdictor Capture Arc",
+    "fsdinterdictorlongrange": "Long Range FSD Interdictor",
     "fsdlongrange": "Increased FSD Range",
     "fsdshielded": "Shielded FSD",
     "heavydutyarmour": "Heavy Duty",
@@ -52,8 +55,11 @@ JOURNAL_BLUEPRINT_NAMES = {
     "hullreinforcementkinetic": "Kinetic Resistant Hull Reinforcement",
     "hullreinforcementlightweight": "Lightweight Hull Reinforcement",
     "hullreinforcementthermic": "Thermal Resistant Hull Reinforcement",
+    "hullreinforcementadvanced": "Lightweight Hull Reinforcement",
     "increasedrange": "Increased FSD Range",
     "mischeatsinkcapacity": "Ammo Capacity",
+    "miscchaffcapacity": "Ammo Capacity",
+    "miscpointdefensecapacity": "Ammo Capacity",
     "misclightweight": "Lightweight",
     "miscreinforced": "Reinforced",
     "miscshielded": "Shielded",
@@ -70,10 +76,14 @@ JOURNAL_BLUEPRINT_NAMES = {
     "powerplantarmoured": "Armoured",
     "powerplantboosted": "Overcharged",
     "powerplantlowemissions": "Low Emissions",
+    "powerplantstealth": "Low Emissions",
     "powerplantovercharged": "Overcharged",
+    "mrpheavyduty": "Heavy Duty",
     "sensorexpanded": "Expanded Probe Scanning Radius",
     "sensorfastscan": "Fast Scanner",
+    "sensorlightweight": "Light Weight Scanner",
     "sensorlongrange": "Long Range Scanner",
+    "sensorwideangle": "Wide Angle Scanner",
     "sensorsensorlightweight": "Light Weight Scanner",
     "sensorsensorwideangle": "Wide Angle Scanner",
     "shieldboosterheavyduty": "Heavy Duty",
@@ -83,9 +93,12 @@ JOURNAL_BLUEPRINT_NAMES = {
     "shieldboosterthermic": "Thermal Resistant",
     "generatorlowpower": "Enhanced, Low Power Shields",
     "shieldgeneratorlowpower": "Enhanced, Low Power Shields",
+    "shieldgeneratoroptimised": "Enhanced, Low Power Shields",
     "shieldgeneratorkinetic": "Kinetic Resistant Shields",
     "shieldgeneratorreinforced": "Reinforced Shields",
     "shieldgeneratorthermic": "Thermal Resistant Shields",
+    "shieldcellbankrapid": "Rapid Charge",
+    "shieldcellbankspecialised": "Specialised",
     "weaponefficient": "Efficient Weapon",
     "weaponfocused": "Focused Weapon",
     "weapondoubleshot": "Double Shot",
@@ -95,6 +108,7 @@ JOURNAL_BLUEPRINT_NAMES = {
     "weaponovercharged": "Overcharged Weapon",
     "weaponrapidfire": "Rapid Fire Modification",
     "weaponreinforced": "Sturdy Mount",
+    "weaponsturdy": "Sturdy Mount",
     "weaponshortrange": "Short Range Blaster",
     "weaponfocuseddistributor": "Weapon Focused",
 }
@@ -104,18 +118,53 @@ JOURNAL_BLUEPRINT_NAMES = {
 # many suffixes do not resemble the displayed effect. Keep their canonical
 # catalog names in one place; localized text remains independent evidence.
 JOURNAL_EXPERIMENTAL_NAMES = {
+    "specialblindingshell": "Dazzle Shell",
+    "specialchokecanister": "Ion Disruptor",
+    "specialdeepcutpayload": "Penetrator Payload",
+    "specialdispersalfield": "Dispersal Field",
+    "specialdistortionfield": "Inertial Impact",
+    "specialdragmunitions": "Drag Munition",
+    "specialemissivemunitions": "Emissive Munitions",
+    "specialfeedbackcascade": "Feedback Cascade",
+    "specialfeedbackcascadecooled": "Feedback Cascade",
+    "specialforceshell": "Force Shell",
+    "specialfsdinterrupt": "FSD Interrupt (Dumbfire only)",
+    "specialhighyieldshell": "High Yield Shell",
+    "speciallockbreaker": "Target Lock Breaker",
+    "specialmasslock": "Mass Lock Munition",
+    "specialoverloadmunitions": "Overload Munitions",
+    "specialpenetratormunitions": "Penetrator Munitions (Dumbfire only)",
+    "specialphasingsequence": "Phasing Sequence",
+    "specialplasmaslug": "Plasma Slug",
+    "specialradiantcanister": "Radiant Canister",
+    "specialregenerationsequence": "Regeneration Sequence",
+    "specialreverberatingcascade": "Reverberating Cascade",
+    "specialscramblespectrum": "Scramble Spectrum",
+    "specialscreeningshell": "Screening Shell",
+    "specialshiftlockcanister": "Shift-Lock Canister",
+    "specialsmartrounds": "Smart Rounds",
+    "specialsuperpenetratorcooled": "Super Penetrator",
+    "specialthermalcascade": "Thermal Cascade",
+    "specialthermalconduit": "Thermal Conduit",
+    "specialthermalshock": "Thermal Shock",
+    "specialthermalvent": "Thermal Vent",
+    "specialweaponefficient": "Flow Control",
     "specialautoloader": "Auto Loader",
     "specialarmourchunky": "Deep Plating",
     "specialarmourexplosive": "Layered Plating",
     "specialarmourkinetic": "Angled Plating",
     "specialarmourthermic": "Reflective Plating",
     "specialenginecooled": "Thermal Spread",
+    "specialenginelightweight": "Stripped Down",
     "specialengineoverloaded": "Drag Drives",
+    "specialenginehaulage": "Drive Distributors",
+    "specialenginetoughened": "Double Braced",
     "specialcorrosiveshell": "Corrosive Shell",
     "specialfsdcooled": "Thermal Spread",
     "specialfsdfuelcapacity": "Deep Charge",
     "specialfsdheavy": "Mass Manager",
     "specialfsdlightweight": "Stripped Down",
+    "specialfsdtoughened": "Double Braced",
     "specialhullreinforcementchunky": "Deep Plating",
     "specialhullreinforcementexplosive": "Layered Plating",
     "specialhullreinforcementkinetic": "Angled Plating",
@@ -123,15 +172,26 @@ JOURNAL_EXPERIMENTAL_NAMES = {
     "specialplasmaslugcooled": "Plasma Slug",
     "specialpowerdistributorcapacity": "Cluster Capacitor",
     "specialpowerdistributorfast": "Super Conduits",
+    "specialpowerdistributorlightweight": "Stripped Down",
+    "specialpowerdistributorefficient": "Flow Control",
+    "specialpowerdistributortoughened": "Double Braced",
     "specialpowerplantcooled": "Thermal Spread",
     "specialpowerplanthighcharge": "Monstered",
     "specialpowerplantlightweight": "Stripped Down",
+    "specialpowerplanttoughened": "Double Braced",
     "specialshieldboosterchunky": "Super Capacitor",
     "specialshieldboosterdoublebraced": "Double Braced",
     "specialshieldboosterexplosive": "Blast Block",
     "specialshieldboosterflowcontrol": "Flow Control",
     "specialshieldboosterkinetic": "Force Block",
     "specialshieldboosterthermic": "Thermo Block",
+    "specialshieldboosterefficient": "Flow Control",
+    "specialshieldboostertoughened": "Double Braced",
+    "specialshieldcellefficient": "Flow Control",
+    "specialshieldcellgradual": "Recycling Cells",
+    "specialshieldcelllightweight": "Stripped Down",
+    "specialshieldcelloversized": "Boss Cells",
+    "specialshieldcelltoughened": "Double Braced",
     "specialshieldhighcapacity": "Hi-cap",
     "specialshieldkinetic": "Force Block",
     "specialshieldlightweight": "Stripped Down",
@@ -139,6 +199,10 @@ JOURNAL_EXPERIMENTAL_NAMES = {
     "specialshieldmultiweave": "Multi-weave",
     "specialshieldregenerative": "Fast Charge",
     "specialshieldthermic": "Thermo Block",
+    "specialshieldefficient": "Lo-draw",
+    "specialshieldhealth": "Hi-cap",
+    "specialshieldresistive": "Multi-weave",
+    "specialshieldtoughened": "Double Braced",
     "specialweapondamage": "Oversized",
     "specialweaponlightweight": "Stripped Down",
     "specialweaponrateoffire": "Multi-Servos",
@@ -609,6 +673,33 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
         blueprint_evidence, grade, experimental_evidence = _engineering(module)
         blueprint_name = next(iter(blueprint_evidence), "")
         experimental_name = next(iter(experimental_evidence), "")
+        types = _module_types(module_id, blueprint_types, module_matcher)
+        # SLEF exposes intrinsic modifications on Guardian, Human Tech Broker,
+        # pre-engineered, and other special modules through the same fields as
+        # ordinary engineering. If the module has no engineerable family, its
+        # installed properties are not a craftable wishlist recipe. Preserve
+        # the module replacement without inventing an engineering plan.
+        if (blueprint_evidence or experimental_evidence) and not types:
+            rows.append({
+                "status": "ready" if module_change else "ignored", "slot": slot,
+                "sourceSlot": source_slot, "slotBound": bool(slot),
+                "module": module_id or "Unknown module", "blueprint": "",
+                "grade": 0, "experimental": "", "planMode": (
+                    "module_only" if module_change else ""
+                ),
+                "moduleChange": module_change,
+                "installedModule": installed_module,
+                "desiredModule": module_id,
+                "intrinsicEngineering": True,
+                "detail": (
+                    "Module replacement tracked; built-in or non-craftable "
+                    "modification is not added as an engineering recipe."
+                    if module_change else
+                    "Built-in or non-craftable modification; installed module "
+                    "already matches."
+                ),
+            })
+            continue
         if not blueprint_evidence and not experimental_evidence:
             rows.append({
                 "status": "ready" if module_change else "ignored", "slot": slot,
@@ -626,7 +717,6 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
                 ),
             })
             continue
-        types = _module_types(module_id, blueprint_types, module_matcher)
         blueprint_group = _resolve_blueprint_group(
             blueprint_evidence, groups, types
         )

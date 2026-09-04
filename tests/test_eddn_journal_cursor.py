@@ -167,6 +167,70 @@ class EddnJournalCursorTests(unittest.TestCase):
                 ["First", "Second"],
             )
 
+    def test_failed_queue_save_does_not_advance_cursor_and_retries(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "Journal.01.log"
+            path.write_text(_line({
+                "timestamp": "2026-08-30T10:01:00Z", "event": "FSDJump",
+                "StarSystem": "Persistence Test", "StarPos": [7, 8, 9],
+                "SystemAddress": 126,
+            }), encoding="utf-8")
+            controller = self._controller([path])
+            controller._eddn_queue = []
+            controller.eddn_config_file = root / "eddn_config.json"
+            controller.eddn_queue_file = root / "community_upload_queue.json"
+            controller.eddn_cursor_file = root / "eddn_journal_cursor.json"
+            controller.connectionChanged = mock.Mock()
+            controller._publish_eddn_delivery_change = lambda: None
+            controller._enqueue_eddn = CockpitController._enqueue_eddn.__get__(
+                controller, CockpitController
+            )
+            controller._save_eddn = CockpitController._save_eddn.__get__(
+                controller, CockpitController
+            )
+            controller._save_eddn_cursor = (
+                CockpitController._save_eddn_cursor.__get__(
+                    controller, CockpitController
+                )
+            )
+
+            real_atomic_write = __import__(
+                "ed_companion.phase14.controller", fromlist=["atomic_write"]
+            ).atomic_write
+
+            def fail_queue_save(target, text, encoding="utf-8"):
+                if Path(target) == controller.eddn_queue_file:
+                    return False
+                return real_atomic_write(target, text, encoding)
+
+            with mock.patch(
+                "ed_companion.phase14.controller.atomic_write",
+                side_effect=fail_queue_save,
+            ):
+                self._scan(controller, [path])
+
+            self.assertEqual(controller._journal_offsets.get(path.name, 0), 0)
+            self.assertFalse(controller.eddn_cursor_file.exists())
+            self.assertEqual(len(controller._eddn_queue), 1)
+            self.assertTrue(controller._eddn_queue_persist_pending)
+            self.assertIn("could not be persisted", controller._eddn_status)
+
+            self._scan(controller, [path])
+
+            self.assertEqual(
+                controller._journal_offsets[path.name], path.stat().st_size
+            )
+            self.assertFalse(controller._eddn_queue_persist_pending)
+            saved_queue = json.loads(
+                controller.eddn_queue_file.read_text(encoding="utf-8")
+            )
+            self.assertEqual(len(saved_queue), 1)
+            self.assertEqual(
+                saved_queue[0]["event"]["message"]["StarSystem"],
+                "Persistence Test",
+            )
+
     def test_full_queue_pauses_cursor_then_retains_every_event(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "Journal.01.log"
@@ -184,7 +248,7 @@ class EddnJournalCursorTests(unittest.TestCase):
                 {"id": f"existing-{index}", "status": "queued"}
                 for index in range(2000)
             ]
-            controller._save_eddn = lambda: None
+            controller._save_eddn = lambda: True
             controller._publish_eddn_delivery_change = lambda: None
             controller.connectionChanged = mock.Mock()
             controller._enqueue_eddn = CockpitController._enqueue_eddn.__get__(

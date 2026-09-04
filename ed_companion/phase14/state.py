@@ -683,7 +683,14 @@ def set_journal_dir(path: object) -> bool:
     value = Path(str(path or "").strip()).expanduser()
     if not value.is_dir():
         return False
-    atomic_write(app_data_dir() / "journal_path.txt", str(value))
+    try:
+        saved = atomic_write(app_data_dir() / "journal_path.txt", str(value))
+    except OSError as exc:
+        LOGGER.error("Journal directory configuration save failed: %s", exc)
+        return False
+    if not saved:
+        LOGGER.error("Journal directory configuration could not be persisted")
+        return False
     clear_journal_event_cache()
     return True
 
@@ -1824,11 +1831,50 @@ def module_purchase_identity(module_id: object) -> tuple[str, str]:
     identity = re.search(r"_size(\d+)_class(\d+)", symbol.casefold())
     rating_letters = {1: "E", 2: "D", 3: "C", 4: "B", 5: "A"}
     size_rating = ""
-    if identity and int(identity.group(2)) in rating_letters:
+    module_class = int(identity.group(2)) if identity else -1
+    special_rating = next((
+        ratings.get(module_class, "")
+        for marker, ratings in (
+            ("intbuggybay", {1: "H", 2: "G"}),
+            ("intlargebuggybay", {3: "F"}),
+            ("intmkiilargebuggybay", {3: "F"}),
+            ("intcorrosionproofcargorack", {2: "F"}),
+            ("intexpmodulestabiliser", {3: "F"}),
+            ("intfighterbaymk2", {1: "D"}),
+            ("intfighterbay", {1: "D"}),
+            ("intlargecargorack", {1: "D"}),
+            ("intmkiipassengercabin", {1: "D", 2: "C"}),
+            ("intpassengercabin", {0: "E"}),
+        )
+        if marker.replace(" ", "") in normalized and module_class in ratings
+    ), "")
+    rating = special_rating or rating_letters.get(module_class, "")
+    if identity and rating:
         size_rating = (
             f"{identity.group(1)}"
-            f"{rating_letters[int(identity.group(2))]}"
+            f"{rating}"
         )
+    if not size_rating:
+        fixed_identity = {
+            "intdockingcomputerstandard": "1E",
+            "intdockingcomputeradvanced": "1E",
+            "intsupercruiseassist": "1E",
+            "intdronecontrolresourcesiphon": "1I",
+            "intdronecontrolunkvesselresearch": "1E",
+            "intstellarbodydiscoveryscannerstandard": "1E",
+            "intstellarbodydiscoveryscannerintermediate": "1D",
+            "intstellarbodydiscoveryscanneradvanced": "1C",
+            "intdetailedsurfacescannertiny": "1I",
+        }.get(normalized, "")
+        size_only = re.search(r"size(\d+)", normalized)
+        if fixed_identity:
+            size_rating = fixed_identity
+        elif size_only and normalized.startswith((
+            "intguardianpowerplant", "intguardianpowerdistributor"
+        )):
+            size_rating = f"{size_only.group(1)}A"
+        elif size_only and normalized.startswith("intguardianfsdbooster"):
+            size_rating = f"{size_only.group(1)}H"
     labels = (
         ("miningvolleyrepeater", "MINING VOLLEY REPEATER"),
         ("miningtoolv2", "MINING VOLLEY REPEATER"),
@@ -1836,6 +1882,29 @@ def module_purchase_identity(module_id: object) -> tuple[str, str]:
         ("miningseismchrgwarhd", "SEISMIC CHARGE LAUNCHER"),
         ("multidronecontrolminingmkii", "MK II MINING MULTI-LIMPET CONTROLLER"),
         ("multidronecontrolminingv2", "MK II MINING MULTI-LIMPET CONTROLLER"),
+        ("multidronecontrolmining", "MINING MULTI-LIMPET CONTROLLER"),
+        ("multidronecontroloperations", "OPERATIONS MULTI-LIMPET CONTROLLER"),
+        ("multidronecontrolrescue", "RESCUE MULTI-LIMPET CONTROLLER"),
+        ("multidronecontroluniversal", "UNIVERSAL MULTI-LIMPET CONTROLLER"),
+        ("multidronecontrolxeno", "XENO MULTI-LIMPET CONTROLLER"),
+        ("dronecontrolcollection", "COLLECTOR LIMPET CONTROLLER"),
+        ("dronecontroldecontamination", "DECONTAMINATION LIMPET CONTROLLER"),
+        ("dronecontrolfueltransfer", "FUEL TRANSFER LIMPET CONTROLLER"),
+        ("dronecontrolprospector", "PROSPECTOR LIMPET CONTROLLER"),
+        ("dronecontrolrecon", "RECON LIMPET CONTROLLER"),
+        ("dronecontrolrepair", "REPAIR LIMPET CONTROLLER"),
+        ("dronecontrolresourcesiphon", "HATCH BREAKER LIMPET CONTROLLER"),
+        ("dronecontrolunkvesselresearch", "RESEARCH LIMPET CONTROLLER"),
+        ("guardianpowerplant", "GUARDIAN HYBRID POWER PLANT"),
+        ("guardianpowerdistributor", "GUARDIAN HYBRID POWER DISTRIBUTOR"),
+        ("guardianfsdbooster", "GUARDIAN FRAME SHIFT DRIVE BOOSTER"),
+        ("dockingcomputeradvanced", "ADVANCED DOCKING COMPUTER"),
+        ("dockingcomputerstandard", "STANDARD DOCKING COMPUTER"),
+        ("supercruiseassist", "SUPERCRUISE ASSIST"),
+        ("detailedsurfacescanner", "DETAILED SURFACE SCANNER"),
+        ("stellarbodydiscoveryscannerstandard", "BASIC DISCOVERY SCANNER"),
+        ("stellarbodydiscoveryscannerintermediate", "INTERMEDIATE DISCOVERY SCANNER"),
+        ("stellarbodydiscoveryscanneradvanced", "ADVANCED DISCOVERY SCANNER"),
         ("buggybaymkii", "MK II PLANETARY VEHICLE HANGAR"),
         ("hyperdriveovercharge", "FRAME SHIFT DRIVE (SCO)"),
         ("cloudscanner", "PULSE WAVE ANALYSER"),
@@ -1853,6 +1922,7 @@ def module_purchase_identity(module_id: object) -> tuple[str, str]:
         ("intmodulereinforcement", "MODULE REINFORCEMENT PACKAGE"),
         ("intshieldgenerator", "SHIELD GENERATOR"),
         ("intfuelscoop", "FUEL SCOOP"),
+        ("intrepairer", "AUTO FIELD-MAINTENANCE UNIT"),
         ("intfighterbay", "FIGHTER HANGAR"),
         ("intbuggybay", "PLANETARY VEHICLE HANGAR"),
         ("planetaryapproachsuite", "PLANETARY APPROACH SUITE"),

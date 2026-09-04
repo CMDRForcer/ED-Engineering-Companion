@@ -91,6 +91,46 @@ class ProfileContextTests(unittest.TestCase):
         }
         controller._save_inara_config()
 
+    def _prepare_spansh_controller(self, controller):
+        controller._state = {"currentPosition": [1.0, 2.0, 3.0]}
+        controller._trader_sync_busy = False
+        controller._tech_broker_sync_busy = False
+        controller._trader_sync_status = "Ready"
+        controller._tech_broker_sync_status = "Ready"
+        controller.refresh = mock.Mock()
+        workers = {}
+        controller._start_network_worker = (
+            lambda target, name: workers.__setitem__(name, target) or True
+        )
+        controller.traderSyncFinished = _Signal(
+            controller._finish_trader_catalog_sync
+        )
+        controller.techBrokerSyncFinished = _Signal(
+            controller._finish_tech_broker_catalog_sync
+        )
+        return workers
+
+    @staticmethod
+    def _spansh_results():
+        trader = {
+            "stations": [{
+                "category": "Raw", "system": "Alpha System",
+                "station": "Alpha Trader", "market_id": 101,
+            }],
+            "errors": {}, "reference_coords": [1.0, 2.0, 3.0],
+            "fetched_at": "2026-09-04T10:00:00+00:00",
+        }
+        broker = {
+            "stations": [{
+                "brokerType": "HUMAN", "system": "Alpha System",
+                "station": "Alpha Broker", "market_id": 102,
+                "distance_ly": 1.0, "distance_ls": 100,
+            }],
+            "errors": {}, "reference_coords": [1.0, 2.0, 3.0],
+            "fetched_at": "2026-09-04T10:00:00+00:00",
+        }
+        return trader, broker
+
     def test_explicit_profile_fid_uses_its_own_context_when_present_or_missing(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -262,6 +302,95 @@ class ProfileContextTests(unittest.TestCase):
             self.assertFalse((bravo.directory / "inara_receipts.json").exists())
             self.assertFalse((bravo.directory / "inara_journal_cache.json").exists())
             self.assertEqual(len(workers), 1)
+
+    def test_spansh_catalog_updates_keep_normal_active_profile_behavior(self):
+        with TemporaryDirectory() as directory:
+            package_root = Path(__file__).resolve().parents[1]
+            alpha = self._context(directory, "F-ALPHA")
+            controller = self._controller(alpha, package_root)
+            workers = self._prepare_spansh_controller(controller)
+            trader, broker = self._spansh_results()
+
+            with mock.patch(
+                "ed_companion.phase14.controller.fetch_trader_catalog_updates",
+                return_value=trader,
+            ), mock.patch(
+                "ed_companion.phase14.controller.fetch_tech_broker_catalog_updates",
+                return_value=broker,
+            ), mock.patch(
+                "ed_companion.phase14.controller.TraderTypeCache"
+            ):
+                controller.updateSpanshCatalogs()
+                workers["trader-catalog-sync"]()
+                workers["tech-broker-catalog-sync"]()
+
+            saved_trader = json.loads(
+                alpha.directory.joinpath(
+                    "material_trader_catalog_user.json"
+                ).read_text(encoding="utf-8")
+            )
+            saved_broker = json.loads(
+                alpha.directory.joinpath(
+                    "tech_broker_catalog_user.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(saved_trader["stations"][0]["market_id"], 101)
+            self.assertEqual(saved_broker["stations"][0]["market_id"], 102)
+            self.assertIn("Catalog updated", controller._trader_sync_status)
+            self.assertIn(
+                "Tech Broker catalog updated", controller._tech_broker_sync_status
+            )
+            self.assertEqual(controller.refresh.call_count, 2)
+
+    def test_spansh_catalog_completion_writes_only_original_profile(self):
+        with TemporaryDirectory() as directory:
+            package_root = Path(__file__).resolve().parents[1]
+            alpha = self._context(directory, "F-ALPHA")
+            bravo = self._context(directory, "F-BRAVO")
+            controller = self._controller(alpha, package_root)
+            workers = self._prepare_spansh_controller(controller)
+            trader, broker = self._spansh_results()
+            bravo_trader = bravo.directory / "material_trader_catalog_user.json"
+            bravo_broker = bravo.directory / "tech_broker_catalog_user.json"
+            bravo_trader.write_text('{"profile":"bravo"}', encoding="utf-8")
+            bravo_broker.write_text('{"profile":"bravo"}', encoding="utf-8")
+            original_bravo_trader = bravo_trader.read_bytes()
+            original_bravo_broker = bravo_broker.read_bytes()
+
+            with mock.patch(
+                "ed_companion.phase14.controller.fetch_trader_catalog_updates",
+                return_value=trader,
+            ), mock.patch(
+                "ed_companion.phase14.controller.fetch_tech_broker_catalog_updates",
+                return_value=broker,
+            ), mock.patch(
+                "ed_companion.phase14.controller.TraderTypeCache"
+            ):
+                controller.updateSpanshCatalogs()
+                controller._bind_profile_paths(bravo)
+                controller._profile_generation += 1
+                controller._trader_sync_status = "Bravo trader status"
+                controller._tech_broker_sync_status = "Bravo broker status"
+                workers["trader-catalog-sync"]()
+                workers["tech-broker-catalog-sync"]()
+
+            saved_trader = json.loads(
+                alpha.directory.joinpath(
+                    "material_trader_catalog_user.json"
+                ).read_text(encoding="utf-8")
+            )
+            saved_broker = json.loads(
+                alpha.directory.joinpath(
+                    "tech_broker_catalog_user.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(saved_trader["stations"][0]["market_id"], 101)
+            self.assertEqual(saved_broker["stations"][0]["market_id"], 102)
+            self.assertEqual(bravo_trader.read_bytes(), original_bravo_trader)
+            self.assertEqual(bravo_broker.read_bytes(), original_bravo_broker)
+            self.assertEqual(controller._trader_sync_status, "Bravo trader status")
+            self.assertEqual(controller._tech_broker_sync_status, "Bravo broker status")
+            controller.refresh.assert_not_called()
 
     def test_new_controller_loads_inara_configuration_only_for_its_profile(self):
         with TemporaryDirectory() as directory:

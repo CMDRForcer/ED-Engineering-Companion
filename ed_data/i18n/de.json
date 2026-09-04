@@ -173,7 +173,7 @@
   "import.placeholder": ".json-Datei hier ablegen oder Coriolis JSON / EDSY-SLEF / eingebetteten Link einfügen",
   "import.module_swap": "MODULWECHSEL",
   "import.module_swap_help": "Gewünschtes Modul für diesen physischen Slot verfolgen",
-  "import.safety": "Bestehende Pläne bleiben erhalten; exakte Duplikate werden übersprungen. Importierte Zielmodule bleiben ungebunden, bis das Journal sie bestätigt.",
+  "import.safety": "Bestehende Pläne bleiben erhalten; exakte Duplikate werden übersprungen. Importierte Pläne bleiben an Zielschiff, Slot und Modul gebunden, bis das Journal den Einbau bestätigt.",
   "logbook.no_active": "KEINE AKTIVE SITZUNG",
   "logbook.no_history": "Noch keine abgeschlossenen Sitzungen gespeichert.",
   "logbook.note_label": "NOTIZ · %1",

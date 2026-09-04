@@ -196,7 +196,7 @@
   "import.placeholder": "Drop a .json file here, or paste Coriolis JSON / EDSY-SLEF / embedded-data link",
   "import.module_swap": "MODULE SWAP",
   "import.module_swap_help": "Track desired module for this physical slot",
-  "import.safety": "Existing plans stay intact; exact duplicates are skipped. Imported target modules remain unbound until confirmed by Journal.",
+  "import.safety": "Existing plans stay intact; exact duplicates are skipped. Imported plans stay bound to their target ship, slot, and module until Journal confirms installation.",
   "about.thanks_text": "Special thanks to everyone who helped shape EDEC — contributors, testers, bug reporters, translators, and the Elite Dangerous community. Thanks also to EDCD/EDDN, INARA, and Spansh for their documentation, services, and community resources.",
   "about.license": "Licensed under the GNU General Public License v3.0",
   "about.disclaimer": "ED Engineering Companion (EDEC) is a third-party tool and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc.",

@@ -2992,6 +2992,8 @@ ApplicationWindow {
         property string selectedCategory: window.engineeringCategoryState
         property string selectedModule: window.engineeringModuleState
         property string selectedInstalledSlot: ""
+        property real leftSlotContentY: 0
+        property real rightSlotContentY: 0
         property var selectedShipData: {
             var symbol = String(cockpit.selectedShipType || "")
             var normalized = symbol.toLowerCase().replace(/[^a-z0-9]/g, "")
@@ -3273,9 +3275,41 @@ ApplicationWindow {
                         model: [parent.leftSlots, parent.rightSlots]
                         delegate: ListView {
                             required property var modelData
+                            required property int index
+                            id: engineeringSlotList
                             Layout.fillWidth: true; Layout.fillHeight: true
                             clip: true; spacing: 4
                             model: modelData
+                            function rememberViewport() {
+                                if (index === 0)
+                                    engineeringPage.leftSlotContentY = contentY
+                                else
+                                    engineeringPage.rightSlotContentY = contentY
+                            }
+                            function restoreViewport() {
+                                const retained = index === 0
+                                               ? engineeringPage.leftSlotContentY
+                                               : engineeringPage.rightSlotContentY
+                                const maximum = originY + Math.max(
+                                    0, contentHeight - height)
+                                contentY = Math.max(originY,
+                                                    Math.min(retained, maximum))
+                            }
+                            onMovementEnded: rememberViewport()
+                            onModelChanged: restoreEngineeringSlotViewport.restart()
+                            Component.onCompleted: restoreEngineeringSlotViewport.restart()
+                            Timer {
+                                id: restoreEngineeringSlotViewport
+                                interval: 0
+                                repeat: false
+                                onTriggered: engineeringSlotList.restoreViewport()
+                            }
+                            Connections {
+                                target: cockpit
+                                function onStateChanged() {
+                                    restoreEngineeringSlotViewport.restart()
+                                }
+                            }
                             // The two slot columns normally fit without a
                             // scrollbar. Keep wheel/touch scrolling available
                             // for short windows without drawing permanent rails.
@@ -7031,7 +7065,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Label {
                     Layout.fillWidth: true
-                    text: window.t("import.safety", "Existing plans stay intact; exact duplicates are skipped. Imported target modules remain unbound until confirmed by Journal.")
+                    text: window.t("import.safety", "Existing plans stay intact; exact duplicates are skipped. Imported plans stay bound to their target ship, slot, and module until Journal confirms installation.")
                     color: muted; font.pixelSize: 9; wrapMode: Text.WordWrap
                 }
                 CockpitButton {

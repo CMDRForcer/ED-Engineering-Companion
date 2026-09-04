@@ -16,6 +16,76 @@ class ModulePurchaseDisplayTests(unittest.TestCase):
             ("POWER PLANT", "6A"),
         )
 
+    def test_repairer_ids_display_as_afmu_for_every_size_and_rating(self):
+        rating_letters = {1: "E", 2: "D", 3: "C", 4: "B", 5: "A"}
+        for size in range(1, 8):
+            for module_class, rating in rating_letters.items():
+                with self.subTest(size=size, module_class=module_class):
+                    self.assertEqual(
+                        module_purchase_identity(
+                            f"int_repairer_size{size}_class{module_class}"
+                        ),
+                        ("AUTO FIELD-MAINTENANCE UNIT", f"{size}{rating}"),
+                    )
+
+    def test_nonstandard_frontier_classes_use_their_real_ratings(self):
+        cases = {
+            "int_buggybay_size2_class1": "2H",
+            "int_buggybay_size2_class2": "2G",
+            "int_largebuggybay_size4_class3": "4F",
+            "int_mkiilargebuggybay_size6_class3": "6F",
+            "int_corrosionproofcargorack_size4_class2": "4F",
+            "int_expmodulestabiliser_size5_class3": "5F",
+            "int_fighterbay_size5_class1": "5D",
+            "int_fighterbaymk2_size6_class1": "6D",
+            "int_largecargorack_size7_class1": "7D",
+            "int_mkii_passengercabin_size5_class1": "5D",
+            "int_mkii_passengercabin_size5_class2": "5C",
+            "int_passengercabin_size4_class0": "4E",
+        }
+        for module_id, expected in cases.items():
+            with self.subTest(module_id=module_id):
+                self.assertEqual(
+                    module_purchase_identity(module_id)[1], expected
+                )
+
+    def test_every_limpet_controller_subtype_keeps_its_specific_name(self):
+        cases = {
+            "int_dronecontrol_collection_size3_class5": "COLLECTOR LIMPET CONTROLLER",
+            "int_dronecontrol_decontamination_size3_class5": "DECONTAMINATION LIMPET CONTROLLER",
+            "int_dronecontrol_fueltransfer_size3_class5": "FUEL TRANSFER LIMPET CONTROLLER",
+            "int_dronecontrol_prospector_size3_class5": "PROSPECTOR LIMPET CONTROLLER",
+            "int_dronecontrol_recon_size3_class1": "RECON LIMPET CONTROLLER",
+            "int_dronecontrol_repair_size1_class2": "REPAIR LIMPET CONTROLLER",
+            "int_dronecontrol_resourcesiphon_size3_class5": "HATCH BREAKER LIMPET CONTROLLER",
+            "int_dronecontrol_unkvesselresearch_size1_class1": "RESEARCH LIMPET CONTROLLER",
+            "int_multidronecontrol_mining_size3_class3": "MINING MULTI-LIMPET CONTROLLER",
+            "int_multidronecontrol_miningv2_size5_class5": "MK II MINING MULTI-LIMPET CONTROLLER",
+            "int_multidronecontrol_operations_size3_class3": "OPERATIONS MULTI-LIMPET CONTROLLER",
+            "int_multidronecontrol_rescue_size3_class3": "RESCUE MULTI-LIMPET CONTROLLER",
+            "int_multidronecontrol_universal_size7_class3": "UNIVERSAL MULTI-LIMPET CONTROLLER",
+            "int_multidronecontrol_xeno_size3_class3": "XENO MULTI-LIMPET CONTROLLER",
+        }
+        for module_id, expected in cases.items():
+            with self.subTest(module_id=module_id):
+                self.assertEqual(module_purchase_identity(module_id)[0], expected)
+
+    def test_fixed_identity_modules_do_not_show_unknown_size_or_rating(self):
+        cases = {
+            "int_dockingcomputer_standard": ("STANDARD DOCKING COMPUTER", "1E"),
+            "int_dockingcomputer_advanced": ("ADVANCED DOCKING COMPUTER", "1E"),
+            "int_supercruiseassist": ("SUPERCRUISE ASSIST", "1E"),
+            "int_guardianfsdbooster_size5": ("GUARDIAN FRAME SHIFT DRIVE BOOSTER", "5H"),
+            "int_guardianpowerplant_size6": ("GUARDIAN HYBRID POWER PLANT", "6A"),
+            "int_guardianpowerdistributor_size4": ("GUARDIAN HYBRID POWER DISTRIBUTOR", "4A"),
+            "int_dronecontrol_resourcesiphon": ("HATCH BREAKER LIMPET CONTROLLER", "1I"),
+            "int_dronecontrol_unkvesselresearch": ("RESEARCH LIMPET CONTROLLER", "1E"),
+            "int_detailedsurfacescanner_tiny": ("DETAILED SURFACE SCANNER", "1I"),
+        }
+        for module_id, expected in cases.items():
+            with self.subTest(module_id=module_id):
+                self.assertEqual(module_purchase_identity(module_id), expected)
+
     def test_hardpoint_shows_name_and_mount_without_guessing_rating(self):
         self.assertEqual(
             module_purchase_identity("hpt_multicannon_turret_medium"),

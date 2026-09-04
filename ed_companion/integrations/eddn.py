@@ -1,9 +1,12 @@
 import gzip
 import hashlib
 import json
+import math
 import re
 import time
 import zlib
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from pathlib import Path
@@ -176,10 +179,32 @@ JOURNAL_NESTED_ALLOWED = {
 
 
 class EddnError(RuntimeError):
-    def __init__(self, message, terminal=False, status_code=None):
+    def __init__(
+        self, message, terminal=False, status_code=None, retry_after=None,
+    ):
         super().__init__(message)
         self.terminal = bool(terminal)
         self.status_code = status_code
+        self.retry_after = retry_after
+
+
+def _retry_after_seconds(headers):
+    value = str((headers or {}).get("Retry-After") or "").strip()
+    if not value:
+        return None
+    try:
+        return max(0, int(math.ceil(float(value))))
+    except (TypeError, ValueError):
+        pass
+    try:
+        target = parsedate_to_datetime(value)
+        if target.tzinfo is None:
+            target = target.replace(tzinfo=timezone.utc)
+        return max(0, int(math.ceil(
+            (target - datetime.now(timezone.utc)).total_seconds()
+        )))
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def supported_schema_names():
@@ -930,6 +955,7 @@ def send(prepared, context, uploader_id, opener=urlopen, timeout=20):
             f"EDDN rejected the message (HTTP {status}).{schema_note}"
             + (f" Gateway: {detail[:300]}" if detail else ""),
             terminal=status in {400, 413, 426}, status_code=status,
+            retry_after=_retry_after_seconds(exc.headers) if status == 429 else None,
         ) from None
     except (OSError, URLError) as exc:
         raise EddnError(f"EDDN network error: {exc}") from None
@@ -937,6 +963,10 @@ def send(prepared, context, uploader_id, opener=urlopen, timeout=20):
         raise EddnError(
             f"EDDN returned HTTP {status}.",
             terminal=status in {400, 413, 426}, status_code=status,
+            retry_after=(
+                _retry_after_seconds(getattr(response, "headers", {}))
+                if status == 429 else None
+            ),
         )
     return {
         "httpStatus": status,

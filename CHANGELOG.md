@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 21.201 — 2026-09-04
 
 ### Added
 
@@ -20,6 +20,23 @@
   `SAASignalsFound` observations while discarding unrelated and private fields.
 
 ### Fixed
+
+- Harden EDSY/SLEF and Coriolis build imports with global machine-name aliases,
+  intrinsic Guardian/Tech-Broker module handling and exact desired-module slot
+  bindings across every supported hull.
+- Show canonical purchase names and real ratings for AFMUs, all limpet-controller
+  families, vehicle hangars, docking assists, Guardian modules and other modules
+  whose Frontier class identifiers do not follow the standard A–E scale.
+- Preserve both Engineering slot-list scroll positions across Journal refreshes,
+  loadout changes and delegate relayouts.
+- Keep EDDN queue persistence and its Journal cursor synchronized, honour
+  `Retry-After`, and make recovery of interrupted deliveries visible.
+- Bind asynchronous startup and Spansh results to their originating generation
+  and profile so stale workers cannot overwrite newer state.
+- Recover pending INARA events across Journal rotations, honour structured HTTP
+  429 cooldowns and retain per-event success from partially accepted batches.
+- Check persistence results for profile catalogs and configuration writes so a
+  failed disk write is never presented as a successful save.
 
 - Keep known Mining Finder locations searchable when their confirmation ages,
   showing `RECHECK RECOMMENDED` instead of replacing evidence with `STALE`.

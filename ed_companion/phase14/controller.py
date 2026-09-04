@@ -319,7 +319,7 @@ class CockpitController(QObject):
     traderSyncFinished = Signal(bool, str)
     techBrokerSyncFinished = Signal(bool, str)
     startupStateReady = Signal(object)
-    startupStateFailed = Signal(str)
+    startupStateFailed = Signal(object)
     refreshStateReady = Signal(object)
     refreshStateFailed = Signal(object)
     exitRequested = Signal()
@@ -489,6 +489,7 @@ class CockpitController(QObject):
         self._inara_pending_events = []
         self._inara_pending_fingerprints = []
         self._inara_inflight_fingerprints = []
+        self._inara_recovery_candidate_file = ""
         self._inara_material_fingerprint = ""
         self._inara_cache = self._read_local_json(
             self.inara_journal_cache_file, {}
@@ -635,6 +636,8 @@ class CockpitController(QObject):
 
     def _start_initial_state_load(self):
         """Build the initial Journal state without blocking the Qt GUI thread."""
+        revision = self._refresh_revision
+        profile_generation = self._profile_generation
         package_root = self.package_root
         selected_ship = self._selected_ship
 
@@ -648,9 +651,13 @@ class CockpitController(QObject):
                 rows = self._build_hge_candidate_rows(
                     state, list(self._hge_sightings)
                 )
-                self.startupStateReady.emit((state, rows))
+                self.startupStateReady.emit((
+                    revision, profile_generation, state, rows,
+                ))
             except Exception as exc:
-                self.startupStateFailed.emit(str(exc))
+                self.startupStateFailed.emit((
+                    revision, profile_generation, str(exc),
+                ))
 
         threading.Thread(
             target=worker, name="initial-journal-state", daemon=True
@@ -658,16 +665,31 @@ class CockpitController(QObject):
 
     @Slot(object)
     def _finish_startup_state(self, payload):
-        state, startup_rows = payload
+        revision, profile_generation, state, startup_rows = payload
+        if (
+            revision != self._refresh_revision
+            or profile_generation != self._profile_generation
+        ):
+            LOGGER.info(
+                "Discarded stale startup state revision %s for profile generation %s",
+                revision, profile_generation,
+            )
+            return
         if not isinstance(state, dict):
-            self._fail_startup_state("Initial Journal state was not a mapping.")
+            self._fail_startup_state((
+                revision, profile_generation,
+                "Initial Journal state was not a mapping.",
+            ))
             return
         profile_context = state.pop("_profileContext", None)
         if (
             isinstance(profile_context, ProfileContext)
             and not self._switch_profile_context(profile_context)
         ):
-            self._fail_startup_state("Profile switch is waiting for EDDN upload.")
+            self._fail_startup_state((
+                revision, profile_generation,
+                "Profile switch is waiting for EDDN upload.",
+            ))
             return
         self._logbook_entries = list(state.pop("_logbookEntries", []))
         state.pop("_craftBatch", None)
@@ -685,8 +707,18 @@ class CockpitController(QObject):
         self.activityChanged.emit()
         self.connectionChanged.emit()
 
-    @Slot(str)
-    def _fail_startup_state(self, message):
+    @Slot(object)
+    def _fail_startup_state(self, payload):
+        revision, profile_generation, message = payload
+        if (
+            revision != self._refresh_revision
+            or profile_generation != self._profile_generation
+        ):
+            LOGGER.info(
+                "Discarded stale startup failure revision %s for profile generation %s",
+                revision, profile_generation,
+            )
+            return
         self._activity = f"Journal startup sync failed · {message}"
         self.activityChanged.emit()
 
@@ -732,8 +764,19 @@ class CockpitController(QObject):
             + (f" · {fetched}" if fetched else " · update via Spansh")
         )
 
+    @staticmethod
+    def _persist_json(path, payload, label):
+        try:
+            saved = atomic_write(path, json.dumps(payload, indent=2))
+        except OSError as exc:
+            LOGGER.error("%s save failed for %s: %s", label, path, exc)
+            return False
+        if not saved:
+            LOGGER.error("%s could not be persisted to %s", label, path)
+        return saved
+
     def _save_ui_config(self):
-        atomic_write(self.config_file, json.dumps({
+        saved = self._persist_json(self.config_file, {
             "renderer_mode": self._renderer_mode,
             "ui_scale": self._ui_scale,
             "theme": self._theme,
@@ -750,7 +793,15 @@ class CockpitController(QObject):
             "trader_preference": self._trader_preference,
             "commander_card_order": self._commander_card_order,
             "navigation_order": self._navigation_order,
-        }, indent=2))
+        }, "UI configuration")
+        if not saved:
+            self._activity = (
+                "Settings changed in memory but could not be saved to disk."
+            )
+            signal = getattr(self, "activityChanged", None)
+            if signal is not None:
+                signal.emit()
+        return saved
 
     def _load_inara_config(self):
         defaults = {
@@ -809,12 +860,38 @@ class CockpitController(QObject):
 
     def _save_eddn(self):
         self._eddn_queue = compact_upload_queue(self._eddn_queue)
-        atomic_write(self.eddn_config_file, json.dumps(self._eddn_config, indent=2))
-        atomic_write(self.eddn_queue_file, json.dumps(self._eddn_queue, indent=2))
+        config_saved = atomic_write(
+            self.eddn_config_file, json.dumps(self._eddn_config, indent=2)
+        )
+        queue_saved = atomic_write(
+            self.eddn_queue_file, json.dumps(self._eddn_queue, indent=2)
+        )
+        self._eddn_queue_persist_pending = not queue_saved
+        if not config_saved:
+            LOGGER.error("EDDN config could not be persisted")
+        if not queue_saved:
+            self._eddn_status = (
+                "EDDN queue could not be persisted; Journal cursor was not advanced."
+            )
+            LOGGER.error(self._eddn_status)
+            signal = getattr(self, "connectionChanged", None)
+            if signal is not None:
+                signal.emit()
+        return queue_saved
 
     def _load_eddn_queue(self):
         """Repair safe legacy jobs and isolate only irrecoverable records."""
         stored = self._read_local_json(self.eddn_queue_file, [])
+        interrupted_count = sum(
+            1 for job in stored
+            if isinstance(job, dict) and job.get("status") == "sending"
+        ) if isinstance(stored, list) else 0
+        if interrupted_count:
+            LOGGER.warning(
+                "EDDN recovered %d interrupted sending job(s); gateway acceptance "
+                "is unknown and retry may produce a duplicate",
+                interrupted_count,
+            )
         jobs = normalize_upload_queue(stored)
         previous = self._read_local_json(self.eddn_quarantine_file, [])
         if not isinstance(previous, list):
@@ -1231,7 +1308,9 @@ class CockpitController(QObject):
         )
 
     def _save_inara_config(self):
-        atomic_write(self.inara_config_file, json.dumps(self._inara_config, indent=2))
+        return self._persist_json(
+            self.inara_config_file, self._inara_config, "INARA configuration"
+        )
 
     def _save_inara_journal_cache(self):
         atomic_write(self.inara_journal_cache_file, json.dumps(self._inara_cache, indent=2))
@@ -3977,9 +4056,11 @@ class CockpitController(QObject):
             binding = {
                 "ship_id": str(target.get("id") or ""),
                 "slot": str(row.get("slot") or ""),
-                # Imported target modules may not be installed yet. Preserve
-                # the slot but require a truthful future Journal binding.
-                "module_id": "",
+                # The import describes the desired physical module, not the
+                # module currently occupying the slot. Binding to that target
+                # prevents refresh reconciliation from moving the plan to an
+                # old same-family module before the replacement is installed.
+                "module_id": str(row.get("desiredModule") or ""),
             }
             instance = str(row.get("slot") or row.get("module") or "Module")[:48]
             tasks = []
@@ -4235,6 +4316,7 @@ class CockpitController(QObject):
     def saveInaraConfig(self, api_key, commander, consent, auto_sync):
         if not self._sync_eddn_profile():
             return
+        previous = dict(self._inara_config)
         api_key = str(api_key or "").strip()
         # Only overwrite the stored key when the user actually provided one.
         # An empty field means "keep the existing key" (use CLEAR KEY to remove).
@@ -4245,7 +4327,13 @@ class CockpitController(QObject):
             "consent": bool(consent),
             "auto_sync": bool(auto_sync),
         })
-        self._save_inara_config()
+        if not self._save_inara_config():
+            self._inara_config = previous
+            self._inara_status = (
+                "INARA configuration could not be saved; previous settings remain active."
+            )
+            self.connectionChanged.emit()
+            return
         if not self._inara_auto_enabled():
             self._discard_inara_pending()
         has_key = bool(self._inara_config.get("api_key"))
@@ -4265,9 +4353,16 @@ class CockpitController(QObject):
     def clearInaraKey(self):
         if not self._sync_eddn_profile():
             return
+        previous = dict(self._inara_config)
         self._inara_config["api_key"] = ""
         self._inara_config["auto_sync"] = False
-        self._save_inara_config()
+        if not self._save_inara_config():
+            self._inara_config = previous
+            self._inara_status = (
+                "INARA API key could not be removed from disk; previous settings remain active."
+            )
+            self.connectionChanged.emit()
+            return
         self._discard_inara_pending()
         self._inara_status = "API key removed from local storage."
         self.connectionChanged.emit()
@@ -4308,8 +4403,27 @@ class CockpitController(QObject):
         if not self._sync_eddn_profile():
             return False
         identity = self.profile_context.identity
-        paths = journal_paths_for_profile(identity)[-5:] if identity else []
+        paths = journal_paths_for_profile(identity) if identity else []
+        recovery_file = str(
+            self._inara_cache.get("journal_recovery_file") or ""
+        )
+        if recovery_file:
+            recovery_index = next((
+                index for index, path in enumerate(paths)
+                if path.name == recovery_file
+            ), None)
+            if recovery_index is not None:
+                # Include the confirmed boundary file because Frontier may
+                # append more complete records to the current Journal.
+                paths = paths[recovery_index:]
+            else:
+                LOGGER.warning(
+                    "INARA recovery boundary %s is unavailable; scanning all "
+                    "profile Journals",
+                    recovery_file,
+                )
         events = []
+        recovery_complete = True
         for path in paths:
             try:
                 with path.open("r", encoding="utf-8-sig", errors="replace") as handle:
@@ -4325,6 +4439,7 @@ class CockpitController(QObject):
                         if isinstance(event, dict):
                             events.append(event)
             except OSError as exc:
+                recovery_complete = False
                 LOGGER.warning("INARA Journal read failed for %s: %s", path, exc)
         # Cargo.json is Frontier's authoritative itemized current snapshot.
         # Compact Cargo Journal events emitted after sales may contain only a
@@ -4376,10 +4491,14 @@ class CockpitController(QObject):
                 "journal_root": journal_root,
                 "fingerprints": (delivered + fingerprints)[-5000:],
             })
+            if paths and recovery_complete:
+                self._inara_cache["journal_recovery_file"] = paths[-1].name
             self._save_inara_journal_cache()
             return False
         if not self._inara_auto_enabled():
             self._inara_cache["fingerprints"] = (delivered + fingerprints)[-5000:]
+            if paths and recovery_complete:
+                self._inara_cache["journal_recovery_file"] = paths[-1].name
             self._save_inara_journal_cache()
             return False
         if (
@@ -4399,6 +4518,20 @@ class CockpitController(QObject):
             self._inara_pending_since = time.monotonic()
         self._inara_pending_events.extend(prepared)
         self._inara_pending_fingerprints.extend(fingerprints)
+        if (
+            paths and recovery_complete
+            and len(self._inara_pending_events) < INARA_PENDING_EVENT_LIMIT
+        ):
+            self._inara_recovery_candidate_file = paths[-1].name
+        if (
+            not self._inara_pending_events
+            and self._inara_recovery_candidate_file
+        ):
+            self._inara_cache["journal_recovery_file"] = (
+                self._inara_recovery_candidate_file
+            )
+            self._inara_recovery_candidate_file = ""
+            self._save_inara_journal_cache()
         if len(self._inara_pending_events) >= INARA_PENDING_EVENT_LIMIT:
             self._inara_status = (
                 f"INARA offline queue full ({INARA_PENDING_EVENT_LIMIT}); "
@@ -4591,6 +4724,7 @@ class CockpitController(QObject):
                         "retryable": exc.retryable,
                         "statusCode": exc.status_code,
                         "schemaError": exc.schema_error,
+                        "retryAfter": exc.retry_after,
                     }),
                     "ships": [],
                 })
@@ -4675,6 +4809,10 @@ class CockpitController(QObject):
                 failure = {"message": str(message), "retryable": True}
             error_message = str(failure.get("message") or message)
             retryable = bool(failure.get("retryable", True))
+            try:
+                status_code = int(failure.get("statusCode"))
+            except (TypeError, ValueError):
+                status_code = None
             retry_note = ""
             if operation == "journal" and self._inara_pending_events and retryable:
                 self._inara_failure_count = getattr(
@@ -4685,21 +4823,27 @@ class CockpitController(QObject):
                     INARA_RETRY_BASE_SECONDS * (2 ** (self._inara_failure_count - 1)),
                 )
                 self._inara_retry_not_before = time.monotonic() + delay
-                rate_limited = any(marker in error_message.casefold() for marker in (
-                    "too much requests", "temporarily revoked", "rate limit",
-                ))
+                rate_limited = status_code == 429 or any(
+                    marker in error_message.casefold() for marker in (
+                        "too much requests", "temporarily revoked", "rate limit",
+                    )
+                )
                 if rate_limited:
+                    try:
+                        cooldown = max(0, int(failure.get("retryAfter")))
+                    except (TypeError, ValueError):
+                        cooldown = INARA_RATE_LIMIT_COOLDOWN_SECONDS
                     self._inara_retry_not_before = (
-                        time.monotonic() + INARA_RATE_LIMIT_COOLDOWN_SECONDS
+                        time.monotonic() + cooldown
                     )
                     self._inara_cache["rate_limit_until"] = (
-                        time.time() + INARA_RATE_LIMIT_COOLDOWN_SECONDS
+                        time.time() + cooldown
                     )
                     self._save_inara_journal_cache()
                 retry_note = (
                     f" · {len(self._inara_pending_events)} journal event(s) retained; "
                     + (
-                        "INARA cooldown active for at least 60 minutes"
+                        f"INARA cooldown active for {cooldown} seconds"
                         if rate_limited else "automatic sync will retry"
                     )
                 )
@@ -4729,8 +4873,31 @@ class CockpitController(QObject):
             self._inara_retry_not_before = 0.0
             self._inara_cache.pop("rate_limit_until", None)
             count = len(self._inara_inflight_fingerprints)
+            accepted_indexes = set(receipt.get("acceptedIndexes", range(count)))
+            failed_indexes = set(receipt.get("failedIndexes", []))
+            retryable_failed = set(receipt.get("retryableFailedIndexes", []))
+            accepted_indexes = {
+                index for index in accepted_indexes
+                if isinstance(index, int) and 0 <= index < count
+            }
+            failed_indexes = {
+                index for index in failed_indexes
+                if isinstance(index, int) and 0 <= index < count
+            }
+            if accepted_indexes & failed_indexes or (
+                accepted_indexes | failed_indexes
+            ) != set(range(count)):
+                LOGGER.warning("Discarded malformed partial INARA receipt")
+                accepted_indexes = set()
+                failed_indexes = set(range(count))
             delivered = list(self._inara_cache.get("fingerprints", []))
-            delivered.extend(self._inara_inflight_fingerprints)
+            delivered.extend(
+                fingerprint
+                for index, fingerprint in enumerate(
+                    self._inara_inflight_fingerprints
+                )
+                if index in accepted_indexes
+            )
             self._inara_cache.update({
                 "initialized": True,
                 "journal_root": self.profile_context.journal_root,
@@ -4741,13 +4908,45 @@ class CockpitController(QObject):
                 self._inara_cache["community_goals"] = list(
                     ships.get("communityGoals") or []
                 )
-            del self._inara_pending_events[:count]
-            del self._inara_pending_fingerprints[:count]
+            failed_events = [
+                self._inara_pending_events[index]
+                for index in sorted(failed_indexes)
+            ]
+            failed_fingerprints = [
+                self._inara_pending_fingerprints[index]
+                for index in sorted(failed_indexes)
+            ]
+            remaining_events = self._inara_pending_events[count:]
+            remaining_fingerprints = self._inara_pending_fingerprints[count:]
+            if failed_indexes and not retryable_failed:
+                self._inara_pending_events = remaining_events + failed_events
+                self._inara_pending_fingerprints = (
+                    remaining_fingerprints + failed_fingerprints
+                )
+            else:
+                self._inara_pending_events = failed_events + remaining_events
+                self._inara_pending_fingerprints = (
+                    failed_fingerprints + remaining_fingerprints
+                )
             self._inara_inflight_fingerprints = []
             self._inara_pending_since = (
                 time.monotonic() if self._inara_pending_events else 0.0
             )
+            if (
+                not self._inara_pending_events
+                and self._inara_recovery_candidate_file
+            ):
+                self._inara_cache["journal_recovery_file"] = (
+                    self._inara_recovery_candidate_file
+                )
+                self._inara_recovery_candidate_file = ""
             self._save_inara_journal_cache()
+            if failed_indexes:
+                receipt["operation"] = "Journal batch partially accepted"
+                receipt["detail"] = (
+                    f"{len(accepted_indexes)} accepted; "
+                    f"{len(failed_indexes)} retained for review or retry"
+                )
         if operation == "fleet":
             self._inara_cache["fleet_cache_timestamp"] = time.time()
             self._inara_cache["fleet_cache_count"] = len(list(ships or []))
@@ -4869,6 +5068,7 @@ class CockpitController(QObject):
         self._inara_pending_events = []
         self._inara_pending_fingerprints = []
         self._inara_inflight_fingerprints = []
+        self._inara_recovery_candidate_file = ""
         self._inara_pending_since = 0.0
         self._inara_retry_not_before = 0.0
         self._inara_failure_count = 0
@@ -5008,6 +5208,8 @@ class CockpitController(QObject):
         ]
         changed = False
         queue_changed = False
+        offsets_before_scan = dict(self._journal_offsets)
+        navroute_fingerprint_before_scan = self._navroute_fingerprint
         self._eddn_batching_scan = True
         self._eddn_scan_queue_full_reported = False
         scan_queue = getattr(self, "_eddn_queue", [])
@@ -5104,12 +5306,20 @@ class CockpitController(QObject):
         self._eddn_scan_job_ids = None
         self._eddn_scan_pending_count = None
         self._eddn_scan_queue_full_reported = False
-        if changed:
-            self._save_eddn_cursor()
-        if queue_changed:
-            self._save_eddn()
+        queue_save_required = queue_changed or bool(
+            getattr(self, "_eddn_queue_persist_pending", False)
+        )
+        queue_saved = True
+        if queue_save_required:
+            queue_saved = self._save_eddn()
             self._publish_eddn_delivery_change()
             self.connectionChanged.emit()
+        if not queue_saved:
+            self._journal_offsets = offsets_before_scan
+            self._navroute_fingerprint = navroute_fingerprint_before_scan
+            return
+        if changed:
+            self._save_eddn_cursor()
         if not saturated:
             self._scan_eddn_station_files()
 
@@ -5211,6 +5421,7 @@ class CockpitController(QObject):
                 self.eddnFinished.emit(job_id, False, json.dumps({
                     "message": str(exc), "terminal": exc.terminal,
                     "statusCode": exc.status_code,
+                    "retryAfter": exc.retry_after,
                 }))
             except Exception as exc:
                 self.eddnFinished.emit(job_id, False, json.dumps({
@@ -5239,6 +5450,9 @@ class CockpitController(QObject):
                     f"Gateway accepted HTTP {result.get('httpStatus')}"
                 ),
             })
+            # Persist the gateway acceptance before status/proof/UI work. A
+            # process exit after this checkpoint will not replay the job.
+            self._save_eddn()
             self._eddn_status = (
                 f"{result.get('event')} accepted · HTTP "
                 f"{result.get('httpStatus')} · {result.get('elapsedMs')} ms"
@@ -5269,8 +5483,21 @@ class CockpitController(QObject):
                 not terminal and self._eddn_config.get("retry_failed", True)
                 and int(job.get("attempts", 0)) < 7
             ):
-                delay = max(
-                    60, min(900, 60 * (2 ** max(0, job["attempts"] - 1)))
+                try:
+                    status_code = int(result.get("statusCode"))
+                except (TypeError, ValueError):
+                    status_code = None
+                try:
+                    retry_after = max(0, int(result.get("retryAfter")))
+                except (TypeError, ValueError):
+                    retry_after = None
+                delay = (
+                    retry_after
+                    if status_code == 429 and retry_after is not None
+                    else max(
+                        60,
+                        min(900, 60 * (2 ** max(0, job["attempts"] - 1))),
+                    )
                 )
                 job.update({
                     "status": "retry", "next_retry_at": time.time() + delay,
@@ -5352,6 +5579,12 @@ class CockpitController(QObject):
             self.connectionChanged.emit()
             return
         reference = tuple(float(value) for value in position)
+        request_context = {
+            "request_id": uuid.uuid4().hex,
+            "profile_key": self.profile_context.key,
+            "path_generation": self._profile_generation,
+            "catalog_path": str(self.tech_broker_catalog_file.resolve()),
+        }
         self._tech_broker_sync_busy = True
         self._tech_broker_sync_status = (
             "Querying Spansh for nearby Human and Guardian Tech Brokers…"
@@ -5370,26 +5603,48 @@ class CockpitController(QObject):
                         for key, value in result.get("errors", {}).items()
                     )
                     raise LookupError(errors or "No valid Tech Broker rows returned")
-                self.techBrokerSyncFinished.emit(True, json.dumps(result))
+                self.techBrokerSyncFinished.emit(True, json.dumps({
+                    "request": request_context, "result": result,
+                }))
             except Exception as exc:
-                self.techBrokerSyncFinished.emit(
-                    False, f"{type(exc).__name__}: {exc}"
-                )
+                self.techBrokerSyncFinished.emit(False, json.dumps({
+                    "request": request_context,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }))
 
         self._start_network_worker(worker, "tech-broker-catalog-sync")
 
     @Slot(bool, str)
     def _finish_tech_broker_catalog_sync(self, success, payload):
         self._tech_broker_sync_busy = False
+        try:
+            envelope = json.loads(payload)
+            request_context = envelope["request"]
+            target_path = Path(request_context["catalog_path"])
+            current_request = (
+                request_context.get("profile_key") == self.profile_context.key
+                and request_context.get("path_generation") == self._profile_generation
+                and target_path == self.tech_broker_catalog_file.resolve()
+            )
+        except (KeyError, TypeError, ValueError):
+            LOGGER.error("Tech Broker Spansh completion has no valid request context")
+            return
         if not success:
+            if not current_request:
+                LOGGER.warning(
+                    "Discarded stale Tech Broker status for Spansh request %s",
+                    request_context.get("request_id", ""),
+                )
+                return
             self._tech_broker_sync_status = (
-                f"Spansh update failed · bundled recommendations remain active · {payload}"
+                "Spansh update failed · bundled recommendations remain active · "
+                f"{envelope.get('error', 'unknown error')}"
             )
             self.connectionChanged.emit()
             return
         try:
-            result = json.loads(payload)
-            existing = self._read_local_json(self.tech_broker_catalog_file, {})
+            result = envelope["result"]
+            existing = self._read_local_json(target_path, {})
             rows = merge_tech_broker_catalog(
                 existing.get("stations", []) if isinstance(existing, dict) else [],
                 result.get("stations", []),
@@ -5400,12 +5655,27 @@ class CockpitController(QObject):
                 "reference_coords": result.get("reference_coords"),
                 "stations": rows,
             }
-            atomic_write(self.tech_broker_catalog_file, json.dumps(document, indent=2))
-        except (OSError, TypeError, ValueError) as exc:
+            if not self._persist_json(
+                target_path, document, "Tech Broker catalog"
+            ):
+                raise OSError("Tech Broker catalog could not be saved to disk")
+        except (KeyError, OSError, TypeError, ValueError) as exc:
+            if not current_request:
+                LOGGER.error(
+                    "Stale Tech Broker Spansh result could not be saved to %s: %s",
+                    target_path, exc,
+                )
+                return
             self._tech_broker_sync_status = (
                 f"Live results received, but local merge failed · {exc}"
             )
             self.connectionChanged.emit()
+            return
+        if not current_request:
+            LOGGER.info(
+                "Saved stale Tech Broker Spansh request %s to original profile %s",
+                request_context.get("request_id", ""), target_path,
+            )
             return
         errors = result.get("errors", {})
         self._tech_broker_sync_status = (
@@ -5440,6 +5710,12 @@ class CockpitController(QObject):
             self.connectionChanged.emit()
             return
         reference = tuple(float(value) for value in position)
+        request_context = {
+            "request_id": uuid.uuid4().hex,
+            "profile_key": self.profile_context.key,
+            "path_generation": self._profile_generation,
+            "catalog_path": str(self.trader_catalog_file.resolve()),
+        }
         self._trader_sync_busy = True
         self._trader_sync_status = (
             "Querying Spansh for nearby Raw, Manufactured and Encoded traders…"
@@ -5461,26 +5737,48 @@ class CockpitController(QObject):
                         for key, value in result.get("errors", {}).items()
                     )
                     raise LookupError(errors or "No valid trader rows returned")
-                self.traderSyncFinished.emit(True, json.dumps(result))
+                self.traderSyncFinished.emit(True, json.dumps({
+                    "request": request_context, "result": result,
+                }))
             except Exception as exc:
-                self.traderSyncFinished.emit(
-                    False, f"{type(exc).__name__}: {exc}"
-                )
+                self.traderSyncFinished.emit(False, json.dumps({
+                    "request": request_context,
+                    "error": f"{type(exc).__name__}: {exc}",
+                }))
 
         self._start_network_worker(worker, "trader-catalog-sync")
 
     @Slot(bool, str)
     def _finish_trader_catalog_sync(self, success, payload):
         self._trader_sync_busy = False
+        try:
+            envelope = json.loads(payload)
+            request_context = envelope["request"]
+            target_path = Path(request_context["catalog_path"])
+            current_request = (
+                request_context.get("profile_key") == self.profile_context.key
+                and request_context.get("path_generation") == self._profile_generation
+                and target_path == self.trader_catalog_file.resolve()
+            )
+        except (KeyError, TypeError, ValueError):
+            LOGGER.error("Trader Spansh completion has no valid request context")
+            return
         if not success:
+            if not current_request:
+                LOGGER.warning(
+                    "Discarded stale Trader status for Spansh request %s",
+                    request_context.get("request_id", ""),
+                )
+                return
             self._trader_sync_status = (
-                f"Spansh update failed · offline catalog remains active · {payload}"
+                "Spansh update failed · offline catalog remains active · "
+                f"{envelope.get('error', 'unknown error')}"
             )
             self.connectionChanged.emit()
             return
         try:
-            result = json.loads(payload)
-            existing = self._read_local_json(self.trader_catalog_file, {})
+            result = envelope["result"]
+            existing = self._read_local_json(target_path, {})
             rows = merge_trader_catalog(
                 existing.get("stations", [])
                 if isinstance(existing, dict) else [],
@@ -5492,7 +5790,8 @@ class CockpitController(QObject):
                 "reference_coords": result.get("reference_coords"),
                 "stations": rows,
             }
-            atomic_write(self.trader_catalog_file, json.dumps(document, indent=2))
+            if not self._persist_json(target_path, document, "Trader catalog"):
+                raise OSError("Trader catalog could not be saved to disk")
             type_cache = TraderTypeCache().load()
             cache_changed = False
             for row in result.get("stations", []):
@@ -5503,11 +5802,23 @@ class CockpitController(QObject):
                     cache_changed = True
             if cache_changed:
                 type_cache.save()
-        except (OSError, TypeError, ValueError) as exc:
+        except (KeyError, OSError, TypeError, ValueError) as exc:
+            if not current_request:
+                LOGGER.error(
+                    "Stale Trader Spansh result could not be saved to %s: %s",
+                    target_path, exc,
+                )
+                return
             self._trader_sync_status = (
                 f"Live results received, but local merge failed · {exc}"
             )
             self.connectionChanged.emit()
+            return
+        if not current_request:
+            LOGGER.info(
+                "Saved stale Trader Spansh request %s to original profile %s",
+                request_context.get("request_id", ""), target_path,
+            )
             return
         errors = result.get("errors", {})
         self._trader_sync_status = (
@@ -5846,7 +6157,11 @@ class CockpitController(QObject):
     @Slot(bool)
     def setJournalAuto(self, enabled):
         self._journal_auto = bool(enabled)
-        self._save_ui_config()
+        saved = self._save_ui_config()
+        if not saved:
+            self.uiChanged.emit()
+            self.journalHealthChanged.emit()
+            return
         self._activity = (
             "Automatic Journal updates enabled."
             if self._journal_auto else "Automatic Journal updates paused."
@@ -5865,7 +6180,9 @@ class CockpitController(QObject):
         self._background_mode = enabled
         if not enabled and self._autostart_enabled:
             self.setAutostartEnabled(False)
-        self._save_ui_config()
+        if not self._save_ui_config():
+            self.uiChanged.emit()
+            return
         self._activity = (
             "Tray background mode enabled."
             if self._background_mode else "Tray background mode disabled."
@@ -5923,7 +6240,9 @@ class CockpitController(QObject):
             self.activityChanged.emit()
             return
         self._autostart_enabled = enabled
-        self._save_ui_config()
+        if not self._save_ui_config():
+            self.uiChanged.emit()
+            return
         self._activity = "Windows autostart enabled." if enabled else "Windows autostart disabled."
         self.uiChanged.emit()
         self.activityChanged.emit()
@@ -5942,7 +6261,12 @@ class CockpitController(QObject):
             self.refresh()
             self._activity = "Journal directory updated."
         else:
-            self._activity = "Journal directory does not exist."
+            value = Path(str(path or "").strip()).expanduser()
+            self._activity = (
+                "Journal directory could not be saved; previous path remains active."
+                if value.is_dir()
+                else "Journal directory does not exist."
+            )
         self.activityChanged.emit()
 
     @Slot()
@@ -6049,8 +6373,10 @@ class CockpitController(QObject):
         ))
         order.extend(card for card in COMMANDER_CARD_IDS if card not in order)
         if order != self._commander_card_order:
+            previous = self._commander_card_order
             self._commander_card_order = order
-            self._save_ui_config()
+            if not self._save_ui_config():
+                self._commander_card_order = previous
             self.uiChanged.emit()
 
     @Slot("QVariantList")
@@ -6061,8 +6387,10 @@ class CockpitController(QObject):
         ))
         order.extend(item for item in NAVIGATION_IDS if item not in order)
         if order != self._navigation_order:
+            previous = self._navigation_order
             self._navigation_order = order
-            self._save_ui_config()
+            if not self._save_ui_config():
+                self._navigation_order = previous
             self.uiChanged.emit()
 
     @Slot()

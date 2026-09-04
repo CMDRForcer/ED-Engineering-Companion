@@ -2,7 +2,9 @@ import time
 import json
 import hashlib
 import re
+import math
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -53,11 +55,34 @@ AUTO_UPLOAD_EVENT_NAMES = frozenset({
 class InaraError(RuntimeError):
     """A safe, user-displayable INARA error without credentials."""
 
-    def __init__(self, message, retryable=True, status_code=None, schema_error=False):
+    def __init__(
+        self, message, retryable=True, status_code=None, schema_error=False,
+        retry_after=None,
+    ):
         super().__init__(message)
         self.retryable = bool(retryable)
         self.status_code = status_code
         self.schema_error = bool(schema_error)
+        self.retry_after = retry_after
+
+
+def _retry_after_seconds(headers):
+    value = str((headers or {}).get("Retry-After") or "").strip()
+    if not value:
+        return None
+    try:
+        return max(0, int(math.ceil(float(value))))
+    except (TypeError, ValueError):
+        pass
+    try:
+        target = parsedate_to_datetime(value)
+        if target.tzinfo is None:
+            target = target.replace(tzinfo=timezone.utc)
+        return max(0, int(math.ceil(
+            (target - datetime.now(timezone.utc)).total_seconds()
+        )))
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def _response_error_detail(response):
@@ -1430,6 +1455,7 @@ def send_events(config, events, post=None, timeout=25):
             + (" · request/schema rejected; update EDEC before retrying."
                if schema_error else "."),
             retryable=retryable, status_code=status, schema_error=schema_error,
+            retry_after=_retry_after_seconds(exc.headers) if status == 429 else None,
         ) from None
     except (OSError, URLError) as exc:
         raise InaraError(f"INARA connection failed: {exc}") from None
@@ -1444,6 +1470,10 @@ def send_events(config, events, post=None, timeout=25):
             + (" · request/schema rejected; update EDEC before retrying."
                if schema_error else "."),
             retryable=retryable, status_code=status, schema_error=schema_error,
+            retry_after=(
+                _retry_after_seconds(getattr(response, "headers", {}))
+                if status == 429 else None
+            ),
         )
     content_type = str(getattr(response, "headers", {}).get(
         "Content-Type", ""
@@ -1469,25 +1499,56 @@ def send_events(config, events, post=None, timeout=25):
     if not isinstance(results, list) or len(results) != len(events):
         raise InaraError("INARA returned an incomplete event receipt.")
     safe_results = []
-    for result in results:
-        if not isinstance(result, dict) or not _status_ok(
+    accepted_indexes = []
+    failed_indexes = []
+    retryable_failed_indexes = []
+    for index, result in enumerate(results):
+        accepted = isinstance(result, dict) and _status_ok(
             result.get("eventStatus")
-        ):
+        )
+        if not accepted:
             rejected_name = (
                 str(result.get("eventName") or "event")
                 if isinstance(result, dict) else "event"
             )
-            raise InaraError(
-                f"INARA rejected {rejected_name}"
-                f" ({result.get('eventStatus', 'unknown') if isinstance(result, dict) else 'invalid'}: "
-                f"{result.get('eventStatusText', 'unknown') if isinstance(result, dict) else 'invalid response'}).",
-                retryable=False, schema_error=True,
+            status_value = (
+                result.get("eventStatus") if isinstance(result, dict) else None
             )
+            try:
+                status_number = int(status_value)
+            except (TypeError, ValueError):
+                status_number = None
+            failed_indexes.append(index)
+            if status_number in {408, 425, 429} or (
+                status_number is not None and status_number >= 500
+            ):
+                retryable_failed_indexes.append(index)
+            safe_results.append({
+                "name": rejected_name,
+                "status": status_number,
+                "text": str(
+                    result.get("eventStatusText") or "Rejected"
+                    if isinstance(result, dict) else "Invalid response"
+                ),
+                "accepted": False,
+            })
+            continue
+        accepted_indexes.append(index)
         safe_results.append({
             "name": str(result.get("eventName") or "event"),
             "status": int(result.get("eventStatus")),
             "text": str(result.get("eventStatusText") or "Accepted"),
+            "accepted": True,
         })
+    if failed_indexes and not accepted_indexes:
+        first = safe_results[failed_indexes[0]]
+        raise InaraError(
+            f"INARA rejected {first['name']}"
+            f" ({first['status'] if first['status'] is not None else 'unknown'}: "
+            f"{first['text']}).",
+            retryable=bool(retryable_failed_indexes),
+            schema_error=not bool(retryable_failed_indexes),
+        )
     receipt = {
         "timestamp": _timestamp(),
         "httpStatus": int(getattr(response, "status_code", 200) or 200),
@@ -1497,6 +1558,9 @@ def send_events(config, events, post=None, timeout=25):
         ),
         "elapsedMs": int((time.monotonic() - started) * 1000),
         "events": safe_results,
+        "acceptedIndexes": accepted_indexes,
+        "failedIndexes": failed_indexes,
+        "retryableFailedIndexes": retryable_failed_indexes,
     }
     return receipt, body
 
