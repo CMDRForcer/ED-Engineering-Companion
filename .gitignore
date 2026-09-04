@@ -65,8 +65,10 @@ Status.json
 
 # Logs, temporary files and crash output
 *.log
+*.lock
 *.tmp
 *.bak
+*.corrupt-*
 *.crash
 crash-reports/
 diagnostics/
@@ -83,6 +85,7 @@ output/
 # Local screenshots and smoke-test output
 screenshots/
 smoke-screens/
+.tmp-release-smoke-*/
 *_preview.png
 *_smoke.png
 
