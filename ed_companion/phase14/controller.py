@@ -3,6 +3,7 @@ import hashlib
 import logging
 import math
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -93,6 +94,13 @@ from ed_companion.navigation.hge import (
     rank_hge_sightings,
     rank_state_find_systems,
 )
+from ed_companion.navigation.mining_finder import (
+    fetch_spansh_system_dump,
+    is_mining_commodity_signal,
+    merge_mining_candidates,
+    project_eddn_mining_candidates,
+    project_spansh_mining_candidates,
+)
 
 HGE_OBSERVATION_LIMIT = 10000
 HGE_CLASSIFIER_VERSION = 2
@@ -110,8 +118,33 @@ COMMANDER_CARD_IDS = (
 )
 NAVIGATION_IDS = (
     "operations", "engineering", "wishlist", "engineers", "materials",
-    "state-finds", "cmdr", "logbook", "settings", "powerplay",
+    "mining-finder", "state-finds", "powerplay", "cmdr", "logbook", "settings",
 )
+LEGACY_DEFAULT_NAVIGATION_ORDERS = {
+    (
+        "operations", "engineering", "wishlist", "engineers", "materials",
+        "state-finds", "cmdr", "logbook", "settings", "powerplay",
+    ),
+    (
+        "operations", "engineering", "wishlist", "engineers", "materials",
+        "state-finds", "mining-finder", "cmdr", "logbook", "settings", "powerplay",
+    ),
+    (
+        "operations", "engineering", "wishlist", "engineers", "materials",
+        "state-finds", "cmdr", "logbook", "settings", "powerplay", "mining-finder",
+    ),
+}
+
+
+def initial_navigation_order(configured):
+    order = list(dict.fromkeys(
+        str(item) for item in list(configured or [])
+        if str(item) in NAVIGATION_IDS
+    ))
+    if not order or tuple(order) in LEGACY_DEFAULT_NAVIGATION_ORDERS:
+        return list(NAVIGATION_IDS)
+    order.extend(item for item in NAVIGATION_IDS if item not in order)
+    return order
 
 
 def state_with_live_location(state, location):
@@ -268,6 +301,8 @@ class CockpitController(QObject):
     wishlistChanged = Signal()
     operationsChanged = Signal()
     hgeChanged = Signal()
+    miningChanged = Signal()
+    miningSyncFinished = Signal(object)
     journalHealthChanged = Signal()
     diagnosticsChanged = Signal()
     logbookChanged = Signal()
@@ -306,6 +341,7 @@ class CockpitController(QObject):
         self.hge_cache_file = self.config_dir / "hge_live_sightings.json"
         self.trader_catalog_file = user_trader_catalog_path(context)
         self.tech_broker_catalog_file = self.config_dir / "tech_broker_catalog_user.json"
+        self.mining_catalog_file = self.config_dir / "mining_finder_catalog.json"
 
     def __init__(self):
         super().__init__()
@@ -369,7 +405,7 @@ class CockpitController(QObject):
         self._shutdown_complete = False
         self._network_threads = set()
         self._network_threads_lock = threading.Lock()
-        self._last_page = max(0, min(11, int(ui_config.get("last_page", 0) or 0)))
+        self._last_page = max(0, min(12, int(ui_config.get("last_page", 0) or 0)))
         configured_cards = ui_config.get("commander_card_order", [])
         configured_cards = configured_cards if isinstance(configured_cards, list) else []
         self._commander_card_order = list(dict.fromkeys(
@@ -383,12 +419,7 @@ class CockpitController(QObject):
         configured_navigation = (
             configured_navigation if isinstance(configured_navigation, list) else []
         )
-        self._navigation_order = list(dict.fromkeys(
-            item for item in configured_navigation if item in NAVIGATION_IDS
-        ))
-        self._navigation_order.extend(
-            item for item in NAVIGATION_IDS if item not in self._navigation_order
-        )
+        self._navigation_order = initial_navigation_order(configured_navigation)
         self._renderer_active = self._detect_renderer()
         self._restart_required = False
         self._state = {}
@@ -493,6 +524,15 @@ class CockpitController(QObject):
         self._hge_sightings = self._read_local_json(self.hge_cache_file, [])
         if not isinstance(self._hge_sightings, list):
             self._hge_sightings = []
+        self._mining_catalog = self._read_local_json(
+            self.mining_catalog_file, {"candidates": []}
+        )
+        if not isinstance(self._mining_catalog, dict):
+            self._mining_catalog = {"candidates": []}
+        self._mining_sync_busy = False
+        self._mining_sync_status = "Ready"
+        self._active_mining_request = None
+        self.miningSyncFinished.connect(self._finish_mining_sync)
         self_test_count = sum(
             1 for row in self._hge_sightings
             if isinstance(row, dict) and row.get("self_test")
@@ -532,6 +572,7 @@ class CockpitController(QObject):
         self._eddn_thread = None
         self._pending_bgs_snapshots = []
         self._pending_hge_observations = []
+        self._pending_mining_candidates = []
         self._last_hge_batch_stats = {
             "bgsApplied": 0, "signalsMerged": 0, "expiredRemoved": 0,
         }
@@ -1560,6 +1601,12 @@ class CockpitController(QObject):
             self._build_engineer_mission_route,
         )
 
+    def _save_mining_catalog(self):
+        atomic_write(
+            self.mining_catalog_file,
+            json.dumps(self._mining_catalog, indent=2),
+        )
+
     def _build_engineer_mission_route(self):
         return self._engineer_assignment_routes()["route"]
 
@@ -2163,6 +2210,161 @@ class CockpitController(QObject):
         )
         return len(self._group_state_find_travel_targets(rows))
 
+    def _mining_rows(self):
+        local = self._state.get("localMiningEvidence", {})
+        local_rows = local.get("candidates", []) if isinstance(local, dict) else []
+        catalog = self._mining_catalog.get("candidates", [])
+        catalog_rows = catalog if isinstance(catalog, list) else []
+        rows = merge_mining_candidates([*local_rows, *catalog_rows])
+        current = str(self._state.get("system") or "").casefold()
+        origin = self._state.get("currentPosition")
+        for row in rows:
+            row["hotspots"] = [
+                item for item in row.get("hotspots", [])
+                if isinstance(item, dict)
+                and is_mining_commodity_signal(item.get("commodity"))
+            ]
+            if current and str(row.get("system") or "").casefold() == current:
+                row["distanceLy"] = 0.0
+            elif (isinstance(origin, (list, tuple)) and len(origin) == 3
+                  and isinstance(row.get("coordinates"), (list, tuple))
+                  and len(row["coordinates"]) == 3):
+                try:
+                    row["distanceLy"] = round(math.sqrt(sum(
+                        (float(left) - float(right)) ** 2
+                        for left, right in zip(origin, row["coordinates"])
+                    )), 1)
+                except (TypeError, ValueError):
+                    row["distanceLy"] = None
+            row["hotspotNames"] = ", ".join(
+                self._mining_display_name(item.get("commodity"))
+                for item in row.get("hotspots", []) if isinstance(item, dict)
+            ) or "No hotspot signals recorded"
+            row["ringTypeName"] = self._mining_display_name(
+                row.get("ringType")
+            ).replace("E Ring Class ", "") or "Unknown"
+            row["reserveName"] = self._mining_display_name(
+                row.get("reserveLevel")
+            ).replace(" Resources", "") or "Unknown"
+        return rows
+
+    @staticmethod
+    def _mining_display_name(value):
+        text = str(value or "").replace("_", " ").strip()
+        if text.casefold().startswith("$saa signaltype ") and text.endswith(";"):
+            text = text[len("$saa signaltype "):-1]
+        text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", text)
+        return text.title()
+
+    @Slot(str, int, str, str, result="QVariantList")
+    def miningFindPage(self, commodity, nearby_ly, evidence, reserve_filter):
+        commodity = normalize(str(commodity or "ALL COMMODITIES"))
+        evidence = str(evidence or "ALL EVIDENCE")
+        reserve_filter = str(reserve_filter or "ALL RESERVES")
+        result = []
+        for row in self._mining_rows():
+            names = [normalize(item.get("commodity"))
+                     for item in row.get("hotspots", []) if isinstance(item, dict)]
+            if commodity != normalize("ALL COMMODITIES") and commodity not in names:
+                continue
+            distance = row.get("distanceLy")
+            if int(nearby_ly or 0) > 0 and (
+                distance is None or float(distance) > int(nearby_ly)
+            ):
+                continue
+            if evidence == "RECHECK_RECOMMENDED":
+                if not row.get("recheckRecommended"):
+                    continue
+            elif evidence != "ALL EVIDENCE" and row.get("evidence") != evidence:
+                continue
+            reserve = normalize(row.get("reserveLevel"))
+            if reserve_filter == "PRISTINE + MAJOR" and not (
+                "pristine" in reserve or "major" in reserve
+            ):
+                continue
+            if reserve_filter == "PRISTINE" and "pristine" not in reserve:
+                continue
+            if reserve_filter == "MAJOR" and "major" not in reserve:
+                continue
+            result.append(row)
+        return result
+
+    @Slot(str, result="QVariantMap")
+    def miningLoadoutReadiness(self, method):
+        method = str(method or "LASER").upper()
+        module_ids = [normalize(row.get("moduleId")) for row in
+                      self._state.get("moduleSlots", []) if isinstance(row, dict)]
+        cargo = int(self._state.get("selectedShipStats", {}).get(
+            "cargoCapacity", 0
+        ) or 0)
+        checks = []
+
+        def check(label, *markers):
+            installed = any(any(marker in module for marker in markers)
+                            for module in module_ids)
+            checks.append({"label": label, "installed": installed})
+
+        if method == "LASER":
+            check("Prospector", "prospector", "multidronecontrolmining")
+            check("Collector", "collector", "collection", "multidronecontrolmining")
+            check("Refinery", "refinery")
+        elif method == "CORE":
+            check("Seismic charge launcher", "miningseismchrgwarhd")
+            check("Abrasion blaster", "miningabrasionblaster")
+            check("Pulse wave analyser", "cloudscanner", "mrascanner")
+            check("Collector", "collector", "collection", "multidronecontrolmining")
+            check("Refinery", "refinery")
+        elif method == "SUBSURFACE":
+            check("Sub-surface displacement missile", "miningsubsurfdispmisle")
+            check("Prospector", "prospector", "multidronecontrolmining")
+            check("Collector", "collector", "collection", "multidronecontrolmining")
+            check("Refinery", "refinery")
+        else:
+            vehicle = self._state.get("vehicleState", {})
+            rhino = any("rhino" in normalize(row.get("type")) for row in
+                        vehicle.get("vehicles", []) if isinstance(row, dict))
+            checks.append({"label": "Rhino observed in vehicle inventory",
+                           "installed": rhino})
+        checks.append({"label": f"Cargo capacity ({cargo} t)", "installed": cargo > 0})
+        ready = bool(checks) and all(row["installed"] for row in checks)
+        return {
+            "method": method,
+            "ready": ready,
+            "status": "READY" if ready else "INCOMPLETE",
+            "summary": " · ".join(
+                ("✓ " if row["installed"] else "✕ ") + row["label"]
+                for row in checks
+            ),
+        }
+
+    def _mining_commodity_filters(self):
+        names = {self._mining_display_name(item.get("commodity"))
+                 for row in self._mining_rows()
+                 for item in row.get("hotspots", []) if isinstance(item, dict)}
+        return ["ALL COMMODITIES", *sorted(name for name in names if name)]
+
+    def _mining_cache_summary(self):
+        rows = self._mining_rows()
+        counts = {key: 0 for key in (
+            "LOCAL_CONFIRMED", "LIVE_REPORTED", "CATALOG_CANDIDATE", "STALE"
+        )}
+        latest = ""
+        for row in rows:
+            evidence = str(row.get("evidence") or "STALE")
+            counts[evidence] = counts.get(evidence, 0) + 1
+            observed = str(row.get("observedAt") or "")
+            if observed > latest:
+                latest = observed
+        return {
+            "total": len(rows),
+            "local": counts["LOCAL_CONFIRMED"],
+            "live": counts["LIVE_REPORTED"],
+            "catalog": counts["CATALOG_CANDIDATE"],
+            "stale": counts["STALE"],
+            "withHotspots": sum(bool(row.get("hotspots")) for row in rows),
+            "latestAt": latest.replace("T", " ")[:16] if latest else "—",
+        }
+
     def _material_source_routes(self, material):
         """Add live, distance-sorted collection routes to a material card."""
         routes = [dict(card) for card in material.get("sourceCards", [])]
@@ -2595,6 +2797,28 @@ class CockpitController(QObject):
     stateFindRefreshSummary = Property(
         "QVariantMap", lambda self: dict(self._last_state_find_refresh_stats),
         notify=hgeChanged,
+    )
+    miningCommodityFilters = Property(
+        "QStringList", lambda self: self._mining_commodity_filters(),
+        notify=stateChanged,
+    )
+    miningRevision = Property(
+        int,
+        lambda self: self._state_revision + len(
+            self._mining_catalog.get("candidates", [])
+            if isinstance(self._mining_catalog, dict) else []
+        ),
+        notify=stateChanged,
+    )
+    miningCacheSummary = Property(
+        "QVariantMap", lambda self: self._mining_cache_summary(),
+        notify=stateChanged,
+    )
+    miningSyncBusy = Property(
+        bool, lambda self: self._mining_sync_busy, notify=miningChanged,
+    )
+    miningSyncStatus = Property(
+        str, lambda self: self._mining_sync_status, notify=miningChanged,
     )
     eddnBusy = Property(
         bool, lambda self: self._eddn_busy, notify=connectionChanged,
@@ -4624,6 +4848,10 @@ class CockpitController(QObject):
             return False
         self._active_inara_request = None
         self._inara_busy = False
+        self._active_mining_request = None
+        self._mining_sync_busy = False
+        self._mining_sync_status = "Ready"
+        self._pending_mining_candidates = []
         self._profile_generation += 1
         self._bind_profile_paths(context)
         self._eddn_profile_key = context.key
@@ -4660,6 +4888,11 @@ class CockpitController(QObject):
         self._hge_sightings = self._read_local_json(self.hge_cache_file, [])
         if not isinstance(self._hge_sightings, list):
             self._hge_sightings = []
+        self._mining_catalog = self._read_local_json(
+            self.mining_catalog_file, {"candidates": []}
+        )
+        if not isinstance(self._mining_catalog, dict):
+            self._mining_catalog = {"candidates": []}
         self._trader_sync_status = self._load_trader_sync_status()
         self._tech_broker_sync_status = self._load_tech_broker_sync_status()
         self._engineer_unlock_catalog = load_unlock_catalog(
@@ -5308,6 +5541,110 @@ class CockpitController(QObject):
             self.selectMaterial(key)
 
     @Slot()
+    def refreshMiningFinder(self):
+        if self._mining_sync_busy:
+            return
+        address = self._state.get("currentSystemAddress")
+        try:
+            address = int(address)
+        except (TypeError, ValueError):
+            self._mining_sync_status = "Current system address unavailable"
+            self.miningChanged.emit()
+            return
+        request = {
+            "id": uuid.uuid4().hex,
+            "profileKey": self.profile_context.key,
+            "generation": self._profile_generation,
+            "path": str(self.mining_catalog_file),
+            "origin": list(self._state.get("currentPosition") or []),
+        }
+        self._active_mining_request = request
+        self._mining_sync_busy = True
+        self._mining_sync_status = "Refreshing current system from Spansh…"
+        self.miningChanged.emit()
+
+        def worker():
+            result = dict(request)
+            try:
+                payload = fetch_spansh_system_dump(address, requests.get)
+                result["candidates"] = project_spansh_mining_candidates(
+                    payload, request["origin"]
+                )
+                result["success"] = True
+            except Exception as exc:
+                result.update({"success": False, "error": str(exc)})
+            self.miningSyncFinished.emit(result)
+
+        if not self._start_network_worker(worker, "mining-catalog-sync"):
+            self._active_mining_request = None
+            self._mining_sync_busy = False
+            self._mining_sync_status = "Refresh unavailable during shutdown"
+            self.miningChanged.emit()
+
+    @Slot()
+    def resetMiningCatalog(self):
+        """Explicitly replace only the active profile's learned mining cache."""
+        self._active_mining_request = None
+        self._mining_sync_busy = False
+        self._pending_mining_candidates = []
+        self._mining_catalog = {
+            "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "candidates": [],
+        }
+        try:
+            self.mining_catalog_file.unlink(missing_ok=True)
+            load_json_file(self.mining_catalog_file, {}, encoding="utf-8")
+            saved = atomic_write(
+                self.mining_catalog_file,
+                json.dumps(self._mining_catalog, indent=2),
+            )
+        except OSError as exc:
+            saved = False
+            LOGGER.warning("Mining catalog reset failed: %s", type(exc).__name__)
+        self._mining_sync_status = (
+            "Mining catalog reset · rebuilding from Journal and new EDDN observations"
+            if saved else "Mining catalog reset failed"
+        )
+        self.miningChanged.emit()
+        self.stateChanged.emit()
+
+    @Slot(object)
+    def _finish_mining_sync(self, result):
+        request = self._active_mining_request
+        if not request or result.get("id") != request.get("id"):
+            return
+        self._active_mining_request = None
+        self._mining_sync_busy = False
+        context_matches = (
+            result.get("profileKey") == self.profile_context.key
+            and result.get("generation") == self._profile_generation
+            and result.get("path") == str(self.mining_catalog_file)
+        )
+        if not context_matches:
+            self._mining_sync_status = "Discarded stale profile response"
+            self.miningChanged.emit()
+            return
+        if not result.get("success"):
+            self._mining_sync_status = "Refresh failed: " + str(
+                result.get("error") or "unknown error"
+            )
+            self.miningChanged.emit()
+            return
+        old = self._mining_catalog.get("candidates", [])
+        merged = merge_mining_candidates([
+            *(old if isinstance(old, list) else []),
+            *list(result.get("candidates") or []),
+        ])
+        self._mining_catalog = {
+            "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "candidates": merged,
+        }
+        self._save_mining_catalog()
+        self._mining_sync_status = f"Current system refreshed · {len(result.get('candidates') or [])} rings"
+        self.miningChanged.emit()
+        self.stateChanged.emit()
+
+    @Slot()
     def refreshStateFinds(self):
         """Refresh every local/live State Finds source without inventing history."""
         self.flushHgeObservationBatch()
@@ -5342,6 +5679,11 @@ class CockpitController(QObject):
         if snapshot:
             self._pending_bgs_snapshots.append(snapshot)
         self._pending_hge_observations.extend(extract_signal_finds(payload))
+        self._pending_mining_candidates.extend(
+            project_eddn_mining_candidates(
+                payload, datetime.now(timezone.utc).isoformat(timespec="seconds")
+            )
+        )
 
     @Slot()
     def flushHgeObservationBatch(self):
@@ -5349,6 +5691,8 @@ class CockpitController(QObject):
         hge_rows = self._pending_hge_observations
         self._pending_bgs_snapshots = []
         self._pending_hge_observations = []
+        mining_rows = getattr(self, "_pending_mining_candidates", [])
+        self._pending_mining_candidates = []
         updated, applied = apply_system_bgs_snapshot_batch(
             self._hge_sightings, snapshots, HGE_OBSERVATION_LIMIT
         )
@@ -5368,10 +5712,26 @@ class CockpitController(QObject):
             self.hgeChanged.emit()
             if self._selected_material:
                 self.selectMaterial(str(self._selected_material.get("key") or ""))
+        if mining_rows:
+            existing = self._mining_catalog.get("candidates", [])
+            self._mining_catalog = {
+                "updatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "candidates": merge_mining_candidates([
+                    *(existing if isinstance(existing, list) else []),
+                    *mining_rows,
+                ])[:20000],
+            }
+            self._save_mining_catalog()
+            self._mining_sync_status = (
+                f"EDDN live · {len(mining_rows)} observations merged · "
+                f"{len(self._mining_catalog['candidates'])} rings cached"
+            )
+            self.miningChanged.emit()
+            self.stateChanged.emit()
         self._eddn_listener_status = (
             f"Connected · {len(self._hge_sightings)} local observations · max 24 h"
         )
-        if snapshots or hge_rows or removed:
+        if snapshots or hge_rows or mining_rows or removed:
             self.connectionChanged.emit()
 
     def _ensure_eddn_listener(self):
@@ -5674,7 +6034,7 @@ class CockpitController(QObject):
 
     @Slot(int)
     def setLastPage(self, page):
-        page = max(0, min(10, int(page)))
+        page = max(0, min(12, int(page)))
         if page != self._last_page:
             if self._last_page == 3 and page != 3:
                 self.clearCraftConfirmation()

@@ -7,8 +7,14 @@ MINING_EVIDENCE_LEVELS = (
     "LOCAL_CONFIRMED",
     "LIVE_REPORTED",
     "CATALOG_CANDIDATE",
-    "STALE",
 )
+
+# EDEC display policy only; these values are not Frontier yield guarantees.
+MINING_FRESHNESS_SECONDS = MappingProxyType({
+    "LOCAL_CONFIRMED": 30 * 86400,
+    "LIVE_REPORTED": 24 * 3600,
+    "CATALOG_CANDIDATE": 30 * 86400,
+})
 
 # Only fields documented by Frontier and already used or accepted by EDEC are
 # listed. Localised and identity-bearing fields are deliberately absent.
@@ -57,7 +63,6 @@ MINING_SOURCE_POLICY = MappingProxyType({
 MINING_FINDER_OPEN_QUESTIONS = (
     "No Rhino-specific deposit or prospecting field is assumed without an observed Journal contract.",
     "No hotspot, ring reserve or prospector sample is treated as a guaranteed yield.",
-    "No freshness threshold for external catalog candidates is selected yet.",
     "No INARA endpoint is used as a general galaxy or mining-target search source.",
 )
 
@@ -66,6 +71,7 @@ def mining_finder_contract():
     """Return a serialisable copy for diagnostics, tests and future UI work."""
     return {
         "evidenceLevels": list(MINING_EVIDENCE_LEVELS),
+        "freshnessSeconds": dict(MINING_FRESHNESS_SECONDS),
         "localEvents": {
             event: sorted(fields)
             for event, fields in LOCAL_MINING_EVENT_FIELDS.items()

@@ -49,6 +49,7 @@ from ed_companion.navigation import (
     resolve_trader_type,
 )
 from ed_companion.navigation.trader import is_material_tradeable
+from ed_companion.navigation.mining_finder import project_local_mining_evidence
 from ed_companion.navigation.trader_type_cache import normalize_timestamp
 from ed_companion.trader_config import HEURISTIC_TRADER_WARNING
 from ed_companion.material_integrity import material_key
@@ -6849,6 +6850,7 @@ def build_state(
         "trackedItems": tracked_items,
         "localHgeSightings": extract_local_hge_sightings(events),
         "localStateFinds": extract_local_state_finds(events),
+        "localMiningEvidence": project_local_mining_evidence(events),
         "localHgeScan": local_hge_scan_status(events),
         "localStateFindScan": local_state_find_scan_status(events),
         "currentSession": sessions["current"],

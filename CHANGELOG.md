@@ -8,8 +8,21 @@
   connecting it to UI, persistence or network operations.
 - Add pure, offline projections for locally confirmed ring/hotspot evidence,
   unbound prospector samples and documented Spansh dump catalog candidates.
+- Add an explicit Mining Finder freshness policy and merge identical ring
+  targets with local/live/catalog precedence while retaining source timestamps.
+- Add a read-only Mining Finder page backed by the existing Journal state, with
+  ring, hotspot, distance and evidence filters plus a profile-bound catalog.
+- Add a confirmed Settings action that resets only the active profile's learned
+  Mining Finder catalog so community observations can be rebuilt safely.
+- Allow an explicit current-system refresh from Spansh's documented public
+  system dump endpoint without transmitting Commander or Journal data.
+- Grow the profile-bound Mining Finder catalog from public EDDN `Scan` and
+  `SAASignalsFound` observations while discarding unrelated and private fields.
 
 ### Fixed
+
+- Keep known Mining Finder locations searchable when their confirmation ages,
+  showing `RECHECK RECOMMENDED` instead of replacing evidence with `STALE`.
 
 - Group HGE BGS predictions into one travel card per system while preserving
   each faction, state and predicted material variant inside that destination.

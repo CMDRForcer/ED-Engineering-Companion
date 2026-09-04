@@ -1,7 +1,7 @@
 # Mining Finder data contract
 
-Status: feasibility contract only. It is not connected to QML, navigation,
-uploads or persistent runtime files.
+Status: implemented read-only contract for QML, navigation and the
+profile-bound runtime catalog. It never initiates uploads.
 
 ## Evidence shown to users
 
@@ -10,8 +10,12 @@ uploads or persistent runtime files.
   report, not a guarantee that a hotspot or deposit still exists.
 - `CATALOG_CANDIDATE`: searchable Spansh body/ring data with its source update
   time. It is suitable for finding destinations, not confirming current yield.
-- `STALE`: the source timestamp exceeds a future, explicitly tested freshness
-  policy. This threshold is deliberately not chosen in this phase.
+
+Location evidence does not expire. When its last confirmation exceeds EDEC's
+display policy (24 hours for live reports and 30 days for local/catalog
+observations), it remains searchable with its original evidence and receives
+`RECHECK_RECOMMENDED`. A missing timestamp becomes
+`CONFIRMATION_TIME_UNKNOWN`. Neither state claims that a ring disappeared.
 
 The UI must never label a destination or yield as guaranteed.
 
