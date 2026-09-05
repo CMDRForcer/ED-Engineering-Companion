@@ -242,6 +242,7 @@ from .state import (
     set_journal_dir,
     reference_data_dir,
     select_operation_action,
+    scope_operation_action_materials,
     set_prioritized_ship_plan,
     set_tech_broker_track,
     user_trader_catalog_path,
@@ -1758,11 +1759,8 @@ class CockpitController(QObject):
         return str(self._operation_action().get("title") or "Open Engineering")
 
     def _operation_action(self):
-        return self._cached_derived(
-            "operation_action", (
-                self._state_revision, tuple(sorted(self._deferred_engineers))
-            ),
-            lambda: select_operation_action(
+        def build_action():
+            return scope_operation_action_materials(self._state, select_operation_action(
                 self._state,
                 self._engineer_mission_route() + self._engineer_unlock_tasks(),
                 self._engineer_index(),
@@ -1771,7 +1769,13 @@ class CockpitController(QObject):
                     for records in self._blueprint_groups.values()
                     for record in records
                 ],
+            ))
+
+        return self._cached_derived(
+            "operation_action", (
+                self._state_revision, tuple(sorted(self._deferred_engineers))
             ),
+            build_action,
         )
 
     def _hge_targets(self):

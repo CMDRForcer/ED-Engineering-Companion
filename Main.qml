@@ -1310,8 +1310,10 @@ ApplicationWindow {
                     text: [
                         cockpit.operationAction.physicalSlotLabel || "",
                         cockpit.operationAction.blueprintName || "",
-                        cockpit.operationAction.targetGrade > 0
-                            ? "G" + cockpit.operationAction.targetGrade : "",
+                        (cockpit.operationAction.actionGrade
+                         || cockpit.operationAction.targetGrade) > 0
+                            ? "G" + (cockpit.operationAction.actionGrade
+                                      || cockpit.operationAction.targetGrade) : "",
                         cockpit.operationAction.experimentalName || ""
                     ].filter(function(value) { return !!value }).join("  ·  ")
                     color: textSecondary; font.pixelSize: 13
@@ -1326,47 +1328,88 @@ ApplicationWindow {
                 ModernProgress {
                     Layout.fillWidth: true
                     value: window.materialDisplay(
-                               cockpit.materialStatus, cockpit.completion,
-                               cockpit.completionReliable).completion
+                               cockpit.operationAction.materialStatus
+                                   || cockpit.materialStatus,
+                               cockpit.operationAction.materialCompletion !== undefined
+                                   ? cockpit.operationAction.materialCompletion
+                                   : cockpit.completion,
+                               cockpit.operationAction.materialCompletionReliable !== undefined
+                                   ? cockpit.operationAction.materialCompletionReliable
+                                   : cockpit.completionReliable).completion
                 }
                 RowLayout {
                     Layout.fillWidth: true
                     Label {
                         text: window.t("common.material_prefix", "MATERIAL · ") + window.materialDisplay(
-                                  cockpit.materialStatus, cockpit.completion,
-                                  cockpit.completionReliable).status
+                                  cockpit.operationAction.materialStatus
+                                      || cockpit.materialStatus,
+                                  cockpit.operationAction.materialCompletion !== undefined
+                                      ? cockpit.operationAction.materialCompletion
+                                      : cockpit.completion,
+                                  cockpit.operationAction.materialCompletionReliable !== undefined
+                                      ? cockpit.operationAction.materialCompletionReliable
+                                      : cockpit.completionReliable).status
                               + " · " + Math.round(window.materialDisplay(
-                                                       cockpit.materialStatus,
-                                                       cockpit.completion,
-                                                       cockpit.completionReliable).completion * 100) + "%"
+                                                       cockpit.operationAction.materialStatus
+                                                           || cockpit.materialStatus,
+                                                       cockpit.operationAction.materialCompletion !== undefined
+                                                           ? cockpit.operationAction.materialCompletion
+                                                           : cockpit.completion,
+                                                       cockpit.operationAction.materialCompletionReliable !== undefined
+                                                           ? cockpit.operationAction.materialCompletionReliable
+                                                           : cockpit.completionReliable).completion * 100) + "%"
+                              + (cockpit.operationAction.materialScope
+                                 ? " · " + cockpit.operationAction.materialScope : "")
                         color: window.materialDisplay(
-                                   cockpit.materialStatus, cockpit.completion,
-                                   cockpit.completionReliable).status === "READY"
+                                   cockpit.operationAction.materialStatus
+                                       || cockpit.materialStatus,
+                                   cockpit.operationAction.materialCompletion !== undefined
+                                       ? cockpit.operationAction.materialCompletion
+                                       : cockpit.completion,
+                                   cockpit.operationAction.materialCompletionReliable !== undefined
+                                       ? cockpit.operationAction.materialCompletionReliable
+                                       : cockpit.completionReliable).status === "READY"
                                ? green : orange
                         font.pixelSize: 13; font.bold: true
                     }
                     Label {
-                        text: window.tf("status.progress", "PROGRESS · %1", [cockpit.planProgressStatus])
-                        color: cockpit.planProgressStatus === "COMPLETE" ? green : cyan
+                        text: window.tf("status.progress", "PROGRESS · %1", [
+                                  cockpit.operationAction.planProgressStatus
+                                      || cockpit.planProgressStatus])
+                        color: (cockpit.operationAction.planProgressStatus
+                                || cockpit.planProgressStatus) === "COMPLETE" ? green : cyan
                         font.pixelSize: 13; font.bold: true
                     }
                     Item { Layout.fillWidth: true }
                     Label {
-                    text: window.tf(cockpit.required === 1 ? "status.material_unit" : "status.material_units",
-                                    cockpit.required === 1 ? "%1 / %2 MATERIAL UNIT" : "%1 / %2 MATERIAL UNITS",
-                                    [cockpit.covered, cockpit.required])
+                    text: window.tf((cockpit.operationAction.materialRequired !== undefined
+                                      ? cockpit.operationAction.materialRequired : cockpit.required) === 1
+                                        ? "status.material_unit" : "status.material_units",
+                                    (cockpit.operationAction.materialRequired !== undefined
+                                      ? cockpit.operationAction.materialRequired : cockpit.required) === 1
+                                        ? "%1 / %2 MATERIAL UNIT" : "%1 / %2 MATERIAL UNITS",
+                                    [cockpit.operationAction.materialCovered !== undefined
+                                         ? cockpit.operationAction.materialCovered : cockpit.covered,
+                                     cockpit.operationAction.materialRequired !== undefined
+                                         ? cockpit.operationAction.materialRequired : cockpit.required])
                         color: muted; font.pixelSize: 12
                     }
                 }
                 Label {
-                    visible: !!cockpit.calculationWarning
-                    text: cockpit.calculationWarning
+                    visible: !!(cockpit.operationAction.materialScope
+                                ? cockpit.operationAction.calculationWarning
+                                : cockpit.calculationWarning)
+                    text: cockpit.operationAction.materialScope
+                          ? cockpit.operationAction.calculationWarning
+                          : cockpit.calculationWarning
                     color: error; font.pixelSize: 11; font.bold: true
                     Layout.fillWidth: true; wrapMode: Text.WordWrap
                 }
                 Label {
-                    visible: cockpit.missingMaterials.length > 0
-                    text: window.t("common.missing_prefix", "MISSING · ") + cockpit.missingMaterials.map(function(row) {
+                    visible: (cockpit.operationAction.missingMaterials
+                              || cockpit.missingMaterials).length > 0
+                    text: window.t("common.missing_prefix", "MISSING · ") + (cockpit.operationAction.missingMaterials
+                          || cockpit.missingMaterials).map(function(row) {
                         return row.name + " ×" + row.missing
                     }).join("   ·   ")
                     color: orange; font.pixelSize: 12; font.bold: true

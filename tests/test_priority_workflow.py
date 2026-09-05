@@ -1,8 +1,133 @@
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
-from ed_companion.phase14.state import select_operation_action
+
+from ed_companion.journal import material_event_changes
+from ed_companion.phase14.state import (
+    apply_engineer_craft,
+    blueprint_rows,
+    build_engineering_plan,
+    scope_operation_action_materials,
+    select_operation_action,
+)
 
 
 class PriorityWorkflowTests(unittest.TestCase):
+    def test_real_journal_cycle_keeps_bars_truthful_then_resumes_full_plan(self):
+        grades = [{
+            "Type": "Power Plant", "Name": "Overcharged",
+            "BlueprintName": "PowerPlant_Boosted", "BlueprintID": 1000 + grade,
+            "Grade": grade, "Engineers": ["Hera Tani"],
+            "Ingredients": [{"Name": f"Mat {grade}", "Size": 1}],
+        } for grade in range(1, 6)]
+        priority = build_engineering_plan(
+            grades, 0, 5, plan_id="power-plant", instance="PowerPlant",
+            experimental_id="power_plant::stripped_down",
+            experimental_name="Stripped Down", plan_mode="combined",
+            ship_id=7, slot="PowerPlant",
+            module_id="int_powerplant_size5_class5",
+        )
+        priority[0]["_Planner"]["priority"] = True
+        experimental = [{
+            "Type": "Power Plant", "Name": "Stripped Down",
+            "ExperimentalId": "power_plant::stripped_down",
+            "Kind": "ExperimentalEffect", "Grade": None,
+            "Engineers": ["Hera Tani"],
+            "Ingredients": [{"Name": "Exp Mat", "Size": 2}],
+            "_ParentPlanId": "power-plant",
+        }]
+        other = build_engineering_plan([{
+            "Type": "Shield Generator", "Name": "Reinforced",
+            "BlueprintName": "ShieldGenerator_Reinforced", "BlueprintID": 2001,
+            "Grade": 1, "Engineers": ["Lei Cheung"],
+            "Ingredients": [{"Name": "Other Mat", "Size": 1}],
+        }], 0, 1, plan_id="shield", instance="Slot03_Size4",
+            ship_id=7, slot="Slot03_Size4",
+            module_id="int_shieldgenerator_size4_class5")
+        inventory = {f"mat{grade}": grade for grade in range(1, 6)}
+        inventory.update({"expmat": 2, "othermat": 0})
+        metadata = {
+            key: {"Name": key, "Category": "Raw"} for key in inventory
+        }
+        route = [{
+            "name": "Hera Tani", "craftable": True,
+            "jobNames": ["Power Plant · Overcharged · G5"],
+        }, {
+            "name": "Lei Cheung", "craftable": True,
+            "jobNames": ["Shield Generator · Reinforced · G1"],
+        }]
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "ship_blueprints.json"
+            path.write_text(json.dumps({"Mandalay": [priority, experimental, other]}),
+                            encoding="utf-8")
+
+            def project():
+                tasks = json.loads(path.read_text(encoding="utf-8"))["Mandalay"]
+                rows = blueprint_rows(tasks, inventory, metadata)
+                global_missing = [
+                    dict(material)
+                    for row in rows for material in row["materialProgress"]
+                    if material["missing"] > 0
+                ]
+                state = {"blueprints": rows, "materials": global_missing, "trades": []}
+                action = scope_operation_action_materials(
+                    state, select_operation_action(state, route)
+                )
+                return rows, action
+
+            for grade in range(1, 6):
+                rows, action = project()
+                power_plant = next(row for row in rows if row["planId"] == "power-plant")
+                self.assertEqual(power_plant["nextGrade"], grade)
+                self.assertEqual(action["kind"], "GRADE_CRAFT")
+                self.assertEqual(action["actionGrade"], grade)
+                self.assertEqual(action["materialStatus"], "READY")
+                self.assertEqual(action["materialCompletion"], 1.0)
+                self.assertEqual(action["materialScope"], "PRIORITY PLAN")
+                event = {
+                    "timestamp": f"2026-09-05T10:00:0{grade}Z",
+                    "event": "EngineerCraft", "ShipID": 7,
+                    "Slot": "PowerPlant", "Module": "int_powerplant_size5_class5",
+                    "Engineer": "Hera Tani", "BlueprintName": "PowerPlant_Boosted",
+                    "BlueprintID": 1000 + grade, "Level": grade, "Quality": 1.0,
+                    "Ingredients": [{"Name": f"mat{grade}", "Count": 1}],
+                }
+                self.assertEqual(
+                    apply_engineer_craft(path, "Mandalay", event, ship_id=7)["status"],
+                    "applied",
+                )
+                for key, _category, delta in material_event_changes(event):
+                    inventory[key] += delta
+
+            rows, action = project()
+            power_plant = next(row for row in rows if row["planId"] == "power-plant")
+            self.assertEqual(power_plant["targetStatus"], "experimental_pending")
+            self.assertEqual(power_plant["gradeStatus"], "completed")
+            self.assertEqual(power_plant["experimentalStatus"], "pending")
+            self.assertEqual(action["kind"], "EXPERIMENTAL_CRAFT")
+            self.assertEqual(action["materialCompletion"], 1.0)
+            effect_event = {
+                "timestamp": "2026-09-05T10:01:00Z", "event": "EngineerCraft",
+                "ShipID": 7, "Slot": "PowerPlant",
+                "Module": "int_powerplant_size5_class5",
+                "BlueprintName": "PowerPlant_Boosted", "BlueprintID": 1005,
+                "Level": 5, "Quality": 1.0,
+                "ApplyExperimentalEffect": "special_powerplant_lightweight",
+                "ExperimentalEffect_Localised": "Stripped Down",
+                "Ingredients": [{"Name": "expmat", "Count": 2}],
+            }
+            result = apply_engineer_craft(path, "Mandalay", effect_event, ship_id=7)
+            self.assertTrue(result["completed"])
+            rows, action = project()
+            power_plant = next(row for row in rows if row["planId"] == "power-plant")
+            self.assertEqual(power_plant["targetStatus"], "completed")
+            self.assertFalse(power_plant["priority"])
+            self.assertEqual(action["kind"], "COLLECT")
+            self.assertNotIn("materialScope", action)
+            self.assertIn("othermat", action["title"])
+
     def test_priority_trade_is_limited_to_its_shortage(self):
         state = {"blueprints": [{"priority": True, "targetStatus": "not_started",
                  "materialProgress": [{"key": "iron", "missing": 2}]}],

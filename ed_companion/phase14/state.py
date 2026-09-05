@@ -3598,6 +3598,50 @@ def operation_physical_slot_label(slot: object) -> str:
     return value
 
 
+def scope_operation_action_materials(state: object, action: object) -> dict:
+    """Show priority-plan readiness on the priority-plan next action."""
+    state = state if isinstance(state, dict) else {}
+    result = dict(action) if isinstance(action, dict) else {}
+    priority = next((
+        row for row in (state.get("blueprints") or [])
+        if isinstance(row, dict) and row.get("priority")
+        and str(row.get("targetStatus") or "") != "completed"
+    ), None)
+    if not priority:
+        return result
+    progress = list(
+        priority.get("experimentalMaterialProgress") or []
+        if priority.get("targetStatus") == "experimental_pending"
+        else priority.get("materialProgress") or []
+    )
+    required = sum(max(0, int(row.get("need", 0) or 0)) for row in progress)
+    covered = sum(min(
+        max(0, int(row.get("have", 0) or 0)),
+        max(0, int(row.get("need", 0) or 0)),
+    ) for row in progress)
+    reliable = bool(priority.get("completionReliable", True))
+    result.update({
+        "materialCompletion": (
+            covered / required if required > 0 else 1.0
+        ) if reliable else 0.0,
+        "materialStatus": (
+            "READY" if reliable and covered >= required else
+            "PARTIAL" if covered > 0 else "MISSING"
+        ),
+        "materialCompletionReliable": reliable,
+        "materialCovered": covered,
+        "materialRequired": required,
+        "missingMaterials": [
+            dict(row) for row in progress
+            if int(row.get("missing", 0) or 0) > 0
+        ],
+        "planProgressStatus": str(priority.get("progressStatus") or ""),
+        "calculationWarning": str(priority.get("calculationWarning") or ""),
+        "materialScope": "PRIORITY PLAN",
+    })
+    return result
+
+
 def select_operation_action(
     state, engineer_route, engineer_rows=None, blueprint_records=None
 ):
@@ -3842,13 +3886,17 @@ def select_operation_action(
         physical_slot = str(plan.get("boundSlot") or "")
         physical_slot_label = operation_physical_slot_label(physical_slot)
         blueprint = str(plan.get("blueprint") or "Blueprint")
-        grade = int(plan.get("targetGrade", 0) or 0)
+        target_grade = int(plan.get("targetGrade", 0) or 0)
+        action_grade = (
+            target_grade if experimental else
+            int(plan.get("nextGrade", 0) or target_grade)
+        )
         module_identity = " · ".join(
             value for value in (module, physical_slot_label) if value
         )
         identity = (
-            f"{module_identity} · {blueprint} · G{grade}"
-            if grade > 0 else f"{module_identity} · {blueprint}"
+            f"{module_identity} · {blueprint} · G{action_grade}"
+            if action_grade > 0 else f"{module_identity} · {blueprint}"
         )
         engineer_options = engineer_options_for_plan(
             plan, engineer_rows, blueprint_records
@@ -3865,7 +3913,8 @@ def select_operation_action(
                 "targetPage": 4, "executable": True,
                 "moduleName": module,
                 "blueprintName": blueprint,
-                "targetGrade": grade,
+                "targetGrade": target_grade,
+                "actionGrade": action_grade,
                 "experimentalName": str(plan.get("experimental") or ""),
                 "physicalSlot": physical_slot,
                 "physicalSlotLabel": physical_slot_label,
@@ -3901,7 +3950,8 @@ def select_operation_action(
             "detail": " · ".join(value for value in (engineer, station, system) if value),
             "moduleName": module,
             "blueprintName": blueprint,
-            "targetGrade": grade,
+            "targetGrade": target_grade,
+            "actionGrade": action_grade,
             "experimentalName": str(plan.get("experimental") or ""),
             "physicalSlot": physical_slot,
             "physicalSlotLabel": physical_slot_label,
