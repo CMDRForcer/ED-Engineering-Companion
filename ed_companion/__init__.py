@@ -3,7 +3,7 @@
 import os
 
 # Release/build identity shown by the app and sent to optional integrations.
-APP_VERSION = "21.201"
+APP_VERSION = "21.202"
 
 # Build pipelines may explicitly mark non-release artifacts. Installed builds
 # and release tags use the stable default.
