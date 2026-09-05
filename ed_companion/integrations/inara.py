@@ -565,6 +565,7 @@ def prepare_journal_batch(events, known_fingerprints=(), expected_identity="",
     latest_credits = None
     pending_loadgame_credits = None
     material_inventory = None
+    latest_material_snapshot = None
     cargo_inventory = None
     fleet_state = {}
     fleet_initialized = False
@@ -591,6 +592,7 @@ def prepare_journal_batch(events, known_fingerprints=(), expected_identity="",
                         known_ship_types.add(str(ship["ShipType"]).casefold())
 
     def append(name, data, timestamp, allow_empty=False, fingerprint_data=None):
+        nonlocal latest_material_snapshot
         if name not in AUTO_UPLOAD_EVENT_NAMES:
             return
         if not timestamp or (not data and not allow_empty):
@@ -601,6 +603,19 @@ def prepare_journal_batch(events, known_fingerprints=(), expected_identity="",
         ):
             return
         event = build_event(name, data, timestamp)
+        if name == "setCommanderInventoryMaterials":
+            # A current inventory is a replacement snapshot, not a historical
+            # transaction. Retain the newest even when it is already known,
+            # so older unknown snapshots cannot roll the remote stock back.
+            fingerprint = hashlib.sha256(json.dumps(
+                event, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")).hexdigest()
+            if (latest_material_snapshot is None or
+                    timestamp >= latest_material_snapshot[0]["eventTimestamp"]):
+                latest_material_snapshot = (event, fingerprint)
+            return
+        if max_events is not None and len(prepared) >= max_events:
+            return
         fingerprint_value = fingerprint_data if fingerprint_data is not None else (
             {"eventName": name, "eventData": data}
             if name.startswith("setCommander") else event
@@ -1405,13 +1420,16 @@ def prepare_journal_batch(events, known_fingerprints=(), expected_identity="",
                     "percentileBandReward": int(goal.get("Bonus", 0) or 0),
                     "isTopRank": bool(goal.get("PlayerInTopRank", False)),
                 }, timestamp)
-        if max_events is not None and len(prepared) >= max_events:
-            del prepared[max_events:]
-            del fingerprints[max_events:]
-            break
+        # Continue replay after the batch fills to reconstruct the latest
+        # material stock. append() bounds other queued events in memory.
     if pending_loadgame_credits is not None:
         data, timestamp = pending_loadgame_credits
         append("setCommanderCredits", data, timestamp)
+    if latest_material_snapshot is not None:
+        event, fingerprint = latest_material_snapshot
+        if fingerprint not in known:
+            prepared.insert(0, event)
+            fingerprints.insert(0, fingerprint)
     if max_events is not None:
         del prepared[max_events:]
         del fingerprints[max_events:]
