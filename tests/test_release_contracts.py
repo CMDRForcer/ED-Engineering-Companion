@@ -341,7 +341,7 @@ class ReleaseContractTests(unittest.TestCase):
                     "blueprint": "Increased Range",
                     "targetGrade": 5,
                     "targetStatus": "not_started",
-                    "priority": True,
+                    "priority": False,
                     "canCraftNext": True,
                     "materialProgress": [],
                 },
@@ -583,7 +583,7 @@ class ReleaseContractTests(unittest.TestCase):
                 "grade": 5, "targetGrade": 5,
                 "eligibleEngineers": ["Felicity Farseer"],
                 "completion": 1, "canCraftNext": True,
-                "targetStatus": "not_started", "priority": True,
+                "targetStatus": "not_started", "priority": False,
                 "materialProgress": [],
             },
             {

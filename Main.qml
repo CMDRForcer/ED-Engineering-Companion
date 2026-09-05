@@ -2992,8 +2992,6 @@ ApplicationWindow {
         property string selectedCategory: window.engineeringCategoryState
         property string selectedModule: window.engineeringModuleState
         property string selectedInstalledSlot: ""
-        property real leftSlotContentY: 0
-        property real rightSlotContentY: 0
         property var selectedShipData: {
             var symbol = String(cockpit.selectedShipType || "")
             var normalized = symbol.toLowerCase().replace(/[^a-z0-9]/g, "")
@@ -3265,6 +3263,7 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 RowLayout {
                     anchors.fill: parent; anchors.margins: 14; spacing: 12
+                    id: engineeringSlotColumns
                     property var leftSlots: cockpit.engineeringShipSlots.filter(function(row) {
                         return row.group === "CORE INTERNALS" || row.group === "OPTIONAL INTERNALS"
                     })
@@ -3272,44 +3271,15 @@ ApplicationWindow {
                         return row.group === "HARDPOINTS" || row.group === "UTILITY MOUNTS"
                     })
                     Repeater {
-                        model: [parent.leftSlots, parent.rightSlots]
-                        delegate: ListView {
-                            required property var modelData
+                        model: 2
+                        delegate: StableSlotList {
                             required property int index
                             id: engineeringSlotList
                             Layout.fillWidth: true; Layout.fillHeight: true
                             clip: true; spacing: 4
-                            model: modelData
-                            function rememberViewport() {
-                                if (index === 0)
-                                    engineeringPage.leftSlotContentY = contentY
-                                else
-                                    engineeringPage.rightSlotContentY = contentY
-                            }
-                            function restoreViewport() {
-                                const retained = index === 0
-                                               ? engineeringPage.leftSlotContentY
-                                               : engineeringPage.rightSlotContentY
-                                const maximum = originY + Math.max(
-                                    0, contentHeight - height)
-                                contentY = Math.max(originY,
-                                                    Math.min(retained, maximum))
-                            }
-                            onMovementEnded: rememberViewport()
-                            onModelChanged: restoreEngineeringSlotViewport.restart()
-                            Component.onCompleted: restoreEngineeringSlotViewport.restart()
-                            Timer {
-                                id: restoreEngineeringSlotViewport
-                                interval: 0
-                                repeat: false
-                                onTriggered: engineeringSlotList.restoreViewport()
-                            }
-                            Connections {
-                                target: cockpit
-                                function onStateChanged() {
-                                    restoreEngineeringSlotViewport.restart()
-                                }
-                            }
+                            viewportKey: cockpit.ship
+                            sourceRows: index === 0 ? engineeringSlotColumns.leftSlots
+                                                   : engineeringSlotColumns.rightSlots
                             // The two slot columns normally fit without a
                             // scrollbar. Keep wheel/touch scrolling available
                             // for short windows without drawing permanent rails.

@@ -10,6 +10,23 @@ from ed_companion.phase14.state import (
 
 
 class ModulePurchaseDisplayTests(unittest.TestCase):
+    def test_catalog_wide_names_and_ratings(self):
+        import json
+        path = Path(__file__).resolve().parents[1] / "ed_data/module_display.json"
+        catalog = json.loads(path.read_text(encoding="utf-8"))["modules"]
+        self.assertEqual(len(catalog), 961)
+        for symbol, (name, rating) in catalog.items():
+            with self.subTest(symbol=symbol):
+                actual_name, actual_rating = module_purchase_identity(symbol)
+                self.assertEqual(actual_rating, rating)
+                self.assertFalse(actual_name.startswith(("INT ", "HPT ")))
+                if "dronecontrol" not in symbol:
+                    self.assertTrue(actual_name.startswith(name), actual_name)
+
+    def test_unknown_future_module_remains_identifiable(self):
+        self.assertEqual(module_purchase_identity("hpt_future_unknown"),
+                         ("HPT FUTURE UNKNOWN", ""))
+
     def test_internal_module_includes_proven_size_and_rating(self):
         self.assertEqual(
             module_purchase_identity("int_powerplant_size6_class5"),
@@ -89,19 +106,19 @@ class ModulePurchaseDisplayTests(unittest.TestCase):
     def test_hardpoint_shows_name_and_mount_without_guessing_rating(self):
         self.assertEqual(
             module_purchase_identity("hpt_multicannon_turret_medium"),
-            ("MULTI-CANNON · TURRETED", ""),
+            ("MULTI-CANNON · TURRETED", "2F"),
         )
 
     def test_new_mining_module_ids_have_purchase_names(self):
         self.assertEqual(
             module_purchase_identity("hpt_miningvolleyrepeater_fixed_large"),
-            ("MINING VOLLEY REPEATER · FIXED", ""),
+            ("MINING VOLLEY REPEATER · FIXED", "3C"),
         )
         self.assertEqual(
             module_purchase_identity(
                 "hpt_mining_subsurfdispmisle_fixed_medium"
             ),
-            ("SUB-SURFACE DISPLACEMENT MISSILE · FIXED", ""),
+            ("SUB-SURFACE DISPLACEMENT MISSILE · FIXED", "2B"),
         )
 
     def test_early_mining_mkii_alias_matches_frontier_miningv2_id(self):
@@ -125,7 +142,7 @@ class ModulePurchaseDisplayTests(unittest.TestCase):
         )
         self.assertEqual(
             canonical_module_id("hpt_cloudscanner_size0_class5"),
-            "hpt_mrascanner_size0_class5",
+            "hpt_cloudscanner_size0_class5",
         )
         self.assertEqual(
             module_purchase_identity("hpt_mrascanner_size0_class5"),

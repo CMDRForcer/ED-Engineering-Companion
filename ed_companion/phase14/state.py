@@ -9,6 +9,7 @@ import re
 import threading
 import uuid
 from copy import deepcopy
+from functools import lru_cache
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -360,8 +361,6 @@ def canonical_module_id(value: object) -> str:
             "hpt_miningtoolv2_fixed_large",
         "hpt_heatsinklauncher_tiny":
             "hpt_heatsinklauncher_turret_tiny",
-        "hpt_cloudscanner_size0_class5":
-            "hpt_mrascanner_size0_class5",
     }
     # Hull prefixes vary between Journal symbols and external build aliases.
     # Inside the already ship-bound Armour slot, the observed grade is the
@@ -1758,7 +1757,6 @@ def engineering_loadout_rows(
             "blueprintCount": 0,
         })
         target["blueprintCount"] += 1
-    rating_letters = {1: "E", 2: "D", 3: "C", 4: "B", 5: "A"}
     category_rank = {
         category: index for index, category in enumerate(ENGINEERING_CATEGORY_ORDER)
     }
@@ -1786,13 +1784,7 @@ def engineering_loadout_rows(
         )
         if not match:
             continue
-        size_rating = ""
-        symbol = canonical_module_id(module_id)
-        identity = re.search(r"_size(\d+)_class(\d+)", symbol)
-        if identity:
-            size = int(identity.group(1))
-            module_class = int(identity.group(2))
-            size_rating = f"{size}{rating_letters.get(module_class, '')}"
+        _, size_rating = module_purchase_identity(module_id)
         slot = str(slot_row.get("slot") or "")
         result.append({
             **match,
@@ -1824,9 +1816,20 @@ def engineering_loadout_rows(
     return result
 
 
+@lru_cache(maxsize=1)
+def _module_display_catalog() -> dict:
+    path = Path(__file__).resolve().parents[2] / "ed_data" / "module_display.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))["modules"]
+    except (OSError, ValueError, KeyError):
+        LOGGER.warning("Module display catalog unavailable: %s", path, exc_info=True)
+        return {}
+
+
 def module_purchase_identity(module_id: object) -> tuple[str, str]:
     """Return a purchase label and only a rating proven by the module ID."""
     symbol = canonical_module_id(module_id)
+    catalog_identity = _module_display_catalog().get(symbol.casefold())
     normalized = normalize(symbol)
     identity = re.search(r"_size(\d+)_class(\d+)", symbol.casefold())
     rating_letters = {1: "E", 2: "D", 3: "C", 4: "B", 5: "A"}
@@ -1907,7 +1910,7 @@ def module_purchase_identity(module_id: object) -> tuple[str, str]:
         ("stellarbodydiscoveryscanneradvanced", "ADVANCED DISCOVERY SCANNER"),
         ("buggybaymkii", "MK II PLANETARY VEHICLE HANGAR"),
         ("hyperdriveovercharge", "FRAME SHIFT DRIVE (SCO)"),
-        ("cloudscanner", "PULSE WAVE ANALYSER"),
+        ("cloudscanner", "FRAME SHIFT WAKE SCANNER"),
         ("mrascanner", "PULSE WAVE ANALYSER"),
         ("mininglaser", "MINING LASER"),
         ("intpowerplant", "POWER PLANT"),
@@ -1948,7 +1951,14 @@ def module_purchase_identity(module_id: object) -> tuple[str, str]:
         ) if marker in normalized
     ), "")
     if not name:
-        name = re.sub(r"[_-]+", " ", symbol).upper()
+        name = (catalog_identity[0] if catalog_identity else
+                re.sub(r"[_-]+", " ", symbol).upper())
+    if catalog_identity:
+        # Keep our explicit limpet subtype wording; older catalog labels can
+        # be generic ("Limpet Control") or omit "Multi".
+        if "dronecontrol" not in normalized:
+            name = catalog_identity[0]
+        size_rating = catalog_identity[1]
     if mount:
         name = f"{name} · {mount}"
     return name, size_rating
@@ -3594,6 +3604,11 @@ def select_operation_action(
     """Select one truthful, executable Commander action from current state."""
     state = state or {}
     plans = list(state.get("blueprints") or [])
+    priority_plan = next((plan for plan in plans
+                          if plan.get("priority")
+                          and plan.get("targetStatus") != "completed"), None)
+    if priority_plan is not None:
+        plans = [priority_plan]
     tracking_issues = list(state.get("craftTrackingIssues") or [])
     open_plans = [
         row for row in plans
@@ -3664,8 +3679,40 @@ def select_operation_action(
         row for row in (state.get("materials") or [])
         if int(row.get("missing", 0) or 0) > 0
     ]
+    if priority_plan is not None:
+        priority_missing = {}
+        for field in ("materialProgress", "experimentalMaterialProgress"):
+            for row in priority_plan.get(field) or []:
+                amount = max(0, int(row.get("missing", 0) or 0))
+                key = str(row.get("key") or "")
+                if amount and key:
+                    entry = priority_missing.setdefault(key, {**row, "missing": 0})
+                    entry["missing"] += amount
+        missing = list(priority_missing.values())
+        trades = [row for row in trades
+                  if str(row.get("targetKey") or "") in priority_missing]
+        scoped_trades = []
+        for trade in trades:
+            give = int(trade.get("giveAmount", 0) or 0)
+            receive = int(trade.get("receiveAmount", 0) or 0)
+            if give <= 0 or receive <= 0:
+                continue
+            divisor = math.gcd(give, receive)
+            receive_step, give_step = receive // divisor, give // divisor
+            needed = priority_missing[str(trade["targetKey"])]["missing"]
+            batches = min(divisor, math.ceil(needed / receive_step))
+            scoped_trades.append({
+                **trade, "giveAmount": batches * give_step,
+                "receiveAmount": batches * receive_step,
+                "remaining": max(0, needed - batches * receive_step),
+                "instruction": (
+                    f"WANTED · {batches * receive_step} {trade.get('receiveName', '')}"
+                    f" · GIVE · {batches * give_step} {trade.get('giveName', '')}"
+                ),
+            })
+        trades = scoped_trades
     tech_track = dict(state.get("techBrokerTrack") or {})
-    if tech_track:
+    if tech_track and priority_plan is None:
         track_missing_by_key = {
             str(row.get("key") or ""): int(row.get("missing", 0) or 0)
             for row in (tech_track.get("materials") or [])
@@ -3890,10 +3937,8 @@ def select_operation_action(
             "system": "", "station": "", "buttonLabel": "OPEN WISHLIST",
             "targetPage": 1, "executable": True,
         }
-    # Engineering is deliberately a two-phase workflow: acquire enough
-    # materials for every open plan first, then visit Engineers.  A tracked or
-    # otherwise prioritised plan controls the later craft order, but must never
-    # hide shortages belonging to another physical module slot.
+    # A priority plan completes its own material/craft workflow first. Without
+    # one, acquire materials for all open plans before visiting Engineers.
     if trades and missing:
         trade = trades[0]
         system = str(trade.get("system") or "")
