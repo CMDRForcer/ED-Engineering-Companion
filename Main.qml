@@ -1254,8 +1254,26 @@ ApplicationWindow {
         }
 
         RowLayout {
-            property int focusHeight: (cockpit.operationAction.engineerOptions || []).length > 0
-                                      ? 390 : 310
+            id: nbaLayout
+            property bool experimentalFocus: !!cockpit.operationAction.experimentalName
+                                             && !!cockpit.operationAction.moduleName
+            property string engineerPortrait: cockpit.operationAction.portraitUrl
+                                                || cockpit.nextEngineerStop.portraitUrl || ""
+            property string engineerName: cockpit.operationAction.engineerName
+                                             || cockpit.nextEngineerStop.name || ""
+            property string engineerStation: cockpit.operationAction.station
+                                                || cockpit.nextEngineerStop.station || ""
+            property string engineerSystem: cockpit.operationAction.system
+                                               || cockpit.nextEngineerStop.system || ""
+            property int focusHeight: 350
+            function effectSummary() {
+                var effects = cockpit.operationAction.experimentalEffects || []
+                var parts = []
+                for (var index = 0; index < effects.length; index++)
+                    parts.push(String(effects[index].property || "Effect").toUpperCase()
+                               + " " + String(effects[index].effect || ""))
+                return parts.join("   ·   ")
+            }
             Layout.fillWidth: true
             Layout.fillHeight: false
             Layout.minimumHeight: focusHeight
@@ -1273,59 +1291,203 @@ ApplicationWindow {
             scale: actionHover.containsMouse ? 1.006 : 1.0
             MouseArea { id: actionHover; anchors.fill: parent; hoverEnabled: true }
             ColumnLayout {
-                anchors.fill: parent; anchors.margins: 20; spacing: 7
-                    Label { text: window.t("operations.next_action", "NEXT BEST ACTION  ·  WHAT NOW"); color: cyan; font.pixelSize: 12; font.bold: true }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 14
-                    Item {
-                        width: 64; height: 64
-                        visible: !!(cockpit.operationAction.portraitUrl)
+                anchors.fill: parent; anchors.margins: 14; spacing: 5
+                Rectangle {
+                    Layout.fillWidth: true; Layout.preferredHeight: 50; radius: 9
+                    color: errorBackground; border.width: 1; border.color: danger
+                    Rectangle {
+                        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+                        width: 5; radius: 3; color: danger
+                    }
+                    RowLayout {
+                        anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 8; spacing: 10
+                        Item {
+                            Layout.preferredWidth: 34; Layout.fillHeight: true
+                            Label {
+                                anchors.centerIn: parent; text: window.t("operations.nba_icon", "»"); rotation: 90
+                                color: danger; font.pixelSize: 29; font.bold: true
+                            }
+                        }
+                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; Layout.topMargin: 10; Layout.bottomMargin: 10; color: danger }
+                        Label {
+                            text: window.t("operations.next_action", "NEXT BEST ACTION")
+                            color: "#ffffff"; font.pixelSize: 22; font.bold: true
+                        }
+                        Label {
+                            text: "·  " + window.t("operations.what_now", "WHAT NOW")
+                            color: "#ffb7bf"; font.pixelSize: 15; font.bold: true
+                        }
+                        Item { Layout.fillWidth: true }
                         Rectangle {
-                            anchors.fill: parent
-                            radius: 10
-                            color: cardRaised
-                            border.width: 1
-                            border.color: borderTone
-                            clip: true
-                            Image {
-                                anchors.fill: parent
-                                source: cockpit.operationAction.portraitUrl || ""
-                                fillMode: Image.PreserveAspectCrop
-                                asynchronous: true
+                            visible: !!cockpit.operationAction.priority
+                            Layout.preferredWidth: priorityLabel.implicitWidth + 30
+                            Layout.preferredHeight: 34; radius: 7
+                            color: "#641d2a"; border.width: 1; border.color: "#ff7182"
+                            Label {
+                                id: priorityLabel; anchors.centerIn: parent
+                                text: "⚠  " + window.t("operations.priority", "PRIORITY") + " · "
+                                      + String(cockpit.operationAction.moduleName || "").toUpperCase()
+                                color: "#ffffff"; font.pixelSize: 12; font.bold: true
                             }
                         }
                     }
-                    Label {
-                        Layout.fillWidth: true
-                        text: cockpit.operationAction.shortTitle
-                              || cockpit.operationAction.title || cockpit.nextAction
-                        color: textPrimary; font.pixelSize: 23; font.bold: true
-                        wrapMode: Text.WordWrap
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 190
+                    radius: 10
+                    color: cardRaised
+                    border.width: 1
+                    border.color: borderTone
+                    RowLayout {
+                        anchors.fill: parent; spacing: 0
+                        ColumnLayout {
+                            Layout.preferredWidth: Math.max(420, parent.width * 0.43)
+                            Layout.maximumWidth: Math.max(420, parent.width * 0.43)
+                            Layout.fillHeight: true; spacing: 0
+                            Repeater {
+                                model: [{
+                                    "label": nbaMaterialStrip.ready ? "MATERIALS · READY" : "MATERIALS · REQUIRED",
+                                    "detail": "", "tone": nbaMaterialStrip.ready ? green : orange, "mark": nbaMaterialStrip.ready ? "✓" : "!"
+                                }, {
+                                    "label": String(cockpit.operationAction.blueprintName || "BLUEPRINT").toUpperCase()
+                                             + " · G" + (cockpit.operationAction.targetGrade || "–")
+                                             + (cockpit.operationAction.targetStatus === "experimental_pending" ? " COMPLETE" : " ACTIVE"),
+                                    "detail": "", "tone": cockpit.operationAction.targetStatus === "experimental_pending" ? green : cyan,
+                                    "mark": cockpit.operationAction.targetStatus === "experimental_pending" ? "✓" : "→"
+                                }, {
+                                    "label": nbaLayout.experimentalFocus
+                                             ? String(cockpit.operationAction.experimentalName).toUpperCase()
+                                               + (cockpit.operationAction.kind === "EXPERIMENTAL_CRAFT" ? " · APPLY NOW" : " · PLANNED")
+                                             : "NO EXPERIMENTAL EFFECT",
+                                    "detail": nbaLayout.experimentalFocus ? nbaLayout.effectSummary() : "",
+                                    "tone": nbaLayout.experimentalFocus ? orange : muted,
+                                    "mark": cockpit.operationAction.kind === "EXPERIMENTAL_CRAFT" ? "›" : "·"
+                                }, {
+                                    "label": "THEN · RETURN TO FULL BUILD", "detail": "", "tone": muted, "mark": "···"
+                                }]
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    Layout.fillWidth: true; Layout.fillHeight: true
+                                    color: "transparent"; border.width: 0
+                                    Rectangle { width: 3; anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom; color: modelData.tone }
+                                    RowLayout {
+                                        anchors.fill: parent; anchors.leftMargin: 18; anchors.rightMargin: 12; spacing: 16
+                                        Label { text: modelData.mark; color: modelData.tone; font.pixelSize: 23; font.bold: true; Layout.preferredWidth: 46; horizontalAlignment: Text.AlignHCenter }
+                                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; Layout.topMargin: 10; Layout.bottomMargin: 10; color: borderTone }
+                                        ColumnLayout {
+                                            Layout.fillWidth: true; spacing: 1
+                                            Label { Layout.fillWidth: true; text: modelData.label; color: modelData.tone; font.pixelSize: 14; font.bold: true; elide: Text.ElideRight }
+                                            Label { visible: !!modelData.detail; Layout.fillWidth: true; text: modelData.detail || ""; color: textSecondary; font.pixelSize: 9; font.bold: true; elide: Text.ElideRight }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderTone }
+                        Item {
+                            Layout.fillWidth: true; Layout.fillHeight: true; Layout.minimumWidth: 520
+                            clip: true
+                            RowLayout {
+                                anchors.fill: parent; spacing: 0
+                                Rectangle {
+                                    Layout.fillWidth: true; Layout.fillHeight: true
+                                    color: "#d907131c"
+                                    ColumnLayout {
+                                        anchors.fill: parent; anchors.margins: 18; spacing: 5
+                                        Item { Layout.fillHeight: true }
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: String(nbaLayout.engineerName || "NO ENGINEER REQUIRED").toUpperCase()
+                                            color: textPrimary; font.pixelSize: 20; font.bold: true; elide: Text.ElideRight
+                                        }
+                                        Label {
+                                            Layout.fillWidth: true
+                                            text: [nbaLayout.engineerStation, nbaLayout.engineerSystem]
+                                                  .filter(function(value) { return !!value }).join(" · ").toUpperCase()
+                                            color: cyan; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight
+                                        }
+                                        RowLayout {
+                                            Layout.fillWidth: true; spacing: 8
+                                            CockpitButton {
+                                                Layout.fillWidth: true
+                                                text: nbaLayout.engineerSystem
+                                                      ? window.t("operations.copy_system", "COPY SYSTEM")
+                                                      : window.t("wishlist.open_engineering", "OPEN ENGINEERING")
+                                                selected: true; enabled: cockpit.operationAction.executable !== false
+                                                onClicked: {
+                                                    if (!!nbaLayout.engineerSystem)
+                                                        cockpit.copySystem(nbaLayout.engineerSystem)
+                                                    else
+                                                        window.currentPage = cockpit.operationAction.targetPage >= 0
+                                                                             ? cockpit.operationAction.targetPage : 4
+                                                }
+                                            }
+                                            CockpitButton {
+                                                Layout.fillWidth: true
+                                                text: window.t("operations.open_engineers", "OPEN ENGINEERS")
+                                                onClicked: window.currentPage = 4
+                                            }
+                                        }
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: 235; Layout.fillHeight: true
+                                    color: "#050b10"; border.width: 1; border.color: borderTone
+                                    Image {
+                                        anchors.fill: parent; anchors.margins: 2
+                                        source: nbaLayout.engineerPortrait
+                                        fillMode: Image.PreserveAspectFit
+                                        horizontalAlignment: Image.AlignHCenter
+                                        verticalAlignment: Image.AlignVCenter
+                                        asynchronous: true
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                Label {
-                    visible: !!cockpit.operationAction.moduleName
-                    Layout.fillWidth: true
-                    text: [
-                        cockpit.operationAction.physicalSlotLabel || "",
-                        cockpit.operationAction.blueprintName || "",
-                        (cockpit.operationAction.actionGrade
-                         || cockpit.operationAction.targetGrade) > 0
-                            ? "G" + (cockpit.operationAction.actionGrade
-                                      || cockpit.operationAction.targetGrade) : "",
-                        cockpit.operationAction.experimentalName || ""
-                    ].filter(function(value) { return !!value }).join("  ·  ")
-                    color: textSecondary; font.pixelSize: 13
-                    elide: Text.ElideRight
-                }
-                Label {
-                    visible: !!cockpit.operationAction.detail
-                    text: cockpit.operationAction.detail || ""
-                    color: muted; font.pixelSize: 12
-                    Layout.fillWidth: true; elide: Text.ElideRight
+                Rectangle {
+                    id: nbaMaterialStrip
+                    Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 9
+                    property bool ready: window.materialDisplay(
+                                             cockpit.operationAction.materialStatus || cockpit.materialStatus,
+                                             cockpit.operationAction.materialCompletion !== undefined
+                                                 ? cockpit.operationAction.materialCompletion : cockpit.completion,
+                                             cockpit.operationAction.materialCompletionReliable !== undefined
+                                                 ? cockpit.operationAction.materialCompletionReliable : cockpit.completionReliable).status === "READY"
+                    color: ready ? successBackground : warningBackground
+                    border.width: 1; border.color: ready ? green : orange
+                    RowLayout {
+                        anchors.fill: parent; anchors.margins: 10; spacing: 12
+                        Label { text: nbaMaterialStrip.ready ? "✓" : "!"; color: nbaMaterialStrip.ready ? green : orange; font.pixelSize: 18; font.bold: true }
+                        Label {
+                            text: nbaMaterialStrip.ready ? "MATERIALS READY" : "MATERIALS REQUIRED"
+                            color: textPrimary; font.pixelSize: 11; font.bold: true
+                        }
+                        Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderTone }
+                        Label {
+                            Layout.fillWidth: true
+                            text: (cockpit.operationAction.missingMaterials || cockpit.missingMaterials).length > 0
+                                  ? (cockpit.operationAction.missingMaterials || cockpit.missingMaterials)
+                                    .map(function(row) { return row.name + " ×" + row.missing }).join("   ·   ")
+                                  : "All required materials are available"
+                            color: nbaMaterialStrip.ready ? green : orange
+                            font.pixelSize: 11; font.bold: true; elide: Text.ElideRight
+                        }
+                        Label {
+                            text: Math.floor(window.materialDisplay(
+                                      cockpit.operationAction.materialStatus || cockpit.materialStatus,
+                                      cockpit.operationAction.materialCompletion !== undefined
+                                          ? cockpit.operationAction.materialCompletion : cockpit.completion,
+                                      cockpit.operationAction.materialCompletionReliable !== undefined
+                                          ? cockpit.operationAction.materialCompletionReliable : cockpit.completionReliable).completion * 100) + "%"
+                            color: textPrimary; font.pixelSize: 13; font.bold: true
+                        }
+                    }
                 }
                 ModernProgress {
+                    visible: false
                     Layout.fillWidth: true
                     value: window.materialDisplay(
                                cockpit.operationAction.materialStatus
@@ -1338,6 +1500,7 @@ ApplicationWindow {
                                    : cockpit.completionReliable).completion
                 }
                 RowLayout {
+                    visible: false
                     Layout.fillWidth: true
                     Label {
                         text: window.t("common.material_prefix", "MATERIAL · ") + window.materialDisplay(
@@ -1407,7 +1570,7 @@ ApplicationWindow {
                 }
                 Label {
                     visible: (cockpit.operationAction.missingMaterials
-                              || cockpit.missingMaterials).length > 0
+                              || cockpit.missingMaterials).length > 0 && false
                     text: window.t("common.missing_prefix", "MISSING · ") + (cockpit.operationAction.missingMaterials
                           || cockpit.missingMaterials).map(function(row) {
                         return row.name + " ×" + row.missing
@@ -1416,7 +1579,7 @@ ApplicationWindow {
                     Layout.fillWidth: true; elide: Text.ElideRight
                 }
                 Label {
-                    visible: cockpit.missingMaterials.length === 0
+                    visible: false && cockpit.missingMaterials.length === 0
                              && !!cockpit.nextEngineerStop.name
                     text: (cockpit.nextEngineerStop.readyJobs || 0)
                           + " READY JOB"
@@ -1427,12 +1590,12 @@ ApplicationWindow {
                     Layout.fillWidth: true; elide: Text.ElideRight
                 }
                 Label {
-                    visible: (cockpit.operationAction.engineerOptions || []).length > 0
+                    visible: false
                     text: window.t("operations.engineers", "ENGINEERS FOR TARGET GRADE · RECOMMENDED FIRST")
                     color: orange; font.pixelSize: 10; font.bold: true
                 }
                 ListView {
-                    visible: count > 0
+                    visible: false
                     Layout.fillWidth: true
                     Layout.preferredHeight: visible ? 66 : 0
                     orientation: ListView.Horizontal
@@ -1513,6 +1676,7 @@ ApplicationWindow {
                     maximumLineCount: 2; elide: Text.ElideRight
                 }
                 RowLayout {
+                    visible: false
                     Layout.fillWidth: true
                     CockpitButton {
                         text: cockpit.operationAction.buttonLabel || window.t("wishlist.open_engineering", "OPEN ENGINEERING")
@@ -1552,12 +1716,15 @@ ApplicationWindow {
 
         ShadowCard {
             objectName: "qa-card-run-overview"
-            Layout.preferredWidth: window.compactSidebar ? 320 : 370
-            Layout.minimumWidth: window.compactSidebar ? 300 : 340
+            visible: false
+            Layout.preferredWidth: 0
+            Layout.minimumWidth: 0
+            Layout.maximumWidth: 0
             Layout.fillHeight: true
             ColumnLayout {
                 anchors.fill: parent; anchors.margins: 15; spacing: 7
                 RowLayout {
+                    visible: false
                     Layout.fillWidth: true
                     Label {
                         text: window.t("operations.run_overview", "RUN OVERVIEW")
@@ -1602,6 +1769,7 @@ ApplicationWindow {
                 }
                 Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
                 RowLayout {
+                    visible: false
                     Layout.fillWidth: true
                     Label {
                         text: window.t("operations.active_route", "ACTIVE FLIGHT ROUTE")

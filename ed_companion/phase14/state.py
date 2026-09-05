@@ -3621,6 +3621,13 @@ def scope_operation_action_materials(state: object, action: object) -> dict:
     ) for row in progress)
     reliable = bool(priority.get("completionReliable", True))
     result.update({
+        "priority": True,
+        "moduleName": str(result.get("moduleName") or priority.get("module") or ""),
+        "blueprintName": str(result.get("blueprintName") or priority.get("blueprint") or ""),
+        "targetGrade": int(result.get("targetGrade") or priority.get("targetGrade") or 0),
+        "experimentalName": str(result.get("experimentalName") or priority.get("experimental") or ""),
+        "experimentalId": str(result.get("experimentalId") or priority.get("experimentalId") or ""),
+        "targetStatus": str(priority.get("targetStatus") or ""),
         "materialCompletion": (
             covered / required if required > 0 else 1.0
         ) if reliable else 0.0,
@@ -3638,6 +3645,87 @@ def scope_operation_action_materials(state: object, action: object) -> dict:
         "planProgressStatus": str(priority.get("progressStatus") or ""),
         "calculationWarning": str(priority.get("calculationWarning") or ""),
         "materialScope": "PRIORITY PLAN",
+    })
+    return result
+
+
+def attach_operation_experimental_effects(action: object, records: object) -> dict:
+    """Attach catalog-backed Experimental effects to an Engineering action."""
+    result = dict(action) if isinstance(action, dict) else {}
+    wanted_id = str(result.get("experimentalId") or "")
+    wanted_name = normalize(result.get("experimentalName"))
+    module_name = str(result.get("moduleName") or "")
+    candidates = [row for row in (records or []) if isinstance(row, dict)]
+    record = next((
+        row for row in candidates
+        if wanted_id and str(row.get("ExperimentalId") or "") == wanted_id
+    ), None)
+    if record is None and wanted_name:
+        matches = [
+            row for row in candidates
+            if normalize(row.get("Name")) == wanted_name
+            and (
+                not module_name
+                or normalize(row.get("Type")) == normalize(module_name)
+                or module_matches_type(module_name, row.get("Type"))
+            )
+        ]
+        record = matches[0] if len(matches) == 1 else None
+    result["experimentalEffects"] = [
+        {
+            "property": str(effect.get("Property") or "Effect"),
+            "effect": str(effect.get("Effect") or ""),
+            "isGood": bool(effect.get("IsGood")),
+            "summary": " ".join(value for value in (
+                str(effect.get("Property") or ""),
+                str(effect.get("Effect") or ""),
+            ) if value),
+        }
+        for effect in ((record or {}).get("Effects") or [])
+        if isinstance(effect, dict)
+    ]
+    return result
+
+
+def attach_operation_plan_context(
+    action: object, state: object, engineer_rows: object, blueprint_records: object
+) -> dict:
+    """Attach the owning plan and its best Engineer to collection actions."""
+    result = dict(action) if isinstance(action, dict) else {}
+    if result.get("portraitUrl"):
+        return result
+    material_key = str(result.get("materialKey") or "")
+    if not material_key:
+        return result
+    plans = [
+        row for row in ((state or {}).get("blueprints") or [])
+        if isinstance(row, dict) and str(row.get("targetStatus") or "") != "completed"
+    ]
+    plan = next((
+        row for row in plans
+        if any(
+            str(material.get("key") or "") == material_key
+            and int(material.get("missing", 0) or 0) > 0
+            for field in ("materialProgress", "experimentalMaterialProgress")
+            for material in (row.get(field) or [])
+        )
+    ), None)
+    if plan is None:
+        return result
+    options = engineer_options_for_plan(plan, engineer_rows, blueprint_records)
+    engineer = options[0] if options else {}
+    result.update({
+        "moduleName": str(plan.get("module") or ""),
+        "blueprintName": str(plan.get("blueprint") or ""),
+        "targetGrade": int(plan.get("targetGrade", 0) or 0),
+        "experimentalName": str(plan.get("experimental") or ""),
+        "experimentalId": str(plan.get("experimentalId") or ""),
+        "targetStatus": str(plan.get("targetStatus") or ""),
+        "engineerOptions": options,
+        "portraitUrl": str(engineer.get("portraitUrl") or ""),
+        "engineerName": str(engineer.get("name") or ""),
+        "system": str(result.get("system") or engineer.get("system") or ""),
+        "station": str(result.get("station") or engineer.get("station") or ""),
     })
     return result
 
@@ -3916,6 +4004,7 @@ def select_operation_action(
                 "targetGrade": target_grade,
                 "actionGrade": action_grade,
                 "experimentalName": str(plan.get("experimental") or ""),
+                "experimentalId": str(plan.get("experimentalId") or ""),
                 "physicalSlot": physical_slot,
                 "physicalSlotLabel": physical_slot_label,
                 "engineerOptions": engineer_options,
@@ -3953,6 +4042,7 @@ def select_operation_action(
             "targetGrade": target_grade,
             "actionGrade": action_grade,
             "experimentalName": str(plan.get("experimental") or ""),
+            "experimentalId": str(plan.get("experimentalId") or ""),
             "physicalSlot": physical_slot,
             "physicalSlotLabel": physical_slot_label,
             "reason": reason, "after": after,
@@ -4017,6 +4107,7 @@ def select_operation_action(
         name = str(material.get("name") or material.get("key") or "material")
         return {
             "kind": "COLLECT",
+            "materialKey": str(material.get("key") or ""),
             "title": f"Collect {amount} × {name}",
             "detail": "Open Material Details for verified acquisition methods.",
             "reason": (

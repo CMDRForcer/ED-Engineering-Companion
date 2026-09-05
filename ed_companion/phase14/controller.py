@@ -206,6 +206,8 @@ from .dashboard_views import (
 
 from .state import (
     active_profile_identity,
+    attach_operation_experimental_effects,
+    attach_operation_plan_context,
     assign_plans_to_nearest_engineers,
     blueprint_catalog,
     build_engineering_plan,
@@ -1760,16 +1762,23 @@ class CockpitController(QObject):
 
     def _operation_action(self):
         def build_action():
-            return scope_operation_action_materials(self._state, select_operation_action(
-                self._state,
-                self._engineer_mission_route() + self._engineer_unlock_tasks(),
-                self._engineer_index(),
-                [
-                    record
-                    for records in self._blueprint_groups.values()
-                    for record in records
-                ],
-            ))
+            return attach_operation_experimental_effects(
+                attach_operation_plan_context(
+                    scope_operation_action_materials(
+                        self._state,
+                        select_operation_action(
+                            self._state,
+                            self._engineer_mission_route() + self._engineer_unlock_tasks(),
+                            self._engineer_index(),
+                            [record for records in self._blueprint_groups.values() for record in records],
+                        ),
+                    ),
+                    self._state,
+                    self._engineer_index(),
+                    [record for records in self._blueprint_groups.values() for record in records],
+                ),
+                self._experimentals,
+            )
 
         return self._cached_derived(
             "operation_action", (

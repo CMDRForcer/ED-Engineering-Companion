@@ -6,6 +6,8 @@ import unittest
 from ed_companion.journal import material_event_changes
 from ed_companion.phase14.state import (
     apply_engineer_craft,
+    attach_operation_experimental_effects,
+    attach_operation_plan_context,
     blueprint_rows,
     build_engineering_plan,
     scope_operation_action_materials,
@@ -14,6 +16,66 @@ from ed_companion.phase14.state import (
 
 
 class PriorityWorkflowTests(unittest.TestCase):
+    def test_collect_action_inherits_owning_plan_engineer_portrait(self):
+        action = {"kind": "COLLECT", "materialKey": "vanadium"}
+        state = {"blueprints": [{
+            "module": "Detailed Surface Scanner",
+            "blueprint": "Expanded Probe Scanning Radius", "targetGrade": 5,
+            "targetStatus": "in_progress", "nextGrade": 5,
+            "materialProgress": [{"key": "vanadium", "missing": 2}],
+        }]}
+        engineers = [{
+            "name": "Lei Cheung", "statusGroup": "unlocked", "rank": 5,
+            "system": "Laksak", "station": "Trader's Rest",
+            "portraitUrl": "file:///lei.png", "distance": 10,
+        }]
+        records = [{
+            "Type": "Detailed Surface Scanner",
+            "Name": "Expanded Probe Scanning Radius", "Grade": 5,
+            "Engineers": ["Lei Cheung"],
+        }]
+        result = attach_operation_plan_context(action, state, engineers, records)
+        self.assertEqual(result["moduleName"], "Detailed Surface Scanner")
+        self.assertEqual(result["engineerName"], "Lei Cheung")
+        self.assertEqual(result["portraitUrl"], "file:///lei.png")
+        self.assertEqual(result["system"], "Laksak")
+
+    def test_experimental_effect_details_use_global_catalog_identity(self):
+        records = [{
+            "Type": "Beam Laser", "Name": "Stripped Down",
+            "ExperimentalId": "beam_laser::stripped_down",
+            "Effects": [{"Property": "Mass", "Effect": "-10%", "IsGood": True}],
+        }, {
+            "Type": "Power Plant", "Name": "Stripped Down",
+            "ExperimentalId": "power_plant::stripped_down",
+            "Effects": [{"Property": "Mass", "Effect": "-10%", "IsGood": True},
+                        {"Property": "Integrity", "Effect": "-25%", "IsGood": False}],
+        }]
+        action = attach_operation_experimental_effects({
+            "moduleName": "Power Plant", "experimentalName": "Stripped Down",
+            "experimentalId": "power_plant::stripped_down",
+        }, records)
+        self.assertEqual(action["experimentalEffects"], [
+            {"property": "Mass", "effect": "-10%", "isGood": True,
+             "summary": "Mass -10%"},
+            {"property": "Integrity", "effect": "-25%", "isGood": False,
+             "summary": "Integrity -25%"},
+        ])
+
+    def test_experimental_effect_details_fallback_is_module_scoped(self):
+        records = [{
+            "Type": module_type, "Name": "Reinforced",
+            "ExperimentalId": experimental_id,
+            "Effects": [{"Property": "Effect", "Effect": effect, "IsGood": True}],
+        } for module_type, experimental_id, effect in (
+            ("Shield Generator", "shield_generator::reinforced", "+5%"),
+            ("Shield Booster", "shield_booster::reinforced", "+8%"),
+        )]
+        action = attach_operation_experimental_effects({
+            "moduleName": "Shield Generator", "experimentalName": "Reinforced",
+        }, records)
+        self.assertEqual(action["experimentalEffects"][0]["effect"], "+5%")
+
     def test_real_journal_cycle_keeps_bars_truthful_then_resumes_full_plan(self):
         grades = [{
             "Type": "Power Plant", "Name": "Overcharged",
@@ -86,6 +148,9 @@ class PriorityWorkflowTests(unittest.TestCase):
                 self.assertEqual(action["materialStatus"], "READY")
                 self.assertEqual(action["materialCompletion"], 1.0)
                 self.assertEqual(action["materialScope"], "PRIORITY PLAN")
+                self.assertTrue(action["priority"])
+                self.assertEqual(action["moduleName"], "Power Plant")
+                self.assertEqual(action["experimentalName"], "Stripped Down")
                 event = {
                     "timestamp": f"2026-09-05T10:00:0{grade}Z",
                     "event": "EngineerCraft", "ShipID": 7,
