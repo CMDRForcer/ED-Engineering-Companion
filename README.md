@@ -40,53 +40,71 @@ That precision is the whole point:
 
 Everything is derived from local files. Nothing is invented to fill a gap.
 
-## What it does
+## A tour of EDEC
 
-### Slot-based ship engineering
+### Ship engineering, bound to real slots
 
-Pick any ship EDEC has seen in your Journal and work on its actual physical slots. The module wrench, grade and experimental effect come straight from authoritative `Loadout` / `EngineerCraft` events; pinned plans survive you browsing other catalog blueprints.
+Pick any ship EDEC has seen in your Journal and work on its actual physical layout — Core Internal, Optional Internal, Hardpoint, Utility Mount, Limpet/Controller. Each slot shows the module fitted there, its Journal-confirmed grade and experimental effect (`G1`–`G5`), and whether a planned change still needs the module **installed first** (`INSTALL`). Ship stats update as you plan. Pinned plans stay attached to the slot even while you browse other catalog blueprints.
 
-### An actionable Wishlist
+![Ship engineering bound to the Fer-de-Lance's physical slots](docs/images/edec-engineering.png)
 
-Material readiness, craft progress, Engineer destinations and trader routes — all computed from the selected ship and its pinned plans. The next useful action is always on screen: collect these materials, fly to this Engineer, craft this grade, or *install this module before anything else*.
+The **Wishlist** turns those pinned plans into one running answer to "what now?": collect these materials, fly to this Engineer, craft this grade — or install this module before anything else.
+
+### Engineer unlocks, step by step
+
+A searchable index of every Engineer — capabilities, distance, and Journal-backed unlock state. The **Unlock Guide** turns a locked Engineer into an ordered checklist: prerequisite Engineer, reputation and permit requirements, invitation, first visit. Journal evidence ticks steps off as you meet them; nothing unknown is guessed. Human and Guardian Technology Brokers get the same treatment on their own tab.
+
+![Guided unlock chain for a locked Engineer](docs/images/edec-engineers-unlock.png)
 
 ### Material intelligence
 
-Live Raw / Manufactured / Encoded inventory straight from the Journal, with per-grade caps, stock bars, and surplus flags. Build reserves are protected so a plan can't spend materials it still needs; the rest is offered for trading. Filter to what a build needs, what's missing, what's ready, or what's tradeable, and route material runs by nearest-known or Journal-confirmed trader.
+Live Raw / Manufactured / Encoded inventory straight from the Journal, with per-grade caps, stock bars and surplus flags. Build reserves are protected so a plan can't spend materials it still needs; the rest is offered for trading. Filter to what a build needs, what's missing, what's ready, or what's tradeable, and route material runs by nearest-known or Journal-confirmed trader.
 
 ![Live material inventory with build-aware filters](docs/images/edec-materials.png)
 
-### Engineer navigation
-
-A searchable index of Engineer capabilities with Journal-backed unlock state, guided prerequisite chains, and Human / Guardian Technology Broker tracking. Entries sort by state, distance and name; Journal evidence advances unlock progress without guessing history it can't see.
-
-![Engineer navigation and capability index](docs/images/edec-engineers.png)
-
-### Powerplay 2.0
+### Powerplay 2.0, honestly
 
 Derived entirely from local Journal events. EDEC picks your pledged leader automatically and shows an offline profile and portrait alongside only the values it has actually observed — rank, merits, pledge duration, salary, cargo activity, system-control state. No fabricated rewards, no invented numbers.
 
 ![Journal-driven Powerplay 2.0 overview](docs/images/edec-powerplay.png)
 
+### Commander overview
+
+Ranks and progress, major- and minor-faction reputation, financial snapshots, current ship and squadron — read from the Journal and laid out as cards you can rearrange.
+
+![Commander ranks, reputation and financial snapshot](docs/images/edec-commander.png)
+
+### Credits — a live ticker, not a guess
+
+Rising balance segments are green, spending is red, total assets track alongside as a thin line. Pick a period from the current session to 30 days and EDEC reports net change, average credits per hour, and the delta on any point you hover. Old gaps aren't fabricated — the ticker gets denser as Elite reports real balance changes.
+
+![Live Credits ticker with period selection and hover detail](docs/images/edec-credits.png)
+
+### Fleet
+
+Every ship EDEC has seen — value, rebuy and where each one is parked (here, stored, or remote) — with the current hull marked. This is the same fleet you plan engineering against, without switching in-game.
+
+![Fleet overview with per-ship value, rebuy and location](docs/images/edec-fleet.png)
+
+### Flight record
+
+A profile-isolated logbook: session totals for jumps, distance, dockings, crafts and trades, plus a searchable, filterable timeline of engineering, travel and trade events — newest first.
+
+![Commander logbook with session totals and a searchable event timeline](docs/images/edec-logbook.png)
+
 ### Safe build interchange
 
 Import EDEC, EDSY/SLEF and Coriolis builds through exact hull-slot validation. Export the selected ship's outfitting with its physical slot identities intact.
 
-### Commander: Credits and Fleet
-
-The CMDR workspace reads your career from the Journal. The **Credits** view is a live ticker: rising balance segments are green, spending is red, and total assets track alongside. Pick a period — session to 30 days — and it reports net change, average credits per hour, and the delta on any point you hover. Old gaps aren't fabricated; the ticker gets denser as Elite reports real balance changes.
-
-![Live Credits ticker with period selection and hover detail](docs/images/edec-credits.png)
-
-The **Fleet** view shows every ship EDEC has seen — value, rebuy, and where each one is parked (here, stored, or remote) — with the current hull marked. This is the same fleet you plan engineering against, without switching in-game.
-
-![Fleet overview with per-ship value, rebuy and location](docs/images/edec-fleet.png)
-
-Alongside these: Logbook sessions and notes, State Finds, live High-Grade Emission assistance, configurable navigation, and persistent settings across four interface languages — English, German, Spanish and French. In-game names stay in English where that makes them easier to find in Elite.
-
 ### Optional community connections
 
-Rate-limited INARA synchronization and privacy-filtered EDDN contributions, both with offline-aware queues and retry handling. Off by default; you opt in per service.
+Rate-limited INARA synchronization and privacy-filtered EDDN contributions, both with offline-aware queues and retry handling. Off by default; you opt in per service. State Finds, live High-Grade Emission assistance and configurable navigation round out the toolkit.
+
+### Make it yours
+
+Six built-in themes, a UI scale, and four interface languages — English, German, Spanish and French. In-game names stay in English where that makes them easier to find in Elite.
+
+![Settings with the six-theme design-skin picker](docs/images/edec-themes.png)
 
 > All screenshots use the **Orbital Dawn** theme and synthetic demo data. They contain no real Commander profile, Journal history, service credentials, or API keys.
 
