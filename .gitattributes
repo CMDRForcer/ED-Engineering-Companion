@@ -1,0 +1,17 @@
+# Normalize all text to LF in the repository; check out LF on every platform
+# so the working tree matches the index and core.autocrlf stays quiet.
+* text=auto eol=lf
+
+# Windows batch files must keep CRLF to run reliably under cmd.exe.
+*.bat text eol=crlf
+
+# Explicitly text (SVG is XML) so autocrlf does not rewrite it.
+*.svg text eol=lf
+
+# Binary assets: never touch line endings, never diff as text.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.sqlite3 binary
