@@ -56,16 +56,16 @@ ApplicationWindow {
             overlay: "#c509061a", shadow: "#90000000"
         },
         "orbital_dawn": {
-            backgroundPrimary: "#171219", backgroundSecondary: "#1d111b",
-            backgroundTertiary: "#292238", card: "#302a3a", cardRaised: "#40394a",
-            inputBackground: "#241d2c", textPrimary: "#f3f1e6",
-            textSecondary: "#d9d8cf", textMuted: "#9d97a4", textDisabled: "#665f6d",
-            accent: "#5c9c9c", accentSecondary: "#315d72",
-            success: "#a5d1c7", warning: "#e8b36f", error: "#d94c62",
-            border: "#554e5f", divider: "#443d4c", hover: "#493e50",
-            active: "#315d72", successBackground: "#294845",
-            warningBackground: "#4a3829", errorBackground: "#512634",
-            overlay: "#c0171219", shadow: "#88000000"
+            backgroundPrimary: "#0b1020", backgroundSecondary: "#0e1426",
+            backgroundTertiary: "#141d33", card: "#141c30", cardRaised: "#1c2740",
+            inputBackground: "#101728", textPrimary: "#f7f2e9",
+            textSecondary: "#d7d2c6", textMuted: "#8b93a8", textDisabled: "#57607a",
+            accent: "#ff9d5c", accentSecondary: "#5ad1e6",
+            success: "#5fd6a6", warning: "#f5c46a", error: "#ff5d73",
+            border: "#2b3550", divider: "#212a42", hover: "#1a2338",
+            active: "#3d2c28", successBackground: "#183d33",
+            warningBackground: "#3f331d", errorBackground: "#3c1f27",
+            overlay: "#c00b1020", shadow: "#88000000"
         },
         "crimson_dark": {
             backgroundPrimary: "#090f15", backgroundSecondary: "#0b1219",
