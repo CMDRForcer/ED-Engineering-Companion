@@ -2,11 +2,30 @@
 
 **Plan Elite Dangerous engineering against the real slots of your real ships — without leaving the cockpit.**
 
+[![Latest release](https://img.shields.io/github/v/release/CMDRForcer/ED-Engineering-Companion?sort=semver&label=release)](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/CMDRForcer/ED-Engineering-Companion/total?label=downloads)](https://github.com/CMDRForcer/ED-Engineering-Companion/releases)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
+![Languages: EN · DE · ES · FR](https://img.shields.io/badge/languages-EN%20%C2%B7%20DE%20%C2%B7%20ES%20%C2%B7%20FR-informational)
+
 ED Engineering Companion (EDEC) is a free, open-source Windows companion for [Elite Dangerous](https://www.elitedangerous.com/). It reads your local Journal and turns it into a ship-aware engineering workspace: every hull in your fleet, every physical module slot, every Journal-confirmed blueprint and experimental effect, and a running "what to do next" that never asks you to swap ships in-game to find out.
 
 [**Download v1.0.0**](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
 
 ![EDEC ship engineering in the Crimson Dark theme](docs/images/edec-engineering-crimson.png)
+
+## Highlights
+
+- **Your ships, not ship types** — plan on the exact physical slots of every hull EDEC has seen in your fleet, without switching to it in-game.
+- **Install-before-engineering guard** — EDEC never pretends an empty slot is ready; if the planned module isn't fitted, it says so and pauses the plan.
+- **The Journal is the source of truth** — confirmed blueprints, grades and experimental effects sit on the module they belong to. Nothing is invented to fill a gap.
+- **One next action, always on screen** — collect these materials, fly to this Engineer, craft this grade.
+- **Material intelligence** — live Raw / Manufactured / Encoded stock, protected build reserves, verified acquisition routes, nearest-vs-Journal trader choice.
+- **Engineer & Tech Broker navigation** — capability search, Journal-backed unlock progress, guided prerequisite chains, Human & Guardian broker tracking.
+- **Powerplay 2.0, honestly** — pledged leader, rank, merits, salary and system state, showing only values EDEC has actually observed.
+- **Safe build interchange** — import and export EDEC, EDSY/SLEF and Coriolis builds with physical slot identities intact.
+- **Commander tools** — live Credits ticker and finance timeline, Logbook, State Finds, live High-Grade Emission assistance.
+- **Offline-first and private** — everything runs from local files; optional INARA and EDDN sync is opt-in, rate-limited and privacy-filtered.
 
 ## Why EDEC
 
