@@ -52,7 +52,9 @@ Material readiness, craft progress, Engineer destinations and trader routes — 
 
 ### Material intelligence
 
-Live Raw / Manufactured / Encoded inventory, protected build stock so a plan can't spend materials it needs, verified acquisition guidance, and a choice between nearest-known and Journal-confirmed trader routing.
+Live Raw / Manufactured / Encoded inventory straight from the Journal, with per-grade caps, stock bars, and surplus flags. Build reserves are protected so a plan can't spend materials it still needs; the rest is offered for trading. Filter to what a build needs, what's missing, what's ready, or what's tradeable, and route material runs by nearest-known or Journal-confirmed trader.
+
+![Live material inventory with build-aware filters](docs/images/edec-materials-crimson.png)
 
 ### Engineer navigation
 
@@ -70,9 +72,17 @@ Derived entirely from local Journal events. EDEC picks your pledged leader autom
 
 Import EDEC, EDSY/SLEF and Coriolis builds through exact hull-slot validation. Export the selected ship's outfitting with its physical slot identities intact.
 
-### Commander tools
+### Commander: Credits and Fleet
 
-CMDR overview with a live Credits ticker and finance timeline, Logbook sessions and notes, State Finds, live High-Grade Emission assistance, configurable navigation, and persistent interface settings across four languages — English, German, Spanish and French. In-game names stay in English where that makes them easier to find in Elite.
+The CMDR workspace reads your career from the Journal. The **Credits** view is a live ticker: rising balance segments are green, spending is red, and total assets track alongside. Pick a period — session to 30 days — and it reports net change, average credits per hour, and the delta on any point you hover. Old gaps aren't fabricated; the ticker gets denser as Elite reports real balance changes.
+
+![Live Credits ticker with period selection and hover detail](docs/images/edec-credits-crimson.png)
+
+The **Fleet** view shows every ship EDEC has seen — value, rebuy, and where each one is parked (here, stored, or remote) — with the current hull marked. This is the same fleet you plan engineering against, without switching in-game.
+
+![Fleet overview with per-ship value, rebuy and location](docs/images/edec-fleet-crimson.png)
+
+Alongside these: Logbook sessions and notes, State Finds, live High-Grade Emission assistance, configurable navigation, and persistent settings across four interface languages — English, German, Spanish and French. In-game names stay in English where that makes them easier to find in Elite.
 
 ### Optional community connections
 

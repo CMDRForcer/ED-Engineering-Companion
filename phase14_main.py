@@ -588,6 +588,9 @@ def run():
     preview_theme = os.environ.get("PHASE14_PREVIEW_THEME")
     if preview_theme:
         controller.setTheme(preview_theme)
+    preview_cmdr_period = os.environ.get("PHASE14_PREVIEW_CMDR_PERIOD")
+    if preview_cmdr_period:
+        controller.setCommanderFinancePeriod(preview_cmdr_period)
     preview_connection = os.environ.get("PHASE14_PREVIEW_CONNECTION")
     if preview_connection is not None:
         try:
