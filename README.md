@@ -12,7 +12,7 @@ ED Engineering Companion (EDEC) is a free, open-source Windows companion for [El
 
 [**Download v1.0.0**](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
 
-![EDEC ship engineering in the Crimson Dark theme](docs/images/edec-engineering-crimson.png)
+![EDEC ship engineering in the Orbital Dawn theme](docs/images/edec-engineering.png)
 
 ## Highlights
 
@@ -54,19 +54,19 @@ Material readiness, craft progress, Engineer destinations and trader routes — 
 
 Live Raw / Manufactured / Encoded inventory straight from the Journal, with per-grade caps, stock bars, and surplus flags. Build reserves are protected so a plan can't spend materials it still needs; the rest is offered for trading. Filter to what a build needs, what's missing, what's ready, or what's tradeable, and route material runs by nearest-known or Journal-confirmed trader.
 
-![Live material inventory with build-aware filters](docs/images/edec-materials-crimson.png)
+![Live material inventory with build-aware filters](docs/images/edec-materials.png)
 
 ### Engineer navigation
 
 A searchable index of Engineer capabilities with Journal-backed unlock state, guided prerequisite chains, and Human / Guardian Technology Broker tracking. Entries sort by state, distance and name; Journal evidence advances unlock progress without guessing history it can't see.
 
-![Engineer navigation and capability index](docs/images/edec-engineers-crimson.png)
+![Engineer navigation and capability index](docs/images/edec-engineers.png)
 
 ### Powerplay 2.0
 
 Derived entirely from local Journal events. EDEC picks your pledged leader automatically and shows an offline profile and portrait alongside only the values it has actually observed — rank, merits, pledge duration, salary, cargo activity, system-control state. No fabricated rewards, no invented numbers.
 
-![Journal-driven Powerplay 2.0 overview](docs/images/edec-powerplay-crimson.png)
+![Journal-driven Powerplay 2.0 overview](docs/images/edec-powerplay.png)
 
 ### Safe build interchange
 
@@ -76,11 +76,11 @@ Import EDEC, EDSY/SLEF and Coriolis builds through exact hull-slot validation. E
 
 The CMDR workspace reads your career from the Journal. The **Credits** view is a live ticker: rising balance segments are green, spending is red, and total assets track alongside. Pick a period — session to 30 days — and it reports net change, average credits per hour, and the delta on any point you hover. Old gaps aren't fabricated; the ticker gets denser as Elite reports real balance changes.
 
-![Live Credits ticker with period selection and hover detail](docs/images/edec-credits-crimson.png)
+![Live Credits ticker with period selection and hover detail](docs/images/edec-credits.png)
 
 The **Fleet** view shows every ship EDEC has seen — value, rebuy, and where each one is parked (here, stored, or remote) — with the current hull marked. This is the same fleet you plan engineering against, without switching in-game.
 
-![Fleet overview with per-ship value, rebuy and location](docs/images/edec-fleet-crimson.png)
+![Fleet overview with per-ship value, rebuy and location](docs/images/edec-fleet.png)
 
 Alongside these: Logbook sessions and notes, State Finds, live High-Grade Emission assistance, configurable navigation, and persistent settings across four interface languages — English, German, Spanish and French. In-game names stay in English where that makes them easier to find in Elite.
 
@@ -88,7 +88,7 @@ Alongside these: Logbook sessions and notes, State Finds, live High-Grade Emissi
 
 Rate-limited INARA synchronization and privacy-filtered EDDN contributions, both with offline-aware queues and retry handling. Off by default; you opt in per service.
 
-> All screenshots use the **Crimson Dark** theme and synthetic demo data. They contain no real Commander profile, Journal history, service credentials, or API keys.
+> All screenshots use the **Orbital Dawn** theme and synthetic demo data. They contain no real Commander profile, Journal history, service credentials, or API keys.
 
 ## Install on Windows
 
