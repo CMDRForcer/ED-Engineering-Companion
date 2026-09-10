@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.2 — 2026-09-10
+
+### Fixed
+
+- The engineering view's **installed roll panel** and the automatic current
+  grade selection now work. `_apply_installed_slot_engineering` computed the
+  installed blueprint, grade, quality and experimental of the selected slot
+  but a misplaced early `return` left the code that applies them unreachable
+  — dead since 1.0.0. A regression test now covers it.
+
+### Changed
+
+- Internal tidy: removed dead local variables and two unused imports, folded
+  a duplicated sort/merge path in the CAPI fleet merge, hoisted the ship-type
+  name table to a module constant. No behaviour change from these.
+
 ## 1.1.1 — 2026-09-10
 
 ### Added
