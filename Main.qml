@@ -7309,6 +7309,13 @@ ApplicationWindow {
                             }
                         }
                     }
+                    CheckBox {
+                        id: frontierConsentBox
+                        text: window.t("connections.frontier_consent", "I consent to EDEC using Frontier's Companion API to read my Commander credits and active ship for this account.")
+                        checked: cockpit.frontierConsent
+                        Layout.fillWidth: true
+                        onToggled: cockpit.setFrontierConsent(checked)
+                    }
                     RowLayout {
                         Layout.fillWidth: true; spacing: 10
                         CockpitButton {
@@ -7316,7 +7323,7 @@ ApplicationWindow {
                                   ? window.t("connections.frontier_reconnect", "RECONNECT FRONTIER")
                                   : window.t("connections.frontier_connect", "CONNECT FRONTIER")
                             selected: true; Layout.fillWidth: true
-                            enabled: !cockpit.frontierBusy
+                            enabled: cockpit.frontierConsent && !cockpit.frontierBusy
                             onClicked: cockpit.connectFrontier()
                         }
                         CockpitButton {

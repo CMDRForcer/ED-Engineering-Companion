@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import os
 import re
 import secrets
 import threading
@@ -28,8 +29,27 @@ FRONTIER_AUTHORIZE_URL = f"{FRONTIER_AUTH_BASE}/auth"
 FRONTIER_TOKEN_URL = f"{FRONTIER_AUTH_BASE}/token"
 FRONTIER_CAPI_BASE = "https://companion.orerve.net"
 FRONTIER_SCOPES = "auth capi"
-FRONTIER_CLIENT_ID = "b17a6919-d902-430d-bb28-7fbb7cbbe5a9"
-FRONTIER_REDIRECT_URI = "https://cmdrforcer.github.io/oauth/callback.html"
+FRONTIER_AUDIENCE = "all"
+
+
+def _configured(env_name, default, *, environ=None):
+    """Prefer a non-empty operator override, otherwise the bundled default."""
+    value = str((environ or os.environ).get(env_name, "") or "").strip()
+    return value or default
+
+
+# The bundled OAuth client covers the public GitHub Pages redirect below.
+# Operators who run their own instance and accepted the Frontier developer
+# terms can register a separate client and point EDEC at it without a code
+# change; a client secret is never used or accepted.
+_DEFAULT_FRONTIER_CLIENT_ID = "b17a6919-d902-430d-bb28-7fbb7cbbe5a9"
+_DEFAULT_FRONTIER_REDIRECT_URI = "https://cmdrforcer.github.io/oauth/callback.html"
+FRONTIER_CLIENT_ID = _configured(
+    "EDEC_FRONTIER_CLIENT_ID", _DEFAULT_FRONTIER_CLIENT_ID
+)
+FRONTIER_REDIRECT_URI = _configured(
+    "EDEC_FRONTIER_REDIRECT_URI", _DEFAULT_FRONTIER_REDIRECT_URI
+)
 CAPI_ENDPOINTS = frozenset({"/profile", "/market", "/shipyard", "/fleetcarrier"})
 CAPI_MIN_INTERVAL_SECONDS = 60.0
 CAPI_TIMEOUT_SECONDS = 25
@@ -119,7 +139,7 @@ def build_pkce_authorization(
     challenge = _urlsafe(hashlib.sha256(verifier.encode("ascii")).digest())
     query = urlencode({
         "response_type": "code",
-        "audience": "frontier,steam,epic",
+        "audience": FRONTIER_AUDIENCE,
         "scope": FRONTIER_SCOPES,
         "client_id": client_id,
         "code_challenge": challenge,
@@ -135,13 +155,39 @@ def build_pkce_authorization(
     )
 
 
+def _readable_oauth_error(error, description):
+    """Collapse an OAuth error response into one short printable line."""
+    error = re.sub(r"[^0-9A-Za-z._-]", "", str(error or ""))[:64]
+    description = "".join(
+        character for character in re.sub(r"\s+", " ", str(description or ""))
+        if character.isprintable()
+    ).strip()[:200]
+    if error and description:
+        return f"{error} - {description}"
+    return error or description or "no reason given"
+
+
 def parse_authorization_callback(callback_url, expected_state):
     """Return an OAuth code only after the anti-forgery state matches."""
     parameters = parse_qs(urlparse(str(callback_url or "")).query)
     received_state = (parameters.get("state") or [""])[0]
-    if not expected_state or not secrets.compare_digest(
+    state_matches = bool(expected_state) and secrets.compare_digest(
         str(expected_state), str(received_state)
-    ):
+    )
+    error = str((parameters.get("error") or [""])[0])
+    if error:
+        if state_matches:
+            detail = _readable_oauth_error(
+                error, (parameters.get("error_description") or [""])[0]
+            )
+            raise FrontierAuthError(f"Frontier declined the login: {detail}")
+        # Without a matching state the redirect is unverified, so only the
+        # bounded error code is echoed, never attacker-supplied free text.
+        raise FrontierAuthError(
+            "Frontier returned a login error "
+            f"({_readable_oauth_error(error, '')})."
+        )
+    if not state_matches:
         raise FrontierAuthError("Frontier authorization state did not match.")
     code = str((parameters.get("code") or [""])[0])
     if not code:

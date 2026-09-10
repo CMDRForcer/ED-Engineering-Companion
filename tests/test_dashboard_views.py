@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock
 
 from ed_companion.phase14.dashboard_views import (
@@ -428,6 +430,53 @@ class FrontierRequestResilienceTests(unittest.TestCase):
         self.assertEqual(
             controller._frontier_status, "FRONTIER REQUEST COULD NOT START"
         )
+
+
+class FrontierConsentTests(unittest.TestCase):
+    def _controller(self, directory):
+        controller = CockpitController.__new__(CockpitController)
+        controller.frontier_config_file = (
+            Path(directory) / "frontier_config.json"
+        )
+        controller._frontier_config = controller._load_frontier_config()
+        controller._frontier_busy = False
+        controller._frontier_authorization = None
+        controller._frontier_status = ""
+        controller.connectionChanged = Mock()
+        return controller
+
+    def test_connect_is_refused_until_consent_is_recorded(self):
+        with TemporaryDirectory() as directory:
+            controller = self._controller(directory)
+
+            controller.connectFrontier()
+
+            self.assertIn("CONSENT REQUIRED", controller._frontier_status)
+            self.assertIsNone(controller._frontier_authorization)
+            controller.connectionChanged.emit.assert_called_once()
+
+    def test_consent_choice_persists_for_the_next_start(self):
+        with TemporaryDirectory() as directory:
+            controller = self._controller(directory)
+
+            controller.setFrontierConsent(True)
+            self.assertTrue(controller._frontier_config["consent"])
+            self.assertTrue(controller.frontier_config_file.exists())
+
+            restarted = self._controller(directory)
+            self.assertTrue(restarted._frontier_config["consent"])
+
+    def test_withdrawing_consent_drops_a_pending_login(self):
+        with TemporaryDirectory() as directory:
+            controller = self._controller(directory)
+            controller.setFrontierConsent(True)
+            controller._frontier_authorization = object()
+
+            controller.setFrontierConsent(False)
+
+            self.assertFalse(controller._frontier_config["consent"])
+            self.assertIsNone(controller._frontier_authorization)
+            self.assertIn("CONSENT WITHDRAWN", controller._frontier_status)
 
 
 if __name__ == "__main__":

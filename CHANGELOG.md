@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.4 — 2026-09-10
+
+### Added
+
+- The Frontier CAPI tab now requires an explicit consent tick before the
+  first login. The choice is stored per Commander profile; clearing it
+  cancels any pending login and leaves existing local tokens untouched.
+- `EDEC_FRONTIER_CLIENT_ID` and `EDEC_FRONTIER_REDIRECT_URI` let an operator
+  who runs their own instance point EDEC at a self-registered OAuth client
+  instead of the bundled one.
+
+### Changed
+
+- The authorization request now asks for `audience=all`, matching Frontier's
+  documented default, so Steam, Epic, Xbox and PSN logins all resolve.
+
+### Fixed
+
+- A Frontier `error` / `error_description` returned to the OAuth callback is
+  now shown on the Connections tab instead of a generic "authorization was
+  not completed". An error whose `state` does not match echoes only the
+  bounded error code, never unverified free text.
+
 ## 1.0.3 — 2026-09-10
 
 ### Fixed

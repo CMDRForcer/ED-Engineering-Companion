@@ -254,6 +254,60 @@ class FrontierCapiTests(unittest.TestCase):
             client.query("profile")
         self.assertEqual(str(raised.exception), "Frontier CAPI could not be reached.")
 
+    def test_authorization_requests_every_documented_audience(self):
+        authorization = build_pkce_authorization(
+            "client", "https://example.test/callback",
+            state="state", verifier="v" * 64,
+        )
+        query = parse_qs(urlparse(authorization.authorize_url).query)
+
+        self.assertEqual(query["audience"], ["all"])
+
+    def test_callback_surfaces_a_frontier_error_response(self):
+        callback = (
+            "https://example.test/callback?error=access_denied"
+            "&error_description=User%20cancelled%20the%20login&state=expected"
+        )
+        with self.assertRaises(FrontierAuthError) as raised:
+            parse_authorization_callback(callback, "expected")
+
+        message = str(raised.exception)
+        self.assertIn("access_denied", message)
+        self.assertIn("User cancelled the login", message)
+
+    def test_callback_error_without_matching_state_stays_generic(self):
+        callback = (
+            "https://example.test/callback?error=server_error"
+            "&error_description=leak%20me&state=wrong"
+        )
+        with self.assertRaises(FrontierAuthError) as raised:
+            parse_authorization_callback(callback, "expected")
+
+        self.assertIn("server_error", str(raised.exception))
+        self.assertNotIn("leak me", str(raised.exception))
+
+    def test_client_id_prefers_an_operator_override_over_the_bundled_default(self):
+        from ed_companion.integrations.frontier_capi import _configured
+
+        self.assertEqual(
+            _configured("EDEC_FRONTIER_CLIENT_ID", "bundled", environ={}),
+            "bundled",
+        )
+        self.assertEqual(
+            _configured(
+                "EDEC_FRONTIER_CLIENT_ID", "bundled",
+                environ={"EDEC_FRONTIER_CLIENT_ID": "  operator-owned  "},
+            ),
+            "operator-owned",
+        )
+        self.assertEqual(
+            _configured(
+                "EDEC_FRONTIER_CLIENT_ID", "bundled",
+                environ={"EDEC_FRONTIER_CLIENT_ID": "   "},
+            ),
+            "bundled",
+        )
+
     def test_profile_projection_is_conservative(self):
         projected = project_profile_snapshot({
             "observedAt": "2026-09-10T12:00:00Z",

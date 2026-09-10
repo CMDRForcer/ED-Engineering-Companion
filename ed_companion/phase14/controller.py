@@ -414,6 +414,7 @@ class CockpitController(QObject):
         self.frontier_credentials_file = (
             self.config_dir / "frontier_credentials.dat"
         )
+        self.frontier_config_file = self.config_dir / "frontier_config.json"
         self.eddn_config_file = self.config_dir / "eddn_config.json"
         self.eddn_queue_file = self.config_dir / "community_upload_queue.json"
         self.eddn_quarantine_file = self.config_dir / "community_upload_quarantine.json"
@@ -624,6 +625,7 @@ class CockpitController(QObject):
         self._frontier_request_token = 0
         self._frontier_last_sync = ""
         self._frontier_profile = {}
+        self._frontier_config = self._load_frontier_config()
         self._frontier_watchdog = QTimer(self)
         self._frontier_watchdog.setSingleShot(True)
         self._frontier_watchdog.setInterval(FRONTIER_REQUEST_WATCHDOG_MS)
@@ -1171,6 +1173,19 @@ class CockpitController(QObject):
                 key: loaded.get(key, defaults[key]) for key in defaults
             })
         return defaults
+
+    def _load_frontier_config(self):
+        defaults = {"consent": False}
+        loaded = self._read_local_json(self.frontier_config_file, {})
+        if isinstance(loaded, dict):
+            defaults["consent"] = bool(loaded.get("consent", False))
+        return defaults
+
+    def _save_frontier_config(self):
+        return self._persist_json(
+            self.frontier_config_file, self._frontier_config,
+            "Frontier configuration",
+        )
 
     def _load_eddn_cursor_state(self) -> None:
         cursor = self._read_local_json(self.eddn_cursor_file, {})
@@ -3794,6 +3809,10 @@ class CockpitController(QObject):
         str, lambda self: self._frontier_last_sync,
         notify=connectionChanged,
     )
+    frontierConsent = Property(
+        bool, lambda self: bool(self._frontier_config.get("consent")),
+        notify=connectionChanged,
+    )
     eddnConsent = Property(
         bool, lambda self: bool(self._eddn_config.get("consent")),
         notify=connectionChanged,
@@ -5335,9 +5354,30 @@ class CockpitController(QObject):
             self.refresh()
             self.engineeringChanged.emit()
 
+    @Slot(bool)
+    def setFrontierConsent(self, consent):
+        consent = bool(consent)
+        if bool(self._frontier_config.get("consent")) == consent:
+            return
+        self._frontier_config["consent"] = consent
+        self._save_frontier_config()
+        if not consent:
+            self._frontier_authorization = None
+            if not self._frontier_busy:
+                self._frontier_status = (
+                    "CONSENT WITHDRAWN · Existing local tokens are unaffected."
+                )
+        self.connectionChanged.emit()
+
     @Slot()
     def connectFrontier(self):
         if self._frontier_busy:
+            return
+        if not self._frontier_config.get("consent"):
+            self._frontier_status = (
+                "CONSENT REQUIRED · Tick the Companion API consent box first."
+            )
+            self.connectionChanged.emit()
             return
         try:
             authorization = build_pkce_authorization(
@@ -6423,6 +6463,7 @@ class CockpitController(QObject):
         self._frontier_credential_store = FrontierCredentialStore(
             self.frontier_credentials_file
         )
+        self._frontier_config = self._load_frontier_config()
         self._frontier_last_sync = ""
         try:
             self._frontier_tokens = self._frontier_credential_store.load()

@@ -133,9 +133,12 @@ EDEC works locally from Elite Dangerous Journal files. Every network integration
 
 - **INARA** — supported Commander events are batched, deduplicated, rate-limited, and written to local receipts before any upload.
 - **EDDN** — supported public market, station, exploration and exobiology messages are validated and stripped of private or unsupported fields before transmission.
+- **Frontier Companion API** — an explicit in-app consent tick is required before the first login. Authorisation uses Frontier's PKCE OAuth flow with no client secret; only credits and the active ship are imported, and newer Journal values always stay authoritative. OAuth tokens are encrypted for the current Windows account (DPAPI) and are never written to logs.
 - **Spansh** — optional read-only catalog data assists navigation and material guidance, with bundled offline fallbacks.
 
 A build run from a source checkout identifies itself to INARA and EDDN as a development build, so ad-hoc runs are never counted as a released version.
+
+The bundled Frontier OAuth client covers the default GitHub Pages redirect. If you run your own instance and have accepted the Frontier developer terms, set `EDEC_FRONTIER_CLIENT_ID` (and, if needed, `EDEC_FRONTIER_REDIRECT_URI`) to use your own registered client.
 
 ## Reliability
 
