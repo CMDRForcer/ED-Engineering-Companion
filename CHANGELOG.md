@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.2 — 2026-09-10
+
+### Added
+
+- Opt-in Frontier Companion API connection on the Connections page. A new
+  FRONTIER CAPI tab authorises through Frontier's PKCE OAuth flow (no shared
+  secret), then imports an authenticated Commander profile snapshot —
+  currently credits and the active ship — on demand via Connect, Refresh and
+  Disconnect.
+- Frontier OAuth tokens are encrypted for the current Windows account with
+  DPAPI and stored outside the diagnostics log; they never appear in Journal
+  data, logs or Git.
+- The hosted GitHub Pages callback returns the authorisation response to the
+  running desktop instance through the `edec://` handler and the existing
+  single-instance channel, so an in-progress login is never handed to a
+  second process.
+
+### Changed
+
+- Frontier CAPI data only augments local Journal and Status.json values;
+  newer Journal observations always remain authoritative. Imported profile
+  fields survive a Journal-driven state rebuild without overwriting fleet
+  entries or engineering plans.
+
 ## 1.0.1 — 2026-09-10
 
 ### Fixed
