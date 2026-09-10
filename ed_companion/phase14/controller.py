@@ -314,6 +314,12 @@ ENGINEER_SYSTEMS = {
 
 LOGGER = logging.getLogger(__name__)
 
+# Upper bound on how long the Frontier CAPI tab may sit in its busy state
+# before the UI is released, in case a worker never reports back. Chosen
+# above the worst realistic single request: a 60 s CAPI rate-limit wait plus
+# the 25 s transport timeout, with margin.
+FRONTIER_REQUEST_WATCHDOG_MS = 120_000
+
 
 def _last_complete_json_record(path: Path) -> dict[str, Any]:
     """Read only the final newline-complete Journal record."""
@@ -618,6 +624,10 @@ class CockpitController(QObject):
         self._frontier_request_token = 0
         self._frontier_last_sync = ""
         self._frontier_profile = {}
+        self._frontier_watchdog = QTimer(self)
+        self._frontier_watchdog.setSingleShot(True)
+        self._frontier_watchdog.setInterval(FRONTIER_REQUEST_WATCHDOG_MS)
+        self._frontier_watchdog.timeout.connect(self._frontier_request_timed_out)
         try:
             self._frontier_tokens = self._frontier_credential_store.load()
             self._frontier_status = (
@@ -5448,8 +5458,23 @@ class CockpitController(QObject):
                     "profile": {},
                     "error": str(exc),
                 })
+            except Exception as exc:  # noqa: BLE001 - never strand the UI
+                LOGGER.exception("Frontier CAPI worker failed")
+                self.frontierFinished.emit({
+                    "requestToken": request_token,
+                    "profileGeneration": profile_generation,
+                    "tokens": active_tokens,
+                    "client": client,
+                    "profile": {},
+                    "error": (
+                        "Unexpected local Frontier connector error: "
+                        f"{type(exc).__name__}"
+                    ),
+                })
 
-        if not self._start_network_worker(worker, "frontier-capi-profile"):
+        if self._start_network_worker(worker, "frontier-capi-profile"):
+            self._frontier_watchdog.start()
+        else:
             self._frontier_busy = False
             self._frontier_status = "FRONTIER REQUEST COULD NOT START"
             self.connectionChanged.emit()
@@ -5464,6 +5489,7 @@ class CockpitController(QObject):
             != self._profile_generation
         ):
             return
+        self._frontier_watchdog.stop()
         self._frontier_busy = False
         tokens = result.get("tokens")
         storage_error = ""
@@ -5491,6 +5517,19 @@ class CockpitController(QObject):
             )
         else:
             self._frontier_status = "CONNECTED · COMMANDER PROFILE UPDATED"
+        self.connectionChanged.emit()
+
+    @Slot()
+    def _frontier_request_timed_out(self):
+        """Release the CAPI tab if a worker never reported a result."""
+        if not self._frontier_busy:
+            return
+        LOGGER.warning("Frontier CAPI request exceeded the watchdog interval")
+        self._frontier_busy = False
+        self._frontier_authorization = None
+        self._frontier_status = (
+            "FRONTIER REQUEST TIMED OUT · Check your connection and try again."
+        )
         self.connectionChanged.emit()
 
     def _apply_frontier_profile(self, profile):
@@ -6378,6 +6417,8 @@ class CockpitController(QObject):
         self._frontier_busy = False
         self._frontier_authorization = None
         self._frontier_profile = {}
+        if getattr(self, "_frontier_watchdog", None) is not None:
+            self._frontier_watchdog.stop()
         self._bind_profile_paths(context)
         self._frontier_credential_store = FrontierCredentialStore(
             self.frontier_credentials_file
@@ -7683,7 +7724,7 @@ class CockpitController(QObject):
         # cannot mutate or re-persist queue state after this point.
         for timer_name in (
             "timer", "refreshDebounceTimer", "craftConfirmationTimer",
-            "hgeBatchTimer",
+            "hgeBatchTimer", "_frontier_watchdog",
         ):
             timer = getattr(self, timer_name, None)
             if timer is not None:

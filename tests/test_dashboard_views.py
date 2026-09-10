@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import Mock
 
 from ed_companion.phase14.dashboard_views import (
     build_commander_cards,
@@ -332,6 +333,100 @@ class DashboardViewTests(unittest.TestCase):
         self.assertEqual(
             filter_finance_history(rows, "session", events),
             rows[1:],
+        )
+
+
+class _FakeTokens:
+    access_token = "access"
+    refresh_token = "refresh"
+    token_type = "Bearer"
+
+    def expires_within(self, _seconds, *, now=None):
+        return False
+
+
+class FrontierRequestResilienceTests(unittest.TestCase):
+    def _controller(self):
+        controller = CockpitController.__new__(CockpitController)
+        controller._frontier_busy = False
+        controller._frontier_request_token = 0
+        controller._profile_generation = 1
+        controller._frontier_tokens = _FakeTokens()
+        controller._frontier_client = Mock()
+        controller._frontier_authorization = None
+        controller._frontier_status = ""
+        controller._frontier_last_sync = ""
+        controller._frontier_watchdog = Mock()
+        controller._frontier_credential_store = Mock()
+        controller.connectionChanged = Mock()
+        controller.frontierFinished = Mock()
+        return controller
+
+    def test_unexpected_worker_error_releases_the_busy_state_without_leaking(self):
+        controller = self._controller()
+        controller._frontier_client.query.side_effect = RuntimeError(
+            "boom token=SUPERSECRET"
+        )
+        workers = []
+        controller._start_network_worker = (
+            lambda target, _name: workers.append(target) or True
+        )
+
+        controller._start_frontier_profile_request(
+            tokens=controller._frontier_tokens
+        )
+        self.assertTrue(controller._frontier_busy)
+        controller._frontier_watchdog.start.assert_called_once()
+
+        workers[0]()
+        payload = controller.frontierFinished.emit.call_args.args[0]
+        self.assertEqual(payload["profile"], {})
+        self.assertIn("RuntimeError", payload["error"])
+        self.assertNotIn("SUPERSECRET", payload["error"])
+
+        controller._finish_frontier(payload)
+        self.assertFalse(controller._frontier_busy)
+        controller._frontier_watchdog.stop.assert_called_once()
+        self.assertNotIn("SUPERSECRET", controller._frontier_status)
+        self.assertNotIn("TIMED OUT", controller._frontier_status)
+
+    def test_watchdog_releases_a_request_that_never_reports(self):
+        controller = self._controller()
+        controller._frontier_busy = True
+        controller._frontier_authorization = object()
+        controller._frontier_status = "CONTACTING FRONTIER…"
+
+        controller._frontier_request_timed_out()
+
+        self.assertFalse(controller._frontier_busy)
+        self.assertIsNone(controller._frontier_authorization)
+        self.assertIn("TIMED OUT", controller._frontier_status)
+        controller.connectionChanged.emit.assert_called_once()
+
+    def test_watchdog_expiry_is_a_noop_once_a_result_arrived(self):
+        controller = self._controller()
+        controller._frontier_busy = False
+        controller._frontier_status = "CONNECTED · COMMANDER PROFILE UPDATED"
+
+        controller._frontier_request_timed_out()
+
+        self.assertEqual(
+            controller._frontier_status, "CONNECTED · COMMANDER PROFILE UPDATED"
+        )
+        controller.connectionChanged.emit.assert_not_called()
+
+    def test_worker_that_cannot_start_does_not_arm_the_watchdog(self):
+        controller = self._controller()
+        controller._start_network_worker = lambda _target, _name: False
+
+        controller._start_frontier_profile_request(
+            tokens=controller._frontier_tokens
+        )
+
+        self.assertFalse(controller._frontier_busy)
+        controller._frontier_watchdog.start.assert_not_called()
+        self.assertEqual(
+            controller._frontier_status, "FRONTIER REQUEST COULD NOT START"
         )
 
 

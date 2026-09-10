@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.3 — 2026-09-10
+
+### Fixed
+
+- The Frontier CAPI tab can no longer strand itself in a permanent
+  "CONTACTING FRONTIER…" state. An unexpected error inside the background
+  worker now always reports back with a privacy-safe message instead of
+  silently ending the thread, and a watchdog releases the tab if a request
+  still never returns. Connect, Refresh and Disconnect stay usable.
+
 ## 1.0.2 — 2026-09-10
 
 ### Added
