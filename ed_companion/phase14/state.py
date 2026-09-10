@@ -3305,7 +3305,7 @@ def aggregate_plan_progress(rows: object) -> str:
 
 
 def annotate_installed_target_conflicts(
-    rows: list[dict[str, Any]], module_slots: object,
+    rows: list[dict[str, Any]], module_slots: object, *, loadout_known=True,
 ) -> None:
     """Expose verified Loadout-vs-wishlist conflicts without auto-deleting."""
     installed_by_slot = {
@@ -3324,17 +3324,25 @@ def annotate_installed_target_conflicts(
             installed_module and row.get("boundModule")
             and same_module_identity(installed_module, row.get("boundModule"))
         )
+        slot_state_known = bool(loadout_known or installed_module)
+        loadout_unknown = bool(
+            row.get("boundSlot") and row.get("boundModule")
+            and not slot_state_known
+        )
         conflict = bool(
             same_module and installed_blueprint and row.get("blueprint")
             and normalize(installed_blueprint) != normalize(row.get("blueprint"))
         )
         installation_required = bool(
-            row.get("boundSlot") and row.get("boundModule") and not same_module
+            row.get("boundSlot") and row.get("boundModule")
+            and slot_state_known and not same_module
         )
         row.update({
             "installedModule": installed_module,
             "installedModuleMatches": same_module,
             "installationRequired": installation_required,
+            "loadoutKnown": slot_state_known,
+            "loadoutUnknown": loadout_unknown,
             "installedBlueprint": installed_blueprint,
             "installedGrade": int(installed.get("engineeringGrade") or 0),
             "installedQuality": float(installed.get("engineeringQuality") or 0),
@@ -3944,7 +3952,8 @@ def attach_operation_plan_context(
 
     plan_action_kinds = {
         "CRAFT_MATCH_BLOCKER", "BINDING_BLOCKER", "CALCULATION_BLOCKER",
-        "OUTFITTING_BLOCKER", "EXPERIMENTAL_BLOCKER", "TRADE", "COLLECT", "GRADE_CRAFT",
+        "LOADOUT_BLOCKER", "OUTFITTING_BLOCKER", "EXPERIMENTAL_BLOCKER",
+        "TRADE", "COLLECT", "GRADE_CRAFT",
         "EXPERIMENTAL_CRAFT", "ENGINEER_PREPARE", "ENGINEER_UNLOCK",
         "ENGINEER_TRAVEL",
     }
@@ -4032,6 +4041,44 @@ def select_operation_action(
             "buttonLabel": "OPEN WISHLIST",
             "targetPage": 1,
             "executable": True,
+        }
+    loadout_blockers = [
+        row for row in open_plans if row.get("loadoutUnknown")
+    ]
+    if loadout_blockers:
+        plan = min(
+            loadout_blockers,
+            key=lambda row: str(row.get("boundSlot") or ""),
+        )
+        module = str(plan.get("module") or "planned module")
+        slot = str(plan.get("boundSlot") or "")
+        slot_label = operation_physical_slot_label(slot)
+        return {
+            "kind": "LOADOUT_BLOCKER",
+            "title": f"Confirm the loadout for {module}",
+            "detail": (
+                "No authoritative Loadout has been observed for this ship and "
+                "module slot."
+            ),
+            "reason": (
+                "EDEC cannot tell whether this remote slot is empty or already "
+                "contains the planned module."
+            ),
+            "after": (
+                "Activate this ship in Elite to emit a Loadout; the saved "
+                "Engineering and material plan will then continue automatically."
+            ),
+            "system": "",
+            "station": "",
+            "buttonLabel": "OPEN ENGINEERING",
+            "targetPage": 3,
+            "executable": True,
+            "moduleName": module,
+            "blueprintName": str(plan.get("blueprint") or ""),
+            "targetGrade": int(plan.get("targetGrade", 0) or 0),
+            "physicalSlot": slot,
+            "physicalSlotLabel": slot_label,
+            "installationState": "UNKNOWN",
         }
     installation_blockers = [
         row for row in open_plans if row.get("installationRequired")
@@ -7401,7 +7448,9 @@ def build_state(
         consistency_issues.append("A material inventory became negative.")
 
     blueprint_state = blueprint_rows(tasks, wishlist_inventory, metadata)
-    annotate_installed_target_conflicts(blueprint_state, module_slots)
+    annotate_installed_target_conflicts(
+        blueprint_state, module_slots, loadout_known=bool(selected_loadout)
+    )
     tracked_items = [
         {
             "kind": "WISHLIST",

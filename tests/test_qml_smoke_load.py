@@ -14,6 +14,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from ed_companion.diagnostics import filtered_log_lines, is_benign_qt_message
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -39,6 +41,21 @@ def _run_smoke(extra_env=None, timeout=240):
 
 
 class QmlSmokeLoadTests(unittest.TestCase):
+    def test_delegate_failure_is_only_benign_after_incubation_teardown(self):
+        teardown = "Object or context destroyed during incubation"
+        delegate = "QML Component: Cannot create delegate"
+
+        self.assertTrue(is_benign_qt_message(teardown))
+        self.assertFalse(is_benign_qt_message(delegate))
+        self.assertTrue(is_benign_qt_message(delegate, teardown))
+        self.assertTrue(
+            is_benign_qt_message(
+                delegate, "an unrelated Qt message", True
+            )
+        )
+        self.assertEqual(filtered_log_lines([teardown, delegate]), [])
+        self.assertEqual(filtered_log_lines([delegate]), [delegate])
+
     def test_main_qml_loads_without_runtime_errors(self):
         # The smoke runner steps pages faster than any human, which can trip a
         # rare delegate-incubation teardown race. Retry once so only a

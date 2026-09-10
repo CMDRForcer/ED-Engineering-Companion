@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.0.1 — 2026-09-10
+
+### Fixed
+
+- Remote ships whose current loadout has not been observed are no longer
+  mistaken for ships with confirmed empty or mismatched slots. Operations now
+  asks for a Journal loadout confirmation before recommending installation.
+- The Credits chart no longer draws an artificial Assets series, legend or
+  right-hand scale when no authoritative asset snapshot is available.
+- Standalone QML delegate failures remain visible in diagnostics while the
+  known paired delegate-incubation teardown noise is suppressed narrowly.
+
+### Changed
+
+- Refreshed the application with the Orbital Dawn visual design and expanded
+  the public documentation and screenshots.
+
 ## 1.0.0 — 2026-09-09
 
 First public release of ED Engineering Companion under versioned releases.

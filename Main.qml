@@ -1259,6 +1259,8 @@ ApplicationWindow {
             property bool experimentalFocus: !!cockpit.operationAction.experimentalName
                                              && !!cockpit.operationAction.moduleName
             property bool installationBlocked: cockpit.operationAction.kind === "OUTFITTING_BLOCKER"
+            property bool loadoutBlocked: cockpit.operationAction.kind === "LOADOUT_BLOCKER"
+            property bool modulePrerequisiteBlocked: installationBlocked || loadoutBlocked
             property string engineerPortrait: cockpit.operationAction.portraitUrl
                                                 || cockpit.nextEngineerStop.portraitUrl || ""
             property string engineerName: cockpit.operationAction.engineerName
@@ -1349,38 +1351,41 @@ ApplicationWindow {
                             Layout.fillHeight: true; spacing: 0
                             Repeater {
                                 model: [{
-                                    "label": nbaLayout.installationBlocked
-                                             ? "MODULE · INSTALLATION REQUIRED"
+                                    "label": nbaLayout.loadoutBlocked
+                                             ? "LOADOUT · CONFIRMATION REQUIRED"
+                                             : nbaLayout.installationBlocked ? "MODULE · INSTALLATION REQUIRED"
                                              : nbaMaterialStrip.ready ? "MATERIALS · READY" : "MATERIALS · REQUIRED",
                                     "detail": "",
-                                    "tone": nbaLayout.installationBlocked ? orange : nbaMaterialStrip.ready ? green : orange,
-                                    "mark": nbaLayout.installationBlocked ? "!" : nbaMaterialStrip.ready ? "✓" : "!"
+                                    "tone": nbaLayout.modulePrerequisiteBlocked ? orange : nbaMaterialStrip.ready ? green : orange,
+                                    "mark": nbaLayout.modulePrerequisiteBlocked ? "!" : nbaMaterialStrip.ready ? "✓" : "!"
                                 }, {
-                                    "label": nbaLayout.installationBlocked
+                                    "label": nbaLayout.modulePrerequisiteBlocked
                                              ? String(cockpit.operationAction.moduleName || "MODULE UNKNOWN").toUpperCase()
-                                               + " · INSTALL FIRST"
+                                               + (nbaLayout.loadoutBlocked ? " · INSTALLATION UNKNOWN" : " · INSTALL FIRST")
                                              : String(cockpit.operationAction.moduleName || "MODULE UNKNOWN").toUpperCase()
                                                + " · " + String(cockpit.operationAction.blueprintName || "BLUEPRINT").toUpperCase()
                                                + " · G" + (cockpit.operationAction.targetGrade || "–")
                                                + (cockpit.operationAction.targetStatus === "experimental_pending" ? " COMPLETE" : " ACTIVE"),
                                     "detail": String(cockpit.operationAction.physicalSlotLabel || "").toUpperCase(),
-                                    "tone": nbaLayout.installationBlocked ? orange
+                                    "tone": nbaLayout.modulePrerequisiteBlocked ? orange
                                             : cockpit.operationAction.targetStatus === "experimental_pending" ? green : cyan,
-                                    "mark": nbaLayout.installationBlocked ? "→"
+                                    "mark": nbaLayout.modulePrerequisiteBlocked ? "→"
                                             : cockpit.operationAction.targetStatus === "experimental_pending" ? "✓" : "→"
                                 }, {
-                                    "label": nbaLayout.installationBlocked
-                                             ? "ENGINEERING · PAUSED UNTIL MODULE IS INSTALLED"
+                                    "label": nbaLayout.modulePrerequisiteBlocked
+                                             ? (nbaLayout.loadoutBlocked
+                                                ? "ENGINEERING · PAUSED UNTIL LOADOUT IS CONFIRMED"
+                                                : "ENGINEERING · PAUSED UNTIL MODULE IS INSTALLED")
                                              : nbaLayout.experimentalFocus
                                              ? String(cockpit.operationAction.experimentalName).toUpperCase()
                                                + (cockpit.operationAction.kind === "EXPERIMENTAL_CRAFT" ? " · APPLY NOW" : " · PLANNED")
                                              : "NO EXPERIMENTAL EFFECT",
-                                    "detail": nbaLayout.installationBlocked
+                                    "detail": nbaLayout.modulePrerequisiteBlocked
                                               ? String(cockpit.operationAction.blueprintName || "BLUEPRINT").toUpperCase()
                                                 + " · G" + (cockpit.operationAction.targetGrade || "–") + " TARGET SAVED"
                                               : nbaLayout.experimentalFocus ? nbaLayout.effectSummary() : "",
-                                    "tone": nbaLayout.installationBlocked ? orange : nbaLayout.experimentalFocus ? orange : muted,
-                                    "mark": nbaLayout.installationBlocked ? "·"
+                                    "tone": nbaLayout.modulePrerequisiteBlocked ? orange : nbaLayout.experimentalFocus ? orange : muted,
+                                    "mark": nbaLayout.modulePrerequisiteBlocked ? "·"
                                             : cockpit.operationAction.kind === "EXPERIMENTAL_CRAFT" ? "›" : "·"
                                 }, {
                                     "label": "THEN · RETURN TO FULL BUILD", "detail": "", "tone": muted, "mark": "···"
@@ -1417,32 +1422,32 @@ ApplicationWindow {
                                         Item { Layout.fillHeight: true }
                                         Label {
                                             Layout.fillWidth: true
-                                            text: nbaLayout.installationBlocked
-                                                  ? "OUTFITTING FIRST"
+                                            text: nbaLayout.modulePrerequisiteBlocked
+                                                  ? (nbaLayout.loadoutBlocked ? "CONFIRM LOADOUT" : "OUTFITTING FIRST")
                                                   : String(nbaLayout.engineerName || "NO ENGINEER REQUIRED").toUpperCase()
                                             color: textPrimary; font.pixelSize: 20; font.bold: true; elide: Text.ElideRight
                                         }
                                         Label {
                                             Layout.fillWidth: true
-                                            text: nbaLayout.installationBlocked
+                                            text: nbaLayout.modulePrerequisiteBlocked
                                                   ? String(cockpit.operationAction.detail || "INSTALL THE PLANNED MODULE BEFORE ENGINEERING").toUpperCase()
                                                   : [nbaLayout.engineerStation, nbaLayout.engineerSystem]
                                                     .filter(function(value) { return !!value }).join(" · ").toUpperCase()
-                                            color: nbaLayout.installationBlocked ? orange : cyan
+                                            color: nbaLayout.modulePrerequisiteBlocked ? orange : cyan
                                             font.pixelSize: 12; font.bold: true; elide: Text.ElideRight
                                         }
                                         RowLayout {
                                             Layout.fillWidth: true; spacing: 8
                                             CockpitButton {
                                                 Layout.fillWidth: true
-                                                text: nbaLayout.installationBlocked
+                                                text: nbaLayout.modulePrerequisiteBlocked
                                                       ? cockpit.operationAction.buttonLabel
                                                       : nbaLayout.engineerSystem
                                                       ? window.t("operations.copy_system", "COPY SYSTEM")
                                                       : window.t("wishlist.open_engineering", "OPEN ENGINEERING")
                                                 selected: true; enabled: cockpit.operationAction.executable !== false
                                                 onClicked: {
-                                                    if (nbaLayout.installationBlocked)
+                                                    if (nbaLayout.modulePrerequisiteBlocked)
                                                         window.currentPage = cockpit.operationAction.targetPage
                                                     else if (!!nbaLayout.engineerSystem)
                                                         cockpit.copySystem(nbaLayout.engineerSystem)
@@ -1452,7 +1457,7 @@ ApplicationWindow {
                                                 }
                                             }
                                             CockpitButton {
-                                                visible: !nbaLayout.installationBlocked
+                                                visible: !nbaLayout.modulePrerequisiteBlocked
                                                 Layout.fillWidth: true
                                                 text: window.t("operations.open_engineers", "OPEN ENGINEERS")
                                                 onClicked: window.currentPage = 4
@@ -1461,7 +1466,7 @@ ApplicationWindow {
                                     }
                                 }
                                 Rectangle {
-                                    visible: !nbaLayout.installationBlocked
+                                    visible: !nbaLayout.modulePrerequisiteBlocked
                                     Layout.preferredWidth: 235; Layout.fillHeight: true
                                     color: "#050b10"; border.width: 1; border.color: borderTone
                                     Image {
@@ -1486,23 +1491,25 @@ ApplicationWindow {
                                                  ? cockpit.operationAction.materialCompletion : cockpit.completion,
                                              cockpit.operationAction.materialCompletionReliable !== undefined
                                                  ? cockpit.operationAction.materialCompletionReliable : cockpit.completionReliable).status === "READY"
-                                         && !nbaLayout.installationBlocked
+                                         && !nbaLayout.modulePrerequisiteBlocked
                     color: ready ? successBackground : warningBackground
                     border.width: 1; border.color: ready ? green : orange
                     RowLayout {
                         anchors.fill: parent; anchors.margins: 10; spacing: 12
                         Label { text: nbaMaterialStrip.ready ? "✓" : "!"; color: nbaMaterialStrip.ready ? green : orange; font.pixelSize: 18; font.bold: true }
                         Label {
-                            text: nbaLayout.installationBlocked
-                                  ? "INSTALL MODULE FIRST"
+                            text: nbaLayout.modulePrerequisiteBlocked
+                                  ? (nbaLayout.loadoutBlocked ? "CONFIRM LOADOUT FIRST" : "INSTALL MODULE FIRST")
                                   : nbaMaterialStrip.ready ? "MATERIALS READY" : "MATERIALS REQUIRED"
                             color: textPrimary; font.pixelSize: 11; font.bold: true
                         }
                         Rectangle { Layout.preferredWidth: 1; Layout.fillHeight: true; color: borderTone }
                         Label {
                             Layout.fillWidth: true
-                            text: nbaLayout.installationBlocked
-                                  ? "Engineering material plan remains saved; continue after installation."
+                            text: nbaLayout.modulePrerequisiteBlocked
+                                  ? (nbaLayout.loadoutBlocked
+                                     ? "Engineering material plan remains saved; continue after loadout confirmation."
+                                     : "Engineering material plan remains saved; continue after installation.")
                                   : (cockpit.operationAction.missingMaterials || cockpit.missingMaterials).length > 0
                                   ? (cockpit.operationAction.missingMaterials || cockpit.missingMaterials)
                                     .map(function(row) { return row.name + " ×" + row.missing }).join("   ·   ")
@@ -1511,7 +1518,7 @@ ApplicationWindow {
                             font.pixelSize: 11; font.bold: true; elide: Text.ElideRight
                         }
                         Label {
-                            visible: !nbaLayout.installationBlocked
+                            visible: !nbaLayout.modulePrerequisiteBlocked
                             text: Math.floor(window.materialDisplay(
                                       cockpit.operationAction.materialStatus || cockpit.materialStatus,
                                       cockpit.operationAction.materialCompletion !== undefined
@@ -5492,6 +5499,14 @@ ApplicationWindow {
         property var financeHistory: cockpit.commanderFinanceHistory || []
         property var financeSummary: cockpit.commanderFinanceSummary || ({})
         property bool financeZeroBased: false
+        property bool financeHasAssets: {
+            for (let index = 0; index < financeHistory.length; ++index) {
+                let value = Number(financeHistory[index].assets)
+                if (isFinite(value) && value >= 0)
+                    return true
+            }
+            return false
+        }
         property var financePeriodKeys: ["session", "1h", "6h", "24h", "7d", "30d", "all"]
         property var financePeriodLabels: [
             window.t("commander.credits.range_session", "CURRENT SESSION"),
@@ -5895,8 +5910,8 @@ ApplicationWindow {
                     }
                     Rectangle { width: 18; height: 3; radius: 2; color: orange }
                     Label { text: window.t("commander.credits.balance_short", "CREDITS"); color: textSecondary; font.pixelSize: 9 }
-                    Rectangle { width: 18; height: 3; radius: 2; color: textMuted }
-                    Label { text: window.t("commander.credits.assets_short", "ASSETS"); color: textSecondary; font.pixelSize: 9 }
+                    Rectangle { visible: commanderPage.financeHasAssets; width: 18; height: 3; radius: 2; color: textMuted }
+                    Label { visible: commanderPage.financeHasAssets; text: window.t("commander.credits.assets_short", "ASSETS"); color: textSecondary; font.pixelSize: 9 }
                 }
                 GridLayout {
                     Layout.fillWidth: true
@@ -5942,7 +5957,7 @@ ApplicationWindow {
                         property int hoverIndex: -1
                         property bool zeroBased: commanderPage.financeZeroBased
                         property real plotLeft: 72
-                        property real plotRight: 72
+                        property real plotRight: commanderPage.financeHasAssets ? 72 : 18
                         property real plotTop: 66
                         property real plotBottom: 34
                         property int activeIndex: points.length > 0
@@ -6080,9 +6095,11 @@ ApplicationWindow {
                                 ctx.fillStyle = String(window.orange)
                                 ctx.textAlign = "right"; ctx.textBaseline = "middle"
                                 ctx.fillText(shortCredits(creditRange.maximum - (creditRange.maximum - creditRange.minimum) * grid / 4), plotLeft - 8, y)
-                                ctx.fillStyle = String(window.textMuted)
-                                ctx.textAlign = "left"
-                                ctx.fillText(shortCredits(assetRange.maximum - (assetRange.maximum - assetRange.minimum) * grid / 4, true), width - plotRight + 8, y)
+                                if (commanderPage.financeHasAssets) {
+                                    ctx.fillStyle = String(window.textMuted)
+                                    ctx.textAlign = "left"
+                                    ctx.fillText(shortCredits(assetRange.maximum - (assetRange.maximum - assetRange.minimum) * grid / 4, true), width - plotRight + 8, y)
+                                }
                             }
                             if (timeRange.maximum > 0) {
                                 for (let tick = 0; tick <= 4; ++tick) {
@@ -6149,7 +6166,8 @@ ApplicationWindow {
                                 }
                                 return samples
                             }
-                            drawTicker("assets", assetRange, window.textMuted, 1.4, false, false)
+                            if (commanderPage.financeHasAssets)
+                                drawTicker("assets", assetRange, window.textMuted, 1.4, false, false)
                             let creditSamples = drawTicker("credits", creditRange, window.orange, 2.3, true, true)
                             if (creditSamples.length > 0) {
                                 let latest = creditSamples[creditSamples.length - 1]
@@ -6259,6 +6277,7 @@ ApplicationWindow {
                             color: orange; font.pixelSize: 8; font.bold: true
                         }
                         Label {
+                            visible: commanderPage.financeHasAssets
                             anchors.right: parent.right; y: financeChart.plotTop - 17
                             text: window.t("commander.credits.assets_short", "ASSETS")
                             color: textMuted; font.pixelSize: 8; font.bold: true

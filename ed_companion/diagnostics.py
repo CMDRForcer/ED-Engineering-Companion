@@ -7,26 +7,43 @@ BENIGN_QT_MESSAGE_FRAGMENTS = (
     "retrying to obtain clipboard",
     "qxgivsyncservice not destroyed in time",
     "qeventdispatcherwin32::wakeup: failed to post a message",
-    # A lazy page Loader unloading while its ListView is still incubating
-    # delegates asynchronously. A real delegate defect produces a different,
-    # deterministic message; this pair is only a teardown-timing artifact.
-    "object or context destroyed during incubation",
-    "qml component: cannot create delegate",
 )
+INCUBATION_TEARDOWN_FRAGMENT = "object or context destroyed during incubation"
+INCUBATION_DELEGATE_FRAGMENT = "qml component: cannot create delegate"
 
 
-def is_benign_qt_message(message):
+def is_benign_qt_message(
+    message, previous_message="", incubation_teardown_recent=False
+):
     folded = str(message or "").casefold()
-    return any(
+    if any(
         fragment in folded for fragment in BENIGN_QT_MESSAGE_FRAGMENTS
+    ):
+        return True
+    if INCUBATION_TEARDOWN_FRAGMENT in folded:
+        return True
+    # Qt emits this immediately after the teardown message when a lazy page is
+    # destroyed while its ListView is still incubating. On its own it remains
+    # actionable and must reach diagnostics and the QML smoke test.
+    return (
+        INCUBATION_DELEGATE_FRAGMENT in folded
+        and (
+            incubation_teardown_recent
+            or INCUBATION_TEARDOWN_FRAGMENT
+            in str(previous_message or "").casefold()
+        )
     )
 
 
 def filtered_log_lines(lines):
-    return [
-        str(line) for line in (lines or [])
-        if not is_benign_qt_message(line)
-    ]
+    result = []
+    previous = ""
+    for line in lines or []:
+        value = str(line)
+        if not is_benign_qt_message(value, previous):
+            result.append(value)
+        previous = value
+    return result
 
 
 def clean_diagnostic_log(path):

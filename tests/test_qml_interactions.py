@@ -64,6 +64,30 @@ class QmlInteractionContractTests(unittest.TestCase):
         self.assertIn('"ENGINEERING · PAUSED UNTIL MODULE IS INSTALLED"', source)
         self.assertIn('"Engineering material plan remains saved;', source)
 
+    def test_next_best_action_requests_unknown_remote_loadout(self):
+        source = (ROOT / "Main.qml").read_text(encoding="utf-8-sig")
+
+        self.assertIn(
+            'cockpit.operationAction.kind === "LOADOUT_BLOCKER"', source
+        )
+        self.assertIn('"LOADOUT · CONFIRMATION REQUIRED"', source)
+        self.assertIn(
+            '"ENGINEERING · PAUSED UNTIL LOADOUT IS CONFIRMED"', source
+        )
+        self.assertIn("continue after loadout confirmation.", source)
+
+    def test_assets_chart_chrome_requires_authoritative_asset_data(self):
+        source = (ROOT / "Main.qml").read_text(encoding="utf-8-sig")
+
+        self.assertIn("property bool financeHasAssets", source)
+        self.assertIn(
+            "property real plotRight: commanderPage.financeHasAssets ? 72 : 18",
+            source,
+        )
+        self.assertGreaterEqual(
+            source.count("visible: commanderPage.financeHasAssets"), 3
+        )
+
     def test_next_action_header_translations_are_not_duplicated(self):
         expected = {
             "en": ("NEXT BEST ACTION", "WHAT NOW"),

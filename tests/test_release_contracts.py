@@ -401,7 +401,9 @@ class ReleaseContractTests(unittest.TestCase):
         ):
             with self.subTest(expected_state=expected_state):
                 candidate = plan()
-                annotate_installed_target_conflicts([candidate], installed_rows)
+                annotate_installed_target_conflicts(
+                    [candidate], installed_rows, loadout_known=True
+                )
 
                 action = select_operation_action({
                     "blueprints": [candidate],
@@ -417,6 +419,59 @@ class ReleaseContractTests(unittest.TestCase):
                 self.assertEqual(action["targetPage"], 1)
                 self.assertIn("Multi-cannon", action["title"])
                 self.assertIn("LARGE HARDPOINT 1", action["title"])
+
+    def test_operations_request_loadout_confirmation_for_unobserved_remote_slots(self):
+        plan = {
+            "module": "Multi-cannon",
+            "blueprint": "Overcharged Weapon",
+            "targetGrade": 5,
+            "targetStatus": "not_started",
+            "boundSlot": "LargeHardpoint1",
+            "boundModule": "hpt_multicannon_turret_large",
+            "bindingRequired": False,
+            "canCraftNext": False,
+            "materialProgress": [{
+                "key": "nickel", "name": "Nickel", "missing": 4,
+            }],
+        }
+        annotate_installed_target_conflicts(
+            [plan], [], loadout_known=False
+        )
+
+        action = select_operation_action({
+            "blueprints": [plan],
+            "materials": [{
+                "key": "nickel", "name": "Nickel", "missing": 4,
+            }],
+            "trades": [],
+        }, [])
+
+        self.assertTrue(plan["loadoutUnknown"])
+        self.assertFalse(plan["installationRequired"])
+        self.assertEqual(action["kind"], "LOADOUT_BLOCKER")
+        self.assertEqual(action["installationState"], "UNKNOWN")
+        self.assertEqual(action["targetPage"], 3)
+        self.assertIn("Multi-cannon", action["title"])
+
+    def test_slot_observation_is_authoritative_without_a_full_loadout(self):
+        plan = {
+            "module": "Multi-cannon",
+            "blueprint": "Overcharged Weapon",
+            "targetGrade": 5,
+            "targetStatus": "not_started",
+            "boundSlot": "LargeHardpoint1",
+            "boundModule": "hpt_multicannon_turret_large",
+            "bindingRequired": False,
+            "canCraftNext": False,
+            "materialProgress": [],
+        }
+        annotate_installed_target_conflicts([plan], [{
+            "slot": "LargeHardpoint1",
+            "moduleId": "hpt_multicannon_turret_large",
+        }], loadout_known=False)
+
+        self.assertFalse(plan["loadoutUnknown"])
+        self.assertFalse(plan["installationRequired"])
 
     def test_operations_continue_after_the_exact_module_is_installed(self):
         plan = {

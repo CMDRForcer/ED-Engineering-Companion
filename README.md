@@ -10,7 +10,7 @@
 
 ED Engineering Companion (EDEC) is a free, open-source Windows companion for [Elite Dangerous](https://www.elitedangerous.com/). It reads your local Journal and turns it into a ship-aware engineering workspace: every hull in your fleet, every physical module slot, every Journal-confirmed blueprint and experimental effect, and a running "what to do next" that never asks you to swap ships in-game to find out.
 
-[**Download v1.0.0**](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
+[**Download v1.0.1**](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
 
 ![EDEC ship engineering in the Orbital Dawn theme](docs/images/edec-engineering.png)
 

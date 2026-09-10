@@ -52,6 +52,8 @@ from ed_companion.phase14 import CockpitController
 from ed_companion.overlay import OverlaySettings, OverlayWindowRuntime
 from ed_companion.diagnostics import (
     clean_diagnostic_log,
+    INCUBATION_DELEGATE_FRAGMENT,
+    INCUBATION_TEARDOWN_FRAGMENT,
     is_benign_qt_message,
 )
 
@@ -108,6 +110,8 @@ def diagnostics_dir():
 def install_diagnostics(smoke_messages=None):
     directory = diagnostics_dir()
     clean_diagnostic_log(directory / "phase14.log")
+    previous_qt_message = ""
+    last_incubation_teardown_at = 0.0
 
     def crash_hook(exc_type, exc_value, exc_traceback):
         try:
@@ -124,7 +128,22 @@ def install_diagnostics(smoke_messages=None):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
 
     def qt_message_handler(_mode, context, message):
-        if is_benign_qt_message(message):
+        nonlocal previous_qt_message, last_incubation_teardown_at
+        folded = str(message or "").casefold()
+        now = time.monotonic()
+        if INCUBATION_TEARDOWN_FRAGMENT in folded:
+            last_incubation_teardown_at = now
+        teardown_recent = (
+            bool(last_incubation_teardown_at)
+            and now - last_incubation_teardown_at <= 1.0
+        )
+        benign = is_benign_qt_message(
+            message, previous_qt_message, teardown_recent
+        )
+        if INCUBATION_DELEGATE_FRAGMENT in folded:
+            last_incubation_teardown_at = 0.0
+        previous_qt_message = str(message or "")
+        if benign:
             return
         source = getattr(context, "file", "") or "QML"
         line = getattr(context, "line", 0) or 0
