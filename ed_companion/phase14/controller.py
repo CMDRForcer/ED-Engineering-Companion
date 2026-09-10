@@ -268,6 +268,7 @@ from .state import (
     latest_loadout_slots,
     merge_capi_commander_overview,
     merge_capi_fleet,
+    merge_capi_loadout,
     profiled_journal_events,
     ProfileContext,
     LOGBOOK_FILTERS,
@@ -5592,13 +5593,14 @@ class CockpitController(QObject):
             "active_id": state.get("activeShipId", ""),
             "ships": state.get("fleet", []),
         }, profile)
-        return {
+        merged = {
             **state,
             "commanderOverview": overview,
             "fleet": fleet_state.get("ships", []),
             "fleetKnown": bool(fleet_state.get("ships")),
             "activeShipId": str(fleet_state.get("active_id") or ""),
         }
+        return merge_capi_loadout(merged, profile)
 
     @Slot(str, str, bool, bool)
     def saveInaraConfig(self, api_key, commander, consent, auto_sync):

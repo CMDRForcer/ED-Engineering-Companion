@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.1 — 2026-09-10
+
+### Added
+
+- When this machine has never seen a Journal `Loadout` for the active ship
+  (fresh install, ship engineered on another PC, rotated Journal files), the
+  install-before-engineering guard now reads the ship's modules from the
+  Frontier CAPI profile instead of blocking every plan with
+  `MODULE · INSTALLATION REQUIRED`. Blueprint conflict detection works from
+  the CAPI loadout too.
+- The priority is Journal `Loadout` → CAPI loadout → unknown. A Journal
+  loadout always wins; without a CAPI connection the behaviour is unchanged.
+  CAPI-sourced slots are marked so the UI can show the profile snapshot
+  time. Within-grade roll quality is treated as unknown, exactly as it is
+  for a Journal `Loadout` that omits it.
+
 ## 1.1.0 — 2026-09-10
 
 ### Added

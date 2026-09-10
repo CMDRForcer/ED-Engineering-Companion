@@ -6943,6 +6943,78 @@ def _merge_capi_fleet_roster(rows, capi_fleet, active_id):
             existing.setdefault("source", "frontier_capi")
 
 
+def capi_loadout_slots(capi_modules):
+    """Convert CAPI ``ship.modules`` rows into the Journal loadout-slot shape."""
+    slots = []
+    for entry in capi_modules if isinstance(capi_modules, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        slot = str(entry.get("slot") or "")
+        module_id = canonical_module_id(entry.get("moduleName"))
+        if not slot or not module_id:
+            continue
+        try:
+            grade = max(0, min(5, int(entry.get("grade") or 0)))
+        except (TypeError, ValueError):
+            grade = 0
+        blueprint = str(entry.get("blueprint") or "")
+        slots.append({
+            "slot": slot,
+            "moduleId": module_id,
+            "engineered": bool(blueprint and grade > 0),
+            "engineeringGrade": grade,
+            # CAPI never reports within-grade quality; mark it unknown so the
+            # planner treats the roll conservatively, exactly as it does for a
+            # Journal Loadout that also omits Quality.
+            "engineeringQuality": 0.0,
+            "engineeringQualityKnown": False,
+            "engineeringBlueprint": blueprint,
+            "experimentalEffect": str(entry.get("experimental") or ""),
+        })
+    return slots
+
+
+def merge_capi_loadout(state, capi_profile):
+    """Answer "what is installed?" from CAPI only when the Journal cannot.
+
+    The Journal Loadout always wins. This fills the install guard for the
+    active ship when this machine has never seen a Loadout for it (fresh
+    install, ship engineered on another PC, rotated Journal files).
+    """
+    state = dict(state) if isinstance(state, dict) else {}
+    capi_profile = capi_profile if isinstance(capi_profile, dict) else {}
+    if state.get("moduleSlots"):
+        return state
+    active = capi_profile.get("activeShip")
+    active = active if isinstance(active, dict) else {}
+    selected_id = str(state.get("selectedShipId") or "")
+    if not selected_id or str(active.get("id") or "") != selected_id:
+        return state
+    capi_slots = capi_loadout_slots(capi_profile.get("activeShipModules"))
+    if not capi_slots:
+        return state
+    observed_at = str(active.get("observedAt") or "")
+    for slot in capi_slots:
+        slot["source"] = "frontier_capi"
+        slot["observedAt"] = observed_at
+    blueprints = [
+        dict(row) for row in state.get("blueprints", []) if isinstance(row, dict)
+    ]
+    annotate_installed_target_conflicts(
+        blueprints, capi_slots, loadout_known=True
+    )
+    for row in blueprints:
+        row["loadoutSource"] = "frontier_capi"
+        row["loadoutObservedAt"] = observed_at
+    return {
+        **state,
+        "moduleSlots": capi_slots,
+        "blueprints": blueprints,
+        "loadoutSource": "frontier_capi",
+        "loadoutObservedAt": observed_at,
+    }
+
+
 def powerplay_journal_overview(events):
     """Build one honest Powerplay snapshot exclusively from Journal events."""
     membership = {"power": "", "rank": None, "merits": None,

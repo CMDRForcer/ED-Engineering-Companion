@@ -436,6 +436,39 @@ def _project_fleet(payload, observed_at, current_ship_id):
     return rows
 
 
+def _project_active_modules(ship):
+    """Flatten the current ship's CAPI modules to slot/blueprint/grade rows."""
+    modules = ship.get("modules") if isinstance(ship, Mapping) else None
+    if not isinstance(modules, Mapping):
+        return []
+    rows = []
+    for slot, entry in modules.items():
+        if not isinstance(entry, Mapping):
+            continue
+        module = entry.get("module")
+        module = module if isinstance(module, Mapping) else {}
+        engineer = entry.get("engineer")
+        engineer = engineer if isinstance(engineer, Mapping) else {}
+        special = entry.get("specialModifications")
+        if isinstance(special, Mapping):
+            experimental = next(iter(special.keys()), "")
+        elif isinstance(special, list) and special:
+            experimental = special[0]
+        else:
+            experimental = ""
+        module_name = str(module.get("name") or "").strip()
+        if not slot or not module_name:
+            continue
+        rows.append({
+            "slot": str(slot),
+            "moduleName": module_name,
+            "blueprint": str(engineer.get("recipeName") or "").strip(),
+            "grade": _clean_int(engineer.get("recipeLevel")) or 0,
+            "experimental": str(experimental or "").strip(),
+        })
+    return rows
+
+
 def project_profile_snapshot(snapshot):
     """Project conservative Commander, fleet and current-ship profile fields."""
     snapshot = snapshot if isinstance(snapshot, Mapping) else {}
@@ -498,4 +531,5 @@ def project_profile_snapshot(snapshot):
             "observedAt": observed_at,
         },
         "fleet": _project_fleet(payload, observed_at, current_ship_id),
+        "activeShipModules": _project_active_modules(ship),
     }

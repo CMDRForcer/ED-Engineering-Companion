@@ -380,6 +380,52 @@ class FrontierCapiTests(unittest.TestCase):
         self.assertEqual(fleet["42"]["stationName"], "Garay Terminal")
         self.assertEqual(fleet["42"]["value"], 53256942)
 
+    def test_profile_projection_flattens_the_active_ship_modules(self):
+        projected = project_profile_snapshot({
+            "observedAt": "2026-09-10T12:00:00Z",
+            "payload": {
+                "commander": {"name": "F", "id": "1", "credits": 1, "currentShipId": 37},
+                "ship": {
+                    "id": 37, "name": "Krait_MkII",
+                    "modules": {
+                        "PowerPlant": {
+                            "module": {"name": "Int_Powerplant_Size7_Class5"},
+                            "engineer": {
+                                "recipeName": "PowerPlant_Boosted",
+                                "recipeLevel": 5,
+                            },
+                            "specialModifications": {
+                                "special_powerplant_cooled": "special_powerplant_cooled"
+                            },
+                        },
+                        "LifeSupport": {
+                            "module": {"name": "Int_LifeSupport_Size4_Class2"},
+                        },
+                        "TinyHardpoint2": {
+                            "module": {"name": "Hpt_ShieldBooster_Size0_Class5"},
+                            "engineer": {
+                                "recipeName": "ShieldBooster_Resistive",
+                                "recipeLevel": 3,
+                            },
+                            "specialModifications": [],
+                        },
+                    },
+                },
+            },
+        })
+        rows = {row["slot"]: row for row in projected["activeShipModules"]}
+
+        self.assertEqual(rows["PowerPlant"]["moduleName"], "Int_Powerplant_Size7_Class5")
+        self.assertEqual(rows["PowerPlant"]["blueprint"], "PowerPlant_Boosted")
+        self.assertEqual(rows["PowerPlant"]["grade"], 5)
+        self.assertEqual(
+            rows["PowerPlant"]["experimental"], "special_powerplant_cooled"
+        )
+        self.assertEqual(rows["LifeSupport"]["blueprint"], "")
+        self.assertEqual(rows["LifeSupport"]["grade"], 0)
+        self.assertEqual(rows["TinyHardpoint2"]["experimental"], "")
+        self.assertEqual(rows["TinyHardpoint2"]["grade"], 3)
+
 
 if __name__ == "__main__":
     unittest.main()

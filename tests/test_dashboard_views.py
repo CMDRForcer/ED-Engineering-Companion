@@ -11,9 +11,11 @@ from ed_companion.phase14.dashboard_views import (
     build_logbook_view,
 )
 from ed_companion.phase14.state import (
+    capi_loadout_slots,
     commander_journal_overview,
     merge_capi_commander_overview,
     merge_capi_fleet,
+    merge_capi_loadout,
 )
 from ed_companion.phase14.controller import CockpitController
 
@@ -497,6 +499,80 @@ class FrontierRequestResilienceTests(unittest.TestCase):
         self.assertEqual(
             controller._frontier_status, "FRONTIER REQUEST COULD NOT START"
         )
+
+
+class CapiLoadoutFallbackTests(unittest.TestCase):
+    CAPI_MODULES = [
+        {"slot": "MainEngines", "moduleName": "Int_Engine_Size6_Class5",
+         "blueprint": "Engine_Dirty", "grade": 5,
+         "experimental": "special_engine_overloaded"},
+        {"slot": "LifeSupport", "moduleName": "Int_LifeSupport_Size4_Class2",
+         "blueprint": "", "grade": 0, "experimental": ""},
+    ]
+
+    def test_capi_loadout_slots_match_the_journal_slot_shape(self):
+        slots = {row["slot"]: row for row in capi_loadout_slots(self.CAPI_MODULES)}
+
+        drive = slots["MainEngines"]
+        self.assertEqual(drive["moduleId"], "int_engine_size6_class5")
+        self.assertEqual(drive["engineeringGrade"], 5)
+        self.assertTrue(drive["engineered"])
+        self.assertFalse(drive["engineeringQualityKnown"])
+        self.assertEqual(drive["engineeringBlueprint"], "Engine_Dirty")
+        self.assertEqual(drive["experimentalEffect"], "special_engine_overloaded")
+        self.assertFalse(slots["LifeSupport"]["engineered"])
+
+    def test_capi_loadout_fills_the_guard_only_when_journal_is_silent(self):
+        base = {
+            "selectedShipId": "37",
+            "moduleSlots": [],
+            "blueprints": [{
+                "planId": "p1", "boundSlot": "MainEngines",
+                "boundModule": "int_engine_size6_class5",
+                "blueprint": "Dirty Drive Tuning", "targetGrade": 5,
+            }],
+        }
+        profile = {
+            "activeShip": {"id": "37", "observedAt": "2026-02-01T00:00:00Z"},
+            "activeShipModules": self.CAPI_MODULES,
+        }
+
+        merged = merge_capi_loadout(base, profile)
+
+        self.assertEqual(merged["loadoutSource"], "frontier_capi")
+        self.assertTrue(merged["moduleSlots"])
+        row = merged["blueprints"][0]
+        self.assertTrue(row["loadoutKnown"])
+        self.assertFalse(row["loadoutUnknown"])
+        self.assertEqual(row["installedModule"], "int_engine_size6_class5")
+        self.assertEqual(row["loadoutSource"], "frontier_capi")
+
+    def test_capi_loadout_never_overrides_a_journal_loadout(self):
+        base = {
+            "selectedShipId": "37",
+            "moduleSlots": [{"slot": "MainEngines", "moduleId": "x"}],
+            "blueprints": [{"planId": "p1"}],
+        }
+        merged = merge_capi_loadout(base, {
+            "activeShip": {"id": "37"},
+            "activeShipModules": self.CAPI_MODULES,
+        })
+
+        self.assertEqual(merged["moduleSlots"], base["moduleSlots"])
+        self.assertNotIn("loadoutSource", merged)
+
+    def test_capi_loadout_ignored_when_a_different_ship_is_selected(self):
+        merged = merge_capi_loadout({
+            "selectedShipId": "9",
+            "moduleSlots": [],
+            "blueprints": [{"planId": "p1"}],
+        }, {
+            "activeShip": {"id": "37"},
+            "activeShipModules": self.CAPI_MODULES,
+        })
+
+        self.assertEqual(merged["moduleSlots"], [])
+        self.assertNotIn("loadoutSource", merged)
 
 
 class FrontierConsentTests(unittest.TestCase):
