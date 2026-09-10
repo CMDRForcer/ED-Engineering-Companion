@@ -1,4 +1,7 @@
+import os
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlparse
 
 import requests
@@ -14,6 +17,10 @@ from ed_companion.integrations.frontier_capi import (
     parse_authorization_callback,
     project_profile_snapshot,
     refresh_frontier_tokens,
+)
+from ed_companion.integrations.frontier_credentials import (
+    FrontierCredentialError,
+    FrontierCredentialStore,
 )
 
 
@@ -106,6 +113,77 @@ class FrontierCapiTests(unittest.TestCase):
 
         self.assertEqual(tokens.refresh_token, "existing-refresh")
         self.assertEqual(tokens.expires_at, 70)
+
+    def test_token_expiry_uses_a_refresh_margin(self):
+        tokens = refresh_frontier_tokens(
+            "client", "refresh",
+            post=lambda *_args, **_kwargs: FakeResponse(200, {
+                "access_token": "access", "expires_in": 120,
+            }),
+            now=100,
+        )
+
+        self.assertFalse(tokens.expires_within(60, now=100))
+        self.assertTrue(tokens.expires_within(60, now=160))
+
+    def test_credential_store_round_trips_only_protected_bytes(self):
+        protected_prefix = b"protected:"
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "frontier_credentials.dat"
+            store = FrontierCredentialStore(
+                path,
+                protect=lambda value: protected_prefix + value[::-1],
+                unprotect=lambda value: value[len(protected_prefix):][::-1],
+            )
+            tokens = refresh_frontier_tokens(
+                "client", "refresh-secret",
+                post=lambda *_args, **_kwargs: FakeResponse(200, {
+                    "access_token": "access-secret", "expires_in": 60,
+                }),
+                now=10,
+            )
+
+            store.save(tokens)
+            stored_text = path.read_text(encoding="ascii")
+            restored = store.load()
+
+            self.assertNotIn("access-secret", stored_text)
+            self.assertNotIn("refresh-secret", stored_text)
+            self.assertEqual(restored.access_token, "access-secret")
+            self.assertEqual(restored.refresh_token, "refresh-secret")
+            store.clear()
+            self.assertFalse(path.exists())
+
+    def test_credential_store_rejects_corrupt_ciphertext(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "frontier_credentials.dat"
+            path.write_text("not base64", encoding="ascii")
+            store = FrontierCredentialStore(
+                path, protect=lambda value: value, unprotect=lambda value: value,
+            )
+
+            with self.assertRaises(FrontierCredentialError):
+                store.load()
+
+    @unittest.skipUnless(os.name == "nt", "Windows DPAPI is required")
+    def test_windows_dpapi_credential_store_round_trip(self):
+        with TemporaryDirectory() as directory:
+            store = FrontierCredentialStore(
+                Path(directory) / "frontier_credentials.dat"
+            )
+            tokens = refresh_frontier_tokens(
+                "client", "refresh-secret",
+                post=lambda *_args, **_kwargs: FakeResponse(200, {
+                    "access_token": "access-secret", "expires_in": 60,
+                }),
+                now=10,
+            )
+
+            store.save(tokens)
+            restored = store.load()
+
+            self.assertEqual(restored.access_token, "access-secret")
+            self.assertEqual(restored.refresh_token, "refresh-secret")
 
     def test_token_errors_never_include_response_credentials(self):
         with self.assertRaises(FrontierAuthError) as raised:

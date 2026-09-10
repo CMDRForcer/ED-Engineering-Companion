@@ -105,6 +105,7 @@ class FrontierOAuthCallbackTests(unittest.TestCase):
         )
         self.assertNotIn("fetch(", source)
         self.assertNotIn("localStorage", source)
+        self.assertIn("a[hidden] { display: none; }", source)
 
     def test_pages_workflow_publishes_only_the_callback_site(self):
         source = (
@@ -114,6 +115,15 @@ class FrontierOAuthCallbackTests(unittest.TestCase):
         self.assertIn("cp docs/oauth/callback.html _site/oauth/callback.html", source)
         self.assertIn("actions/deploy-pages@v4", source)
         self.assertNotIn("docs/images", source)
+
+    def test_runtime_forwards_callbacks_to_the_controller(self):
+        source = (ROOT / "phase14_main.py").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "frontier_auth.callbackReceived.connect(\n"
+            "        controller.acceptFrontierOAuthCallback",
+            source,
+        )
 
 
 if __name__ == "__main__":

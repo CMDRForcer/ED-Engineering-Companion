@@ -7048,7 +7048,8 @@ ApplicationWindow {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 8
                 CockpitButton { text: "INARA"; selected: connectionsPage.connectionMode === 0; onClicked: connectionsPage.connectionMode = 0 }
-                    CockpitButton { text: window.t("connections.eddn_tab", "EDDN & STATE FINDS"); selected: connectionsPage.connectionMode === 1; accentColor: green; onClicked: connectionsPage.connectionMode = 1 }
+                CockpitButton { text: window.t("connections.frontier_tab", "FRONTIER CAPI"); selected: connectionsPage.connectionMode === 2; accentColor: cyan; onClicked: connectionsPage.connectionMode = 2 }
+                CockpitButton { text: window.t("connections.eddn_tab", "EDDN & STATE FINDS"); selected: connectionsPage.connectionMode === 1; accentColor: green; onClicked: connectionsPage.connectionMode = 1 }
             }
         }
 
@@ -7248,6 +7249,98 @@ ApplicationWindow {
                             tone: cyan
                         }
                     }
+                }
+            }
+        }
+
+        Item {
+            anchors.fill: parent
+            visible: connectionsPage.connectionMode === 2
+
+            ShadowCard {
+                anchors.fill: parent
+                accent: cyan
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 24
+                    spacing: 14
+                    Label {
+                        text: window.t("connections.frontier_title", "FRONTIER COMPANION API")
+                        color: cyan; font.pixelSize: 15; font.bold: true
+                    }
+                    Label {
+                        text: window.t("connections.frontier_help", "Adds an authenticated Frontier profile snapshot to local Journal data. Newer Journal values always remain authoritative.")
+                        color: textSecondary; wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: capiStatusColumn.implicitHeight + 28
+                        radius: 10; color: panelRaised
+                        border.width: 1
+                        border.color: cockpit.frontierConnected ? green : borderTone
+                        ColumnLayout {
+                            id: capiStatusColumn
+                            anchors.fill: parent; anchors.margins: 14; spacing: 6
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Label { text: window.t("connections.connection", "CONNECTION"); color: muted; font.pixelSize: 9; font.bold: true }
+                                Item { Layout.fillWidth: true }
+                                Label {
+                                    text: cockpit.frontierBusy ? window.t("status.working", "WORKING")
+                                          : cockpit.frontierConnected ? window.t("status.connected", "CONNECTED")
+                                          : window.t("status.not_connected", "NOT CONNECTED")
+                                    color: cockpit.frontierBusy ? orange
+                                           : cockpit.frontierConnected ? green : muted
+                                    font.pixelSize: 11; font.bold: true
+                                }
+                            }
+                            Label {
+                                text: cockpit.frontierStatus
+                                color: cockpit.frontierStatus.indexOf("FAILED") >= 0
+                                       || cockpit.frontierStatus.indexOf("ERROR") >= 0
+                                       ? error : textSecondary
+                                wrapMode: Text.WordWrap; Layout.fillWidth: true
+                            }
+                            Label {
+                                visible: Boolean(cockpit.frontierLastSync)
+                                text: window.t("connections.frontier_last_sync", "LAST PROFILE SYNC") + " · " + cockpit.frontierLastSync
+                                color: cyan; font.pixelSize: 9; font.bold: true
+                            }
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 10
+                        CockpitButton {
+                            text: cockpit.frontierConnected
+                                  ? window.t("connections.frontier_reconnect", "RECONNECT FRONTIER")
+                                  : window.t("connections.frontier_connect", "CONNECT FRONTIER")
+                            selected: true; Layout.fillWidth: true
+                            enabled: !cockpit.frontierBusy
+                            onClicked: cockpit.connectFrontier()
+                        }
+                        CockpitButton {
+                            text: window.t("connections.frontier_refresh", "REFRESH PROFILE"); Layout.fillWidth: true
+                            enabled: cockpit.frontierConnected && !cockpit.frontierBusy
+                            onClicked: cockpit.refreshFrontierProfile()
+                        }
+                        CockpitButton {
+                            text: window.t("connections.frontier_disconnect", "DISCONNECT"); accentColor: error
+                            enabled: cockpit.frontierConnected && !cockpit.frontierBusy
+                            onClicked: cockpit.disconnectFrontier()
+                        }
+                    }
+                    Label {
+                        text: window.t("connections.frontier_security", "Frontier must activate the registered client before the first login can succeed. Tokens are encrypted for this Windows account and are never written to diagnostics.")
+                        color: muted; wrapMode: Text.WordWrap; Layout.fillWidth: true
+                        font.pixelSize: 10
+                    }
+                    Label {
+                        text: window.t("connections.frontier_scope", "The first integration imports credits and the currently active ship. It never deletes fleet entries or engineering plans.")
+                        color: muted; wrapMode: Text.WordWrap; Layout.fillWidth: true
+                        font.pixelSize: 10
+                    }
+                    Item { Layout.fillHeight: true }
                 }
             }
         }

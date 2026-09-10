@@ -12,6 +12,7 @@ from ed_companion.phase14.state import (
     merge_capi_commander_overview,
     merge_capi_fleet,
 )
+from ed_companion.phase14.controller import CockpitController
 
 
 class DashboardViewTests(unittest.TestCase):
@@ -189,6 +190,33 @@ class DashboardViewTests(unittest.TestCase):
         self.assertEqual(merged["active_id"], "11")
         self.assertEqual(rows["7"]["status"], "stored")
         self.assertTrue(rows["11"]["isCurrent"])
+
+    def test_cached_capi_profile_survives_a_journal_state_rebuild(self):
+        refreshed = CockpitController._state_with_frontier_profile({
+            "commanderOverview": {
+                "credits": {
+                    "known": True, "value": 100,
+                    "timestamp": "2026-01-01T10:00:00Z",
+                },
+            },
+            "fleet": [],
+            "activeShipId": "",
+        }, {
+            "credits": {
+                "known": True, "value": 175,
+                "timestamp": "2026-01-01T10:10:00Z",
+            },
+            "activeShip": {
+                "known": True, "id": "11", "type": "Panther Clipper Mk II",
+                "name": "Hauler", "observedAt": "2026-01-01T10:10:00Z",
+            },
+        })
+
+        self.assertEqual(
+            refreshed["commanderOverview"]["credits"]["value"], 175
+        )
+        self.assertEqual(refreshed["activeShipId"], "11")
+        self.assertEqual(len(refreshed["fleet"]), 1)
 
     def test_finance_history_appends_changed_live_balance(self):
         rows = build_finance_history(

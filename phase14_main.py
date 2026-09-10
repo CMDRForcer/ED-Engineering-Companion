@@ -694,6 +694,16 @@ def run():
     tray_runtime = TrayRuntime(app, window, controller, overlay_settings)
     single_instance.activationRequested.connect(tray_runtime.show_window)
     single_instance.oauthCallbackReceived.connect(frontier_auth.accept)
+    frontier_auth.callbackReceived.connect(
+        controller.acceptFrontierOAuthCallback
+    )
+    pending_frontier_callback = frontier_auth.take()
+    if pending_frontier_callback:
+        QTimer.singleShot(
+            0,
+            lambda callback=pending_frontier_callback:
+                controller.acceptFrontierOAuthCallback(callback),
+        )
     controller.exitRequested.connect(tray_runtime.exit_app)
     controller.restartRequested.connect(tray_runtime.restart_app)
     if "--background" in sys.argv and tray_runtime.enabled():

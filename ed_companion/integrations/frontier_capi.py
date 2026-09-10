@@ -28,6 +28,8 @@ FRONTIER_AUTHORIZE_URL = f"{FRONTIER_AUTH_BASE}/auth"
 FRONTIER_TOKEN_URL = f"{FRONTIER_AUTH_BASE}/token"
 FRONTIER_CAPI_BASE = "https://companion.orerve.net"
 FRONTIER_SCOPES = "auth capi"
+FRONTIER_CLIENT_ID = "b17a6919-d902-430d-bb28-7fbb7cbbe5a9"
+FRONTIER_REDIRECT_URI = "https://cmdrforcer.github.io/oauth/callback.html"
 CAPI_ENDPOINTS = frozenset({"/profile", "/market", "/shipyard", "/fleetcarrier"})
 CAPI_MIN_INTERVAL_SECONDS = 60.0
 CAPI_TIMEOUT_SECONDS = 25
@@ -67,6 +69,10 @@ class FrontierTokens:
     @property
     def authorization_header(self):
         return f"{self.token_type} {self.access_token}"
+
+    def expires_within(self, seconds, *, now=None):
+        current = float(time.time() if now is None else now)
+        return self.expires_at <= current + max(0.0, float(seconds))
 
 
 def _urlsafe(value):

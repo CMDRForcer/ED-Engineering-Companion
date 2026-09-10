@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 
 from PySide6.QtCore import QObject, Property, QTimer, QUrl, Signal, Slot
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtQuick import QQuickWindow
 
 from ed_companion import APP_VERSION
@@ -44,6 +44,22 @@ from ed_companion.integrations.inara import (
     prepare_journal_batch,
     profile_event,
     send_events,
+)
+from ed_companion.integrations.frontier_capi import (
+    FRONTIER_CLIENT_ID,
+    FRONTIER_REDIRECT_URI,
+    FrontierAuthError,
+    FrontierCapiClient,
+    FrontierCapiError,
+    build_pkce_authorization,
+    exchange_authorization_code,
+    parse_authorization_callback,
+    project_profile_snapshot,
+    refresh_frontier_tokens,
+)
+from ed_companion.integrations.frontier_credentials import (
+    FrontierCredentialError,
+    FrontierCredentialStore,
 )
 from ed_companion.build_import import (
     BuildImportError, JOURNAL_BLUEPRINT_NAMES, empty_build_import_preview,
@@ -250,6 +266,8 @@ from .state import (
     journal_paths_for_profile,
     latest_profile_location,
     latest_loadout_slots,
+    merge_capi_commander_overview,
+    merge_capi_fleet,
     profiled_journal_events,
     ProfileContext,
     LOGBOOK_FILTERS,
@@ -365,6 +383,7 @@ class CockpitController(QObject):
     commanderCardsChanged = Signal()
     inaraFinished = Signal(object)
     inaraJournalScanReady = Signal(object)
+    frontierFinished = Signal(object)
     eddnFinished = Signal(str, bool, str)
     eddnRelay = Signal(object)
     traderSyncFinished = Signal(bool, str)
@@ -386,6 +405,9 @@ class CockpitController(QObject):
         self.inara_config_file = self.config_dir / "inara_config.json"
         self.inara_receipts_file = self.config_dir / "inara_receipts.json"
         self.inara_journal_cache_file = self.config_dir / "inara_journal_cache.json"
+        self.frontier_credentials_file = (
+            self.config_dir / "frontier_credentials.dat"
+        )
         self.eddn_config_file = self.config_dir / "eddn_config.json"
         self.eddn_queue_file = self.config_dir / "community_upload_queue.json"
         self.eddn_quarantine_file = self.config_dir / "community_upload_quarantine.json"
@@ -587,6 +609,34 @@ class CockpitController(QObject):
             self._save_inara_receipts()
         self.inaraFinished.connect(self._finish_inara)
         self.inaraJournalScanReady.connect(self._finish_inara_journal_scan)
+        self._frontier_credential_store = FrontierCredentialStore(
+            self.frontier_credentials_file
+        )
+        self._frontier_tokens = None
+        self._frontier_authorization = None
+        self._frontier_busy = False
+        self._frontier_request_token = 0
+        self._frontier_last_sync = ""
+        self._frontier_profile = {}
+        try:
+            self._frontier_tokens = self._frontier_credential_store.load()
+            self._frontier_status = (
+                "CONNECTED LOCALLY · Refresh to verify the Frontier session."
+                if self._frontier_tokens else
+                "NOT CONNECTED · Frontier approval is required before first login."
+            )
+        except FrontierCredentialError:
+            self._frontier_status = (
+                "CREDENTIAL STORAGE ERROR · Reconnect after removing the local token file."
+            )
+        self._frontier_client = (
+            FrontierCapiClient(
+                self._frontier_tokens.access_token,
+                token_type=self._frontier_tokens.token_type,
+            )
+            if self._frontier_tokens else None
+        )
+        self.frontierFinished.connect(self._finish_frontier)
         self._eddn_profile_identity = self.profile_context.identity
         self._eddn_profile_key = self.profile_context.key
         self._eddn_journal_root = self.profile_context.journal_root
@@ -821,6 +871,9 @@ class CockpitController(QObject):
         self._logbook_entries = list(state.pop("_logbookEntries", []))
         state.pop("_craftBatch", None)
         self._logbook_revision += 1
+        state = self._state_with_frontier_profile(
+            state, getattr(self, "_frontier_profile", {})
+        )
         self._state = state
         overview = state.get("commanderOverview", {})
         if isinstance(overview, dict):
@@ -3418,6 +3471,20 @@ class CockpitController(QObject):
                 ),
             },
             {
+                "name": "FRONTIER CAPI",
+                "status": (
+                    "WORKING" if self._frontier_busy
+                    else "CONNECTED" if self._frontier_tokens is not None
+                    else "OFF"
+                ),
+                "detail": self._frontier_status,
+                "healthy": (
+                    not self._frontier_busy
+                    and "FAILED" not in self._frontier_status
+                    and "ERROR" not in self._frontier_status
+                ),
+            },
+            {
                 "name": "EDDN",
                 "status": (
                     "WORKING" if self._eddn_busy
@@ -3699,6 +3766,22 @@ class CockpitController(QObject):
     )
     inaraReceipts = Property(
         "QVariantList", lambda self: self._inara_receipts,
+        notify=connectionChanged,
+    )
+    frontierConnected = Property(
+        bool, lambda self: self._frontier_tokens is not None,
+        notify=connectionChanged,
+    )
+    frontierBusy = Property(
+        bool, lambda self: self._frontier_busy,
+        notify=connectionChanged,
+    )
+    frontierStatus = Property(
+        str, lambda self: self._frontier_status,
+        notify=connectionChanged,
+    )
+    frontierLastSync = Property(
+        str, lambda self: self._frontier_last_sync,
         notify=connectionChanged,
     )
     eddnConsent = Property(
@@ -4108,6 +4191,9 @@ class CockpitController(QObject):
         self._logbook_entries = list(state.pop("_logbookEntries", []))
         self._logbook_revision += 1
         craft_batch = dict(state.pop("_craftBatch", {}) or {})
+        state = self._state_with_frontier_profile(
+            state, getattr(self, "_frontier_profile", {})
+        )
         self._state = state
         if (
             previous
@@ -5239,6 +5325,202 @@ class CockpitController(QObject):
             self.refresh()
             self.engineeringChanged.emit()
 
+    @Slot()
+    def connectFrontier(self):
+        if self._frontier_busy:
+            return
+        try:
+            authorization = build_pkce_authorization(
+                FRONTIER_CLIENT_ID, FRONTIER_REDIRECT_URI
+            )
+        except ValueError:
+            self._frontier_status = "AUTHORIZATION SETUP FAILED"
+            self.connectionChanged.emit()
+            return
+        self._frontier_authorization = authorization
+        if QDesktopServices.openUrl(QUrl(authorization.authorize_url)):
+            self._frontier_status = (
+                "BROWSER OPENED · Complete the Frontier login there."
+            )
+        else:
+            self._frontier_authorization = None
+            self._frontier_status = "BROWSER COULD NOT BE OPENED"
+        self.connectionChanged.emit()
+
+    @Slot(str)
+    def acceptFrontierOAuthCallback(self, callback_url):
+        authorization = self._frontier_authorization
+        if authorization is None:
+            self._frontier_status = (
+                "NO LOGIN WAITING · Start a new Frontier connection."
+            )
+            self.connectionChanged.emit()
+            return
+        try:
+            code = parse_authorization_callback(
+                callback_url, authorization.state
+            )
+        except FrontierAuthError as exc:
+            self._frontier_authorization = None
+            self._frontier_status = f"AUTHORIZATION FAILED · {exc}"
+            self.connectionChanged.emit()
+            return
+        self._frontier_authorization = None
+        self._start_frontier_profile_request(
+            authorization=authorization, authorization_code=code
+        )
+
+    @Slot()
+    def refreshFrontierProfile(self):
+        if self._frontier_busy:
+            return
+        if self._frontier_tokens is None:
+            self._frontier_status = "NOT CONNECTED · Connect Frontier first."
+            self.connectionChanged.emit()
+            return
+        self._start_frontier_profile_request(tokens=self._frontier_tokens)
+
+    @Slot()
+    def disconnectFrontier(self):
+        if self._frontier_busy:
+            return
+        try:
+            self._frontier_credential_store.clear()
+        except FrontierCredentialError as exc:
+            self._frontier_status = f"DISCONNECT FAILED · {exc}"
+            self.connectionChanged.emit()
+            return
+        self._frontier_tokens = None
+        self._frontier_client = None
+        self._frontier_authorization = None
+        self._frontier_last_sync = ""
+        self._frontier_status = "NOT CONNECTED · Local Frontier tokens removed."
+        self.connectionChanged.emit()
+
+    def _start_frontier_profile_request(
+        self, *, tokens=None, authorization=None, authorization_code=""
+    ):
+        if self._frontier_busy:
+            return
+        self._frontier_busy = True
+        self._frontier_request_token += 1
+        request_token = self._frontier_request_token
+        profile_generation = self._profile_generation
+        existing_client = self._frontier_client
+        self._frontier_status = "CONTACTING FRONTIER…"
+        self.connectionChanged.emit()
+
+        def worker():
+            active_tokens = tokens
+            client = existing_client
+            try:
+                if authorization is not None:
+                    active_tokens = exchange_authorization_code(
+                        FRONTIER_CLIENT_ID, authorization,
+                        authorization_code,
+                    )
+                    client = None
+                elif active_tokens.expires_within(60):
+                    active_tokens = refresh_frontier_tokens(
+                        FRONTIER_CLIENT_ID, active_tokens.refresh_token
+                    )
+                    client = None
+                if client is None:
+                    client = FrontierCapiClient(
+                        active_tokens.access_token,
+                        token_type=active_tokens.token_type,
+                    )
+                snapshot = client.query("/profile")
+                self.frontierFinished.emit({
+                    "requestToken": request_token,
+                    "profileGeneration": profile_generation,
+                    "tokens": active_tokens,
+                    "client": client,
+                    "profile": project_profile_snapshot(snapshot),
+                    "error": "",
+                })
+            except FrontierCapiError as exc:
+                self.frontierFinished.emit({
+                    "requestToken": request_token,
+                    "profileGeneration": profile_generation,
+                    "tokens": active_tokens,
+                    "client": client,
+                    "profile": {},
+                    "error": str(exc),
+                })
+
+        if not self._start_network_worker(worker, "frontier-capi-profile"):
+            self._frontier_busy = False
+            self._frontier_status = "FRONTIER REQUEST COULD NOT START"
+            self.connectionChanged.emit()
+
+    @Slot(object)
+    def _finish_frontier(self, result):
+        if not isinstance(result, dict):
+            return
+        if (
+            int(result.get("requestToken", -1)) != self._frontier_request_token
+            or int(result.get("profileGeneration", -1))
+            != self._profile_generation
+        ):
+            return
+        self._frontier_busy = False
+        tokens = result.get("tokens")
+        storage_error = ""
+        if tokens is not None:
+            self._frontier_tokens = tokens
+            self._frontier_client = result.get("client")
+            try:
+                self._frontier_credential_store.save(tokens)
+            except FrontierCredentialError as exc:
+                storage_error = str(exc)
+        error = str(result.get("error") or "")
+        profile = result.get("profile")
+        if isinstance(profile, dict) and profile:
+            self._apply_frontier_profile(profile)
+            self._frontier_last_sync = str(profile.get("observedAt") or "")
+        if storage_error:
+            self._frontier_status = (
+                "CONNECTED FOR THIS RUN · Secure token storage failed."
+            )
+        elif error and self._frontier_tokens is not None:
+            self._frontier_status = f"CONNECTED · PROFILE SYNC FAILED · {error}"
+        elif error:
+            self._frontier_status = (
+                "AUTHORIZATION FAILED · Frontier approval may still be pending."
+            )
+        else:
+            self._frontier_status = "CONNECTED · COMMANDER PROFILE UPDATED"
+        self.connectionChanged.emit()
+
+    def _apply_frontier_profile(self, profile):
+        self._frontier_profile = dict(profile)
+        updated = self._state_with_frontier_profile(self._state, profile)
+        overview = updated.get("commanderOverview", {})
+        self._record_commander_credit_snapshot(overview.get("credits", {}))
+        self._state = updated
+        self._publish_full_state()
+
+    @staticmethod
+    def _state_with_frontier_profile(state, profile):
+        state = dict(state) if isinstance(state, dict) else {}
+        if not isinstance(profile, dict) or not profile:
+            return state
+        overview = merge_capi_commander_overview(
+            state.get("commanderOverview", {}), profile
+        )
+        fleet_state = merge_capi_fleet({
+            "active_id": state.get("activeShipId", ""),
+            "ships": state.get("fleet", []),
+        }, profile)
+        return {
+            **state,
+            "commanderOverview": overview,
+            "fleet": fleet_state.get("ships", []),
+            "fleetKnown": bool(fleet_state.get("ships")),
+            "activeShipId": str(fleet_state.get("active_id") or ""),
+        }
+
     @Slot(str, str, bool, bool)
     def saveInaraConfig(self, api_key, commander, consent, auto_sync):
         if not self._sync_eddn_profile():
@@ -6090,7 +6372,34 @@ class CockpitController(QObject):
         self._inara_scan_token = getattr(self, "_inara_scan_token", 0) + 1
         self._inara_scan_in_flight = False
         self._inara_scan_dirty = False
+        self._frontier_request_token = getattr(
+            self, "_frontier_request_token", 0
+        ) + 1
+        self._frontier_busy = False
+        self._frontier_authorization = None
+        self._frontier_profile = {}
         self._bind_profile_paths(context)
+        self._frontier_credential_store = FrontierCredentialStore(
+            self.frontier_credentials_file
+        )
+        self._frontier_last_sync = ""
+        try:
+            self._frontier_tokens = self._frontier_credential_store.load()
+            self._frontier_status = (
+                "CONNECTED LOCALLY · Refresh to verify the Frontier session."
+                if self._frontier_tokens else
+                "NOT CONNECTED · Frontier approval is required before first login."
+            )
+        except FrontierCredentialError:
+            self._frontier_tokens = None
+            self._frontier_status = "CREDENTIAL STORAGE ERROR"
+        self._frontier_client = (
+            FrontierCapiClient(
+                self._frontier_tokens.access_token,
+                token_type=self._frontier_tokens.token_type,
+            )
+            if self._frontier_tokens else None
+        )
         self._history_archive = HistoryArchive(self.history_archive_file)
         self._commander_credit_snapshots = self._history_archive.records(
             "commander_credit_snapshots"
@@ -7584,15 +7893,18 @@ class CockpitController(QObject):
         credits = credits if isinstance(credits, dict) else {}
         value = credits.get("value")
         timestamp = str(credits.get("timestamp") or "")
-        if str(credits.get("basis") or "") != "LIVE STATUS" \
-                or not credits.get("known") or not timestamp \
+        source = {
+            "LIVE STATUS": "live_balance",
+            "FRONTIER CAPI": "frontier_capi",
+        }.get(str(credits.get("basis") or ""))
+        if not source or not credits.get("known") or not timestamp \
                 or not isinstance(value, (int, float)) or isinstance(value, bool):
             return False
         snapshot = {
             "observedAt": timestamp,
             "timestamp": timestamp,
             "credits": max(0, int(value)),
-            "source": "live_balance",
+            "source": source,
         }
         snapshots = list(getattr(self, "_commander_credit_snapshots", []))
         if snapshots and all(
