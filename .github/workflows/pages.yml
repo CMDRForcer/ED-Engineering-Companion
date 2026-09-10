@@ -1,0 +1,48 @@
+name: OAuth Callback Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/pages.yml"
+      - "docs/oauth/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: oauth-callback-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out callback source
+        uses: actions/checkout@v6
+
+      - name: Prepare minimal static site
+        shell: bash
+        run: |
+          mkdir -p _site/oauth
+          cp docs/oauth/callback.html _site/oauth/callback.html
+          touch _site/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload callback site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Deploy callback site
+        id: deployment
+        uses: actions/deploy-pages@v4

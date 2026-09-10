@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <link rel="canonical"
+        href="https://cmdrforcer.github.io/ED-Engineering-Companion/oauth/callback.html">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <title>Return to ED Engineering Companion</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI", sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+           color: #f7f2e9; background: #0b1020; }
+    main { width: min(34rem, calc(100% - 3rem)); padding: 2rem;
+           border: 1px solid #2b3550; border-radius: 1rem; background: #141c30; }
+    h1 { margin-top: 0; color: #5ad1e6; font-size: 1.5rem; }
+    p { color: #d7d2c6; line-height: 1.55; }
+    a { display: inline-block; margin-top: .75rem; padding: .8rem 1rem;
+        border-radius: .6rem; color: #0b1020; background: #ff9d5c;
+        font-weight: 700; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Returning to EDEC</h1>
+    <p id="status">The authorization response is being returned to the desktop app.</p>
+    <a id="open-app" href="edec://oauth/callback">Open EDEC</a>
+  </main>
+  <script>
+    (() => {
+      "use strict";
+      const allowed = ["code", "state", "error", "error_description"];
+      const incoming = new URLSearchParams(window.location.search);
+      const outgoing = new URLSearchParams();
+      for (const name of allowed) {
+        if (incoming.has(name)) outgoing.set(name, incoming.get(name));
+      }
+      const target = "edec://oauth/callback" +
+        (outgoing.size ? "?" + outgoing.toString() : "");
+      const link = document.getElementById("open-app");
+      link.href = target;
+      if (!outgoing.has("code") && !outgoing.has("error")) {
+        document.getElementById("status").textContent =
+          "No Frontier authorization response was received. You can close this tab.";
+        link.hidden = true;
+        return;
+      }
+      window.location.replace(target);
+    })();
+  </script>
+</body>
+</html>

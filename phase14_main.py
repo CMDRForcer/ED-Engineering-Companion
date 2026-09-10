@@ -38,7 +38,7 @@ def configure_renderer(mode):
 configure_renderer(configured_mode())
 
 from PySide6.QtCore import (
-    QEvent, QMetaObject, QObject, QProcess, QTimer, QUrl, Signal,
+    QEvent, QMetaObject, QObject, Property, QProcess, QTimer, QUrl, Signal,
     qInstallMessageHandler,
 )
 from PySide6.QtGui import QAction, QFont
@@ -61,12 +61,124 @@ from ed_companion.diagnostics import (
 SINGLE_INSTANCE_NAME = os.environ.get(
     "EDEC_SINGLE_INSTANCE_NAME", "EDEC-single-instance"
 )
+EDEC_OAUTH_SCHEME = "edec"
+EDEC_OAUTH_HOST = "oauth"
+EDEC_OAUTH_PATH = "/callback"
+
+
+def frontier_oauth_callback_argument(arguments=None):
+    """Return only the exact callback URL shape registered for EDEC."""
+    for value in arguments if arguments is not None else sys.argv[1:]:
+        text = str(value or "").strip()
+        if not text or len(text) > 8192:
+            continue
+        parsed = QUrl(text)
+        if (
+            parsed.isValid()
+            and parsed.scheme().casefold() == EDEC_OAUTH_SCHEME
+            and parsed.host().casefold() == EDEC_OAUTH_HOST
+            and parsed.path() == EDEC_OAUTH_PATH
+        ):
+            return text
+    return ""
+
+
+def single_instance_message(callback_url=""):
+    """Encode one local IPC command without logging its OAuth parameters."""
+    payload = {
+        "action": "frontier_oauth" if callback_url else "show",
+    }
+    if callback_url:
+        payload["url"] = callback_url
+    return (json.dumps(payload, separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def parse_single_instance_message(message):
+    """Decode and validate one local IPC command."""
+    try:
+        payload = json.loads(bytes(message).decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, TypeError):
+        return "show", ""
+    if not isinstance(payload, dict) or payload.get("action") != "frontier_oauth":
+        return "show", ""
+    callback_url = frontier_oauth_callback_argument([payload.get("url")])
+    return ("frontier_oauth", callback_url) if callback_url else ("show", "")
+
+
+def register_windows_url_protocol(
+    *, executable=None, frozen=None, winreg_module=None
+):
+    """Register edec:// for the current Windows user without admin rights."""
+    frozen = getattr(sys, "frozen", False) if frozen is None else bool(frozen)
+    if os.name != "nt" or not frozen:
+        return False
+    if winreg_module is None:
+        import winreg as winreg_module
+    executable = str(Path(executable or sys.executable).resolve())
+    values = {
+        rf"Software\Classes\{EDEC_OAUTH_SCHEME}": {
+            "": "URL:ED Engineering Companion OAuth Callback",
+            "URL Protocol": "",
+        },
+        rf"Software\Classes\{EDEC_OAUTH_SCHEME}\DefaultIcon": {
+            "": f'"{executable}",0',
+        },
+        rf"Software\Classes\{EDEC_OAUTH_SCHEME}\shell\open\command": {
+            "": f'"{executable}" "%1"',
+        },
+    }
+    try:
+        for path, entries in values.items():
+            with winreg_module.CreateKey(
+                winreg_module.HKEY_CURRENT_USER, path
+            ) as key:
+                for name, value in entries.items():
+                    winreg_module.SetValueEx(
+                        key, name, 0, winreg_module.REG_SZ, value
+                    )
+    except OSError:
+        return False
+    return True
+
+
+class FrontierOAuthCallbackRuntime(QObject):
+    """Hold callbacks until the opt-in CAPI controller consumes them."""
+
+    callbackChanged = Signal()
+    callbackReceived = Signal(str)
+
+    def __init__(self, initial_callback="", parent=None):
+        super().__init__(parent)
+        self._callback = ""
+        if initial_callback:
+            self.accept(initial_callback)
+
+    pendingCallback = Property(
+        str, lambda self: self._callback, notify=callbackChanged
+    )
+
+    def accept(self, callback_url):
+        callback_url = frontier_oauth_callback_argument([callback_url])
+        if not callback_url:
+            return False
+        self._callback = callback_url
+        self.callbackChanged.emit()
+        self.callbackReceived.emit(callback_url)
+        return True
+
+    def take(self):
+        callback_url = self._callback
+        if callback_url:
+            self._callback = ""
+            self.callbackChanged.emit()
+        return callback_url
 
 
 class SingleInstanceRuntime(QObject):
     """Keep one EDEC process and ask the existing window to foreground."""
 
     activationRequested = Signal()
+    oauthCallbackReceived = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -74,12 +186,12 @@ class SingleInstanceRuntime(QObject):
         self.server.newConnection.connect(self._accept_connections)
 
     @staticmethod
-    def notify_existing(timeout_ms=700):
+    def notify_existing(callback_url="", timeout_ms=700):
         socket = QLocalSocket()
         socket.connectToServer(SINGLE_INSTANCE_NAME)
         if not socket.waitForConnected(timeout_ms):
             return False
-        socket.write(b"SHOW\n")
+        socket.write(single_instance_message(callback_url))
         socket.flush()
         socket.waitForBytesWritten(timeout_ms)
         socket.disconnectFromServer()
@@ -96,8 +208,12 @@ class SingleInstanceRuntime(QObject):
         while self.server.hasPendingConnections():
             socket = self.server.nextPendingConnection()
             socket.waitForReadyRead(100)
-            if bytes(socket.readAll()).strip().upper() == b"SHOW":
-                self.activationRequested.emit()
+            action, callback_url = parse_single_instance_message(
+                socket.readAll()
+            )
+            if action == "frontier_oauth":
+                self.oauthCallbackReceived.emit(callback_url)
+            self.activationRequested.emit()
             socket.disconnectFromServer()
 
 
@@ -527,8 +643,10 @@ def run():
     app.setApplicationName("EDEngineeringCompanion")
     app.setApplicationDisplayName("ED Engineering Companion")
     app.setApplicationVersion(APP_VERSION)
+    register_windows_url_protocol()
 
-    if SingleInstanceRuntime.notify_existing():
+    initial_oauth_callback = frontier_oauth_callback_argument()
+    if SingleInstanceRuntime.notify_existing(initial_oauth_callback):
         return 0
     single_instance = SingleInstanceRuntime(app)
     if not single_instance.listen():
@@ -536,6 +654,9 @@ def run():
 
     controller = CockpitController()
     overlay_settings = OverlaySettings(parent=app)
+    frontier_auth = FrontierOAuthCallbackRuntime(
+        initial_oauth_callback, parent=app
+    )
     app.aboutToQuit.connect(controller.shutdown)
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("cockpit", controller)
@@ -572,6 +693,7 @@ def run():
     )
     tray_runtime = TrayRuntime(app, window, controller, overlay_settings)
     single_instance.activationRequested.connect(tray_runtime.show_window)
+    single_instance.oauthCallbackReceived.connect(frontier_auth.accept)
     controller.exitRequested.connect(tray_runtime.exit_app)
     controller.restartRequested.connect(tray_runtime.restart_app)
     if "--background" in sys.argv and tray_runtime.enabled():

@@ -7,7 +7,11 @@ from ed_companion.phase14.dashboard_views import (
     filter_finance_history,
     build_logbook_view,
 )
-from ed_companion.phase14.state import commander_journal_overview
+from ed_companion.phase14.state import (
+    commander_journal_overview,
+    merge_capi_commander_overview,
+    merge_capi_fleet,
+)
 
 
 class DashboardViewTests(unittest.TestCase):
@@ -105,6 +109,86 @@ class DashboardViewTests(unittest.TestCase):
 
         self.assertEqual(overview["credits"]["value"], 145)
         self.assertEqual(overview["credits"]["basis"], "SESSION START")
+
+    def test_capi_credits_supplement_but_never_replace_newer_local_credits(self):
+        local = commander_journal_overview([{
+            "event": "LoadGame", "timestamp": "2026-01-01T10:05:00Z",
+            "Credits": 145,
+        }])
+        older_capi = {
+            "credits": {
+                "known": True, "value": 100,
+                "timestamp": "2026-01-01T10:00:00Z",
+            },
+        }
+        newer_capi = {
+            "credits": {
+                "known": True, "value": 175,
+                "timestamp": "2026-01-01T10:10:00Z",
+            },
+        }
+
+        preserved = merge_capi_commander_overview(local, older_capi)
+        supplemented = merge_capi_commander_overview(local, newer_capi)
+
+        self.assertEqual(preserved["credits"]["value"], 145)
+        self.assertEqual(preserved["credits"]["basis"], "SESSION START")
+        self.assertEqual(supplemented["credits"]["value"], 175)
+        self.assertEqual(supplemented["credits"]["basis"], "FRONTIER CAPI")
+
+    def test_capi_current_ship_never_deletes_or_downgrades_journal_fleet(self):
+        journal_fleet = {
+            "active_id": "7",
+            "ships": [
+                {
+                    "id": "7", "type": "Krait Mk II", "name": "Mechthild",
+                    "value": 900, "observedAt": "2026-01-01T10:05:00Z",
+                    "status": "active", "isCurrent": True,
+                },
+                {
+                    "id": "9", "type": "Fer-de-Lance", "name": "Signe",
+                    "observedAt": "2026-01-01T09:00:00Z",
+                    "status": "remote", "isCurrent": False,
+                },
+            ],
+        }
+        older_capi = {
+            "activeShip": {
+                "known": True, "id": "7", "type": "Krait_MkII",
+                "name": "stale", "value": 100,
+                "observedAt": "2026-01-01T10:00:00Z",
+            },
+        }
+
+        merged = merge_capi_fleet(journal_fleet, older_capi)
+        rows = {row["id"]: row for row in merged["ships"]}
+
+        self.assertEqual(set(rows), {"7", "9"})
+        self.assertEqual(rows["7"]["name"], "Mechthild")
+        self.assertEqual(rows["7"]["value"], 900)
+        self.assertEqual(merged["active_id"], "7")
+
+    def test_capi_can_add_a_newer_current_ship_without_erasing_fleet(self):
+        merged = merge_capi_fleet({
+            "active_id": "7",
+            "ships": [{
+                "id": "7", "type": "Krait Mk II", "name": "Mechthild",
+                "observedAt": "2026-01-01T10:00:00Z",
+                "status": "active", "isCurrent": True,
+            }],
+        }, {
+            "activeShip": {
+                "known": True, "id": "11", "type": "Panther Clipper Mk II",
+                "name": "Hauler", "value": 1000,
+                "observedAt": "2026-01-01T10:10:00Z",
+            },
+        })
+        rows = {row["id"]: row for row in merged["ships"]}
+
+        self.assertEqual(set(rows), {"7", "11"})
+        self.assertEqual(merged["active_id"], "11")
+        self.assertEqual(rows["7"]["status"], "stored")
+        self.assertTrue(rows["11"]["isCurrent"])
 
     def test_finance_history_appends_changed_live_balance(self):
         rows = build_finance_history(
