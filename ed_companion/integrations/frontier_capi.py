@@ -106,20 +106,23 @@ def _require_https_redirect(redirect_uri):
     return parsed.geturl()
 
 
+# Internal ship tokens Frontier data does not title-case cleanly.
+_SHIP_TYPE_NAMES = {
+    "ferdelance": "Fer-de-Lance",
+    "krait_mkii": "Krait Mk II",
+    "krait_light": "Krait Phantom",
+    "typex": "Alliance Chieftain",
+    "typex_2": "Alliance Crusader",
+    "typex_3": "Alliance Challenger",
+    "panthermkii": "Panther Clipper Mk II",
+    "python_nx": "Python Mk II",
+}
+
+
 def _readable_ship_type(value):
     internal = str(value or "").strip()
-    conventional = {
-        "ferdelance": "Fer-de-Lance",
-        "krait_mkii": "Krait Mk II",
-        "krait_light": "Krait Phantom",
-        "typex": "Alliance Chieftain",
-        "typex_2": "Alliance Crusader",
-        "typex_3": "Alliance Challenger",
-        "panthermkii": "Panther Clipper Mk II",
-        "python_nx": "Python Mk II",
-    }
-    if internal.casefold() in conventional:
-        return conventional[internal.casefold()]
+    if internal.casefold() in _SHIP_TYPE_NAMES:
+        return _SHIP_TYPE_NAMES[internal.casefold()]
     # Split snake_case and camelCase so "PantherMkII" reads as "Panther Mk II".
     spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", re.sub(r"[_-]+", " ", internal))
     return " ".join(
@@ -499,11 +502,11 @@ def project_profile_snapshot(snapshot):
 
     ranks_source = commander.get("rank")
     ranks_source = ranks_source if isinstance(ranks_source, Mapping) else {}
-    ranks = {
-        key: _clean_int(ranks_source.get(key))
-        for key in FRONTIER_RANK_KEYS
-        if _clean_int(ranks_source.get(key)) is not None
-    }
+    ranks = {}
+    for key in FRONTIER_RANK_KEYS:
+        rank = _clean_int(ranks_source.get(key))
+        if rank is not None:
+            ranks[key] = rank
 
     return {
         "observedAt": observed_at,

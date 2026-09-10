@@ -6830,54 +6830,51 @@ def merge_capi_fleet(fleet_state, capi_profile):
     capi_profile = capi_profile if isinstance(capi_profile, dict) else {}
     remote = capi_profile.get("activeShip")
     remote = remote if isinstance(remote, dict) else {}
-    if not remote.get("known") or not remote.get("id"):
-        _merge_capi_fleet_roster(rows, capi_profile.get("fleet"), result.get("active_id"))
-        rows.sort(key=lambda row: (
-            str(row.get("type") or "").casefold(),
-            str(row.get("name") or "").casefold(),
-            str(row.get("id") or ""),
-        ))
-        result["ships"] = rows
-        return result
-
-    ship_id = str(remote.get("id"))
-    existing = next((row for row in rows if str(row.get("id")) == ship_id), None)
-    remote_time = normalize_timestamp(remote.get("observedAt"))
-    local_time = normalize_timestamp(existing.get("observedAt")) if existing else None
-    remote_is_newer = bool(
-        remote_time is not None
-        and (local_time is None or remote_time > local_time)
-    )
-    fields = ("type", "name", "ident", "value")
-    if existing is None:
-        existing = {"id": ship_id, "status": "active", "isCurrent": True}
-        rows.append(existing)
-        remote_is_newer = True
-    for field_name in fields:
-        value = remote.get(field_name)
-        if value not in (None, "") and (
-            remote_is_newer or existing.get(field_name) in (None, "")
-        ):
-            existing[field_name] = value
-    if remote_is_newer:
-        for row in rows:
-            row["isCurrent"] = row is existing
-            if row is not existing and row.get("status") == "active":
-                row["status"] = "stored"
-        existing.update({
-            "status": "active",
-            "isCurrent": True,
-            "observedAt": str(remote.get("observedAt") or ""),
-            "source": "frontier_capi",
-        })
-        result["active_id"] = ship_id
-    if not existing.get("label"):
-        existing["label"] = (
-            f"{existing.get('type')} – {existing.get('name')}"
-            if existing.get("type") and existing.get("name")
-            else str(existing.get("name") or existing.get("type") or f"Ship #{ship_id}")
+    if remote.get("known") and remote.get("id"):
+        ship_id = str(remote.get("id"))
+        existing = next(
+            (row for row in rows if str(row.get("id")) == ship_id), None
         )
-    _merge_capi_fleet_roster(rows, capi_profile.get("fleet"), result.get("active_id"))
+        remote_time = normalize_timestamp(remote.get("observedAt"))
+        local_time = (
+            normalize_timestamp(existing.get("observedAt")) if existing else None
+        )
+        remote_is_newer = bool(
+            remote_time is not None
+            and (local_time is None or remote_time > local_time)
+        )
+        if existing is None:
+            existing = {"id": ship_id, "status": "active", "isCurrent": True}
+            rows.append(existing)
+            remote_is_newer = True
+        for field_name in ("type", "name", "ident", "value"):
+            value = remote.get(field_name)
+            if value not in (None, "") and (
+                remote_is_newer or existing.get(field_name) in (None, "")
+            ):
+                existing[field_name] = value
+        if remote_is_newer:
+            for row in rows:
+                row["isCurrent"] = row is existing
+                if row is not existing and row.get("status") == "active":
+                    row["status"] = "stored"
+            existing.update({
+                "status": "active",
+                "isCurrent": True,
+                "observedAt": str(remote.get("observedAt") or ""),
+                "source": "frontier_capi",
+            })
+            result["active_id"] = ship_id
+        if not existing.get("label"):
+            existing["label"] = (
+                f"{existing.get('type')} – {existing.get('name')}"
+                if existing.get("type") and existing.get("name")
+                else str(existing.get("name") or existing.get("type")
+                         or f"Ship #{ship_id}")
+            )
+    _merge_capi_fleet_roster(
+        rows, capi_profile.get("fleet"), result.get("active_id")
+    )
     rows.sort(key=lambda row: (
         str(row.get("type") or "").casefold(),
         str(row.get("name") or "").casefold(),
