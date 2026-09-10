@@ -1840,7 +1840,6 @@ class ReleaseContractTests(unittest.TestCase):
                 ))
             saved = json.loads(path.read_text(encoding="utf-8"))
 
-        rejected_planner = after_rejected["Krait Mk II – Mechthild"][0][0]["_Planner"]
         planner = saved["Krait Mk II – Mechthild"][0][0]["_Planner"]
         self.assertEqual(rejected["status"], "unmatched")
         self.assertEqual(applied["status"], "applied")

@@ -5172,7 +5172,6 @@ def apply_engineer_craft(
     tasks = payload.get(ship, [])
     event_key = engineer_craft_fingerprint(event, ship_id)
     if event.get("ApplyExperimentalEffect"):
-        wanted = str(event.get("ApplyExperimentalEffect") or "")
         candidates = []
         for index, task in enumerate(tasks):
             if not isinstance(task, list) or not task:
@@ -7159,7 +7158,6 @@ def build_state(
 ):
     profile_context = resolve_profile_context()
     data_dir = runtime_data_dir(profile_context)
-    profile_identity = profile_context.identity
     journal_path_valid = journal_dir().is_dir()
     metadata = material_metadata(reference_data_dir(package_root))
     profile_events = profiled_journal_events()
