@@ -194,6 +194,73 @@ class DashboardViewTests(unittest.TestCase):
         self.assertEqual(rows["7"]["status"], "stored")
         self.assertTrue(rows["11"]["isCurrent"])
 
+    def test_capi_roster_adds_stored_ships_with_location_without_deleting(self):
+        journal_fleet = {
+            "active_id": "7",
+            "ships": [{
+                "id": "7", "type": "Krait Mk II", "name": "Mechthild",
+                "value": 900, "observedAt": "2026-01-01T10:05:00Z",
+                "status": "active", "isCurrent": True,
+            }, {
+                "id": "9", "type": "Fer-de-Lance", "name": "Signe",
+                "observedAt": "2026-01-01T09:00:00Z",
+                "status": "remote", "isCurrent": False,
+            }],
+        }
+        capi = {
+            "activeShip": {
+                "known": True, "id": "7", "type": "Krait_MkII",
+                "name": "stale", "value": 100,
+                "observedAt": "2026-01-01T10:00:00Z",
+            },
+            "fleet": [
+                {"id": "9", "type": "Fer-de-Lance", "systemName": "Deciat",
+                 "stationName": "Garay Terminal", "value": 50,
+                 "observedAt": "2026-01-01T11:00:00Z"},
+                {"id": "12", "type": "Type-10 Defender", "name": "Anvil",
+                 "systemName": "Leesti", "stationName": "George Lucas",
+                 "value": 77, "observedAt": "2026-01-01T11:00:00Z"},
+            ],
+        }
+
+        merged = merge_capi_fleet(journal_fleet, capi)
+        rows = {row["id"]: row for row in merged["ships"]}
+
+        self.assertEqual(set(rows), {"7", "9", "12"})
+        self.assertEqual(rows["7"]["name"], "Mechthild")
+        self.assertEqual(rows["9"]["systemName"], "Deciat")
+        self.assertEqual(rows["9"]["value"], 50)
+        self.assertEqual(rows["9"]["name"], "Signe")
+        self.assertEqual(rows["12"]["type"], "Type-10 Defender")
+        self.assertEqual(rows["12"]["stationName"], "George Lucas")
+        self.assertEqual(rows["12"]["source"], "frontier_capi")
+        self.assertFalse(rows["12"]["isCurrent"])
+
+    def test_capi_ranks_fill_only_unknown_rows_and_never_downgrade(self):
+        local = {
+            "ranks": [
+                {"key": "Combat", "known": True, "rank": 8},
+                {"key": "Trade", "known": False, "rank": -1},
+                {"key": "Exobiologist", "known": False, "rank": -1},
+            ],
+            "credits": {"known": True, "value": 5, "timestamp": "2026-01-02T00:00:00Z"},
+        }
+        merged = merge_capi_commander_overview(local, {
+            "credits": {"known": False},
+            "ranks": {"combat": 2, "trade": 6, "exobiologist": 4},
+            "activeShip": {"value": 2000000, "observedAt": "2026-01-02T00:00:00Z"},
+        })
+        rows = {row["key"]: row for row in merged["ranks"]}
+
+        self.assertEqual(rows["Combat"]["rank"], 8)
+        self.assertNotIn("rankBasis", rows["Combat"])
+        self.assertTrue(rows["Trade"]["known"])
+        self.assertEqual(rows["Trade"]["rank"], 6)
+        self.assertEqual(rows["Trade"]["rankBasis"], "FRONTIER CAPI")
+        self.assertEqual(rows["Exobiologist"]["rank"], 4)
+        self.assertEqual(merged["shipValue"]["rebuy"], 100000)
+        self.assertEqual(merged["shipValue"]["basis"], "FRONTIER CAPI")
+
     def test_cached_capi_profile_survives_a_journal_state_rebuild(self):
         refreshed = CockpitController._state_with_frontier_profile({
             "commanderOverview": {

@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.1.0 — 2026-09-10
+
+### Added
+
+- The Frontier CAPI profile snapshot now also imports the **stored fleet**:
+  every ship Frontier knows about, with its current system and station,
+  hull/module value and total value. Ships already seen in the Journal keep
+  their Journal identity; ships only Frontier knows are added as remote
+  rows and never overwrite or delete Journal fleet entries.
+- Commander **ranks** (Combat, Trade, Exploration, CQC, Federation, Empire,
+  Mercenary, Exobiology) are filled from the CAPI profile when the Journal
+  has not established them yet. A Journal rank is never downgraded, and rank
+  progress and reputation are not part of the CAPI profile.
+- A **rebuy estimate** and hull/module value for the active ship, derived
+  from the CAPI ship value when the Journal offers none.
+
+### Changed
+
+- CAPI-only ship type names now split camelCase (`PantherMkII` reads as
+  `Panther Clipper Mk II`); a few current-generation hulls were added to the
+  readable-name table.
+- All of the above only augments local Journal and Status.json data; newer
+  Journal observations stay authoritative and survive a state rebuild.
+
 ## 1.0.4 — 2026-09-10
 
 ### Added

@@ -328,6 +328,57 @@ class FrontierCapiTests(unittest.TestCase):
         self.assertEqual(projected["activeShip"]["id"], "7")
         self.assertEqual(projected["activeShip"]["type"], "Krait Mk II")
         self.assertEqual(projected["activeShip"]["value"], 900)
+        self.assertEqual(projected["ranks"], {})
+        self.assertEqual(projected["fleet"], [])
+
+    def test_profile_projection_reads_fleet_ranks_and_rebuy(self):
+        projected = project_profile_snapshot({
+            "observedAt": "2026-09-10T12:00:00Z",
+            "payload": {
+                "commander": {
+                    "name": "Forcer", "id": "F1", "credits": 500,
+                    "currentShipId": 37,
+                    "rank": {
+                        "combat": 5, "trade": 6, "explore": 7, "cqc": 0,
+                        "federation": 4, "empire": 1, "soldier": 5,
+                        "exobiologist": 5, "crime": 2, "power": 0,
+                    },
+                },
+                "ship": {
+                    "id": 37, "name": "Krait_MkII", "shipName": "Mechthild",
+                    "shipID": "MECH-2",
+                    "value": {"hull": 40, "modules": 190, "total": 232427090},
+                },
+                "ships": {
+                    "37": {
+                        "id": 37, "name": "Krait_MkII", "shipID": "MECH-2",
+                        "value": {"total": 232427090},
+                        "starsystem": {"name": "Shinrarta Dezhra"},
+                        "station": {"name": "Jameson Memorial"},
+                    },
+                    "42": {
+                        "id": 42, "name": "Mandalay", "shipName": "Wanderer",
+                        "value": {"hull": 14, "modules": 38, "total": 53256942},
+                        "starsystem": {"name": "Deciat"},
+                        "station": {"name": "Garay Terminal"},
+                    },
+                },
+            },
+        })
+
+        self.assertNotIn("crime", projected["ranks"])
+        self.assertEqual(projected["ranks"]["explore"], 7)
+        self.assertEqual(projected["ranks"]["soldier"], 5)
+        self.assertEqual(projected["activeShip"]["rebuy"], round(232427090 * 0.05))
+
+        fleet = {row["id"]: row for row in projected["fleet"]}
+        self.assertEqual(set(fleet), {"37", "42"})
+        self.assertTrue(fleet["37"]["isCurrent"])
+        self.assertFalse(fleet["42"]["isCurrent"])
+        self.assertEqual(fleet["42"]["type"], "Mandalay")
+        self.assertEqual(fleet["42"]["systemName"], "Deciat")
+        self.assertEqual(fleet["42"]["stationName"], "Garay Terminal")
+        self.assertEqual(fleet["42"]["value"], 53256942)
 
 
 if __name__ == "__main__":

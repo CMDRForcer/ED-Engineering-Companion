@@ -6782,7 +6782,42 @@ def merge_capi_commander_overview(overview, capi_profile):
                 str(result.get("lastUpdated") or ""),
                 str(remote.get("timestamp") or ""),
             )
+    _supplement_capi_ranks(result, capi_profile.get("ranks"))
+    _supplement_capi_ship_value(result, capi_profile.get("activeShip"))
     return result
+
+
+def _supplement_capi_ranks(result, capi_ranks):
+    """Fill only ranks the Journal has not established; never downgrade one."""
+    if not isinstance(capi_ranks, dict):
+        return
+    rows = result.get("ranks")
+    if not isinstance(rows, list):
+        return
+    for row in rows:
+        if not isinstance(row, dict) or row.get("known"):
+            continue
+        value = capi_ranks.get(str(row.get("key") or "").casefold())
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            row.update({"known": True, "rank": value, "rankBasis": "FRONTIER CAPI"})
+
+
+def _supplement_capi_ship_value(result, active_ship):
+    """Expose a CAPI rebuy estimate when the Journal offers no ship value."""
+    if not isinstance(active_ship, dict):
+        return
+    total = active_ship.get("value")
+    rebuy = active_ship.get("rebuy")
+    if isinstance(total, int) and not isinstance(total, bool) and total > 0:
+        existing = result.get("shipValue")
+        if not (isinstance(existing, dict) and existing.get("known")):
+            result["shipValue"] = {
+                "known": True, "value": total,
+                "rebuy": int(rebuy) if isinstance(rebuy, (int, float))
+                and not isinstance(rebuy, bool) else round(total * 0.05),
+                "basis": "FRONTIER CAPI",
+                "timestamp": str(active_ship.get("observedAt") or ""),
+            }
 
 
 def merge_capi_fleet(fleet_state, capi_profile):
@@ -6796,6 +6831,12 @@ def merge_capi_fleet(fleet_state, capi_profile):
     remote = capi_profile.get("activeShip")
     remote = remote if isinstance(remote, dict) else {}
     if not remote.get("known") or not remote.get("id"):
+        _merge_capi_fleet_roster(rows, capi_profile.get("fleet"), result.get("active_id"))
+        rows.sort(key=lambda row: (
+            str(row.get("type") or "").casefold(),
+            str(row.get("name") or "").casefold(),
+            str(row.get("id") or ""),
+        ))
         result["ships"] = rows
         return result
 
@@ -6836,6 +6877,7 @@ def merge_capi_fleet(fleet_state, capi_profile):
             if existing.get("type") and existing.get("name")
             else str(existing.get("name") or existing.get("type") or f"Ship #{ship_id}")
         )
+    _merge_capi_fleet_roster(rows, capi_profile.get("fleet"), result.get("active_id"))
     rows.sort(key=lambda row: (
         str(row.get("type") or "").casefold(),
         str(row.get("name") or "").casefold(),
@@ -6843,6 +6885,62 @@ def merge_capi_fleet(fleet_state, capi_profile):
     ))
     result["ships"] = rows
     return result
+
+
+def _merge_capi_fleet_roster(rows, capi_fleet, active_id):
+    """Add or fill stored-ship rows from CAPI without touching Journal truth."""
+    if not isinstance(capi_fleet, list):
+        return
+    by_id = {str(row.get("id")): row for row in rows if isinstance(row, dict)}
+    supplement = ("type", "name", "ident", "systemName", "stationName")
+    for entry in capi_fleet:
+        if not isinstance(entry, dict) or entry.get("id") in (None, ""):
+            continue
+        ship_id = str(entry.get("id"))
+        existing = by_id.get(ship_id)
+        remote_time = normalize_timestamp(entry.get("observedAt"))
+        if existing is None:
+            new_row = {
+                "id": ship_id,
+                "status": "active" if ship_id == str(active_id or "") else "remote",
+                "isCurrent": ship_id == str(active_id or ""),
+                "observedAt": str(entry.get("observedAt") or ""),
+                "source": "frontier_capi",
+            }
+            for field_name in supplement:
+                if entry.get(field_name) not in (None, ""):
+                    new_row[field_name] = entry.get(field_name)
+            for field_name in ("value", "hullValue", "modulesValue"):
+                if isinstance(entry.get(field_name), int):
+                    new_row[field_name] = entry.get(field_name)
+            new_row["label"] = (
+                f"{new_row.get('type')} – {new_row.get('name')}"
+                if new_row.get("type") and new_row.get("name")
+                else str(new_row.get("name") or new_row.get("type")
+                         or f"Ship #{ship_id}")
+            )
+            rows.append(new_row)
+            by_id[ship_id] = new_row
+            continue
+        local_time = normalize_timestamp(existing.get("observedAt"))
+        remote_is_newer = bool(
+            remote_time is not None
+            and (local_time is None or remote_time > local_time)
+        )
+        for field_name in supplement:
+            value = entry.get(field_name)
+            if value in (None, ""):
+                continue
+            if remote_is_newer or existing.get(field_name) in (None, ""):
+                existing[field_name] = value
+        for field_name in ("value", "hullValue", "modulesValue"):
+            value = entry.get(field_name)
+            if isinstance(value, int) and (
+                remote_is_newer or not isinstance(existing.get(field_name), int)
+            ):
+                existing[field_name] = value
+        if entry.get("systemName") or entry.get("stationName"):
+            existing.setdefault("source", "frontier_capi")
 
 
 def powerplay_journal_overview(events):

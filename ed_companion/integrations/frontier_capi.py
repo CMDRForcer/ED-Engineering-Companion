@@ -111,14 +111,21 @@ def _readable_ship_type(value):
     conventional = {
         "ferdelance": "Fer-de-Lance",
         "krait_mkii": "Krait Mk II",
+        "krait_light": "Krait Phantom",
+        "typex": "Alliance Chieftain",
+        "typex_2": "Alliance Crusader",
+        "typex_3": "Alliance Challenger",
+        "panthermkii": "Panther Clipper Mk II",
+        "python_nx": "Python Mk II",
     }
     if internal.casefold() in conventional:
         return conventional[internal.casefold()]
-    words = re.sub(r"[_-]+", " ", internal).split()
+    # Split snake_case and camelCase so "PantherMkII" reads as "Panther Mk II".
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", re.sub(r"[_-]+", " ", internal))
     return " ".join(
         word.upper() if word.casefold() in {"ii", "iii", "iv", "mk"}
         else word.capitalize()
-        for word in words
+        for word in spaced.split()
     )
 
 
@@ -368,8 +375,69 @@ def _response_timestamp(response, payload, utcnow: Callable):
     return utcnow().astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _clean_int(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return max(0, int(value))
+
+
+def _value_parts(container):
+    value = container.get("value") if isinstance(container, Mapping) else None
+    if isinstance(value, Mapping):
+        return (
+            _clean_int(value.get("total")),
+            _clean_int(value.get("hull")),
+            _clean_int(value.get("modules")),
+        )
+    return (_clean_int(value), None, None)
+
+
+# Frontier's ``/profile`` commander.rank keys that EDEC surfaces. Reputation
+# and rank progress are intentionally not present in the profile document.
+FRONTIER_RANK_KEYS = (
+    "combat", "trade", "explore", "cqc",
+    "federation", "empire", "soldier", "exobiologist",
+)
+
+
+def _project_fleet(payload, observed_at, current_ship_id):
+    ships = payload.get("ships") if isinstance(payload, Mapping) else None
+    if isinstance(ships, Mapping):
+        entries = ships.values()
+    elif isinstance(ships, list):
+        entries = ships
+    else:
+        return []
+    rows = []
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        raw_id = entry.get("id")
+        if raw_id in (None, ""):
+            continue
+        total, hull, modules = _value_parts(entry)
+        system = entry.get("starsystem")
+        system = system if isinstance(system, Mapping) else {}
+        station = entry.get("station")
+        station = station if isinstance(station, Mapping) else {}
+        rows.append({
+            "id": str(raw_id),
+            "type": _readable_ship_type(entry.get("name") or entry.get("type")),
+            "name": str(entry.get("shipName") or "").strip(),
+            "ident": str(entry.get("shipID") or entry.get("shipIdent") or "").strip(),
+            "value": total,
+            "hullValue": hull,
+            "modulesValue": modules,
+            "systemName": str(system.get("name") or "").strip(),
+            "stationName": str(station.get("name") or "").strip(),
+            "isCurrent": str(raw_id) == str(current_ship_id or ""),
+            "observedAt": observed_at,
+        })
+    return rows
+
+
 def project_profile_snapshot(snapshot):
-    """Project only conservative Commander and current-ship profile fields."""
+    """Project conservative Commander, fleet and current-ship profile fields."""
     snapshot = snapshot if isinstance(snapshot, Mapping) else {}
     payload = snapshot.get("payload")
     payload = payload if isinstance(payload, Mapping) else {}
@@ -383,20 +451,26 @@ def project_profile_snapshot(snapshot):
     credits_known = isinstance(credits_value, (int, float)) and not isinstance(
         credits_value, bool
     )
+    current_ship_id = commander.get("currentShipId")
     ship_id = ship.get("id")
     if ship_id in (None, ""):
-        ship_id = commander.get("currentShipId")
+        ship_id = current_ship_id
     ship_type = _readable_ship_type(ship.get("name") or ship.get("type"))
     ship_name = str(
         ship.get("shipName") or ship.get("userShipName") or ""
     ).strip()
     ship_ident = str(
-        ship.get("shipIdent") or ship.get("userShipId") or ""
+        ship.get("shipID") or ship.get("shipIdent") or ship.get("userShipId") or ""
     ).strip()
-    value = ship.get("value")
-    if isinstance(value, Mapping):
-        value = value.get("total")
-    value_known = isinstance(value, (int, float)) and not isinstance(value, bool)
+    total, hull, modules = _value_parts(ship)
+
+    ranks_source = commander.get("rank")
+    ranks_source = ranks_source if isinstance(ranks_source, Mapping) else {}
+    ranks = {
+        key: _clean_int(ranks_source.get(key))
+        for key in FRONTIER_RANK_KEYS
+        if _clean_int(ranks_source.get(key)) is not None
+    }
 
     return {
         "observedAt": observed_at,
@@ -410,13 +484,18 @@ def project_profile_snapshot(snapshot):
             "timestamp": observed_at,
             "basis": "FRONTIER CAPI",
         },
+        "ranks": ranks,
         "activeShip": {
             "known": bool(ship_id not in (None, "") and ship_type),
             "id": str(ship_id or ""),
             "type": ship_type,
             "name": ship_name,
             "ident": ship_ident,
-            "value": max(0, int(value)) if value_known else None,
+            "value": total,
+            "hullValue": hull,
+            "modulesValue": modules,
+            "rebuy": round((total or 0) * 0.05) if total else None,
             "observedAt": observed_at,
         },
+        "fleet": _project_fleet(payload, observed_at, current_ship_id),
     }
