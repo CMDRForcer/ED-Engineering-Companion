@@ -100,7 +100,7 @@ class FrontierOAuthCallbackTests(unittest.TestCase):
         self.assertIn('"edec://oauth/callback"', source)
         self.assertIn('name="referrer" content="no-referrer"', source)
         self.assertIn(
-            'href="https://cmdrforcer.github.io/ED-Engineering-Companion/oauth/callback.html"',
+            'href="https://cmdrforcer.github.io/oauth/callback.html"',
             source,
         )
         self.assertNotIn("fetch(", source)
