@@ -110,14 +110,12 @@ from ed_companion.navigation.hge import (
     recent_unverified_hge_summary,
     rank_all_hge_sightings,
     rank_hge_candidate_systems,
-    rank_hge_sightings,
     rank_state_find_systems,
 )
 from ed_companion.navigation.mining_finder import (
     fetch_spansh_system_dump,
     is_mining_commodity_signal,
     merge_mining_candidate_batch,
-    merge_mining_candidates,
     mining_candidate_freshness,
     project_eddn_mining_candidates,
     project_spansh_mining_candidates,
@@ -2734,7 +2732,6 @@ class CockpitController(QObject):
             state, sightings, eddn_context,
         )
         local_scan = state.get("localStateFindScan", {}) or {}
-        current_system = str(state.get("system") or "").strip().casefold()
         rows = []
         for candidate in rank_state_find_systems(
             observations, origin,
@@ -4677,17 +4674,6 @@ class CockpitController(QObject):
         installed_quality_known = bool(
             selected.get("engineeringQualityKnown")
         )
-
-    def _engineering_run_preflight(self):
-        return self._cached_derived(
-            "engineering_run_preflight", (
-                self._state_revision, tuple(sorted(self._deferred_engineers))
-            ),
-            lambda: engineering_run_preflight(
-                self._state,
-                self._engineer_mission_route() + self._engineer_unlock_tasks(),
-            ),
-        )
         selected_name = str(self._selected_blueprint.get("name") or "")
         matches = bool(
             installed_grade > 0 and installed_name and selected_name
@@ -4719,6 +4705,17 @@ class CockpitController(QObject):
             self._current_grade = max(
                 0, min(installed_grade, self._target_grade) - 1
             )
+
+    def _engineering_run_preflight(self):
+        return self._cached_derived(
+            "engineering_run_preflight", (
+                self._state_revision, tuple(sorted(self._deferred_engineers))
+            ),
+            lambda: engineering_run_preflight(
+                self._state,
+                self._engineer_mission_route() + self._engineer_unlock_tasks(),
+            ),
+        )
 
     @Slot(int)
     def setCurrentGrade(self, grade):
@@ -5499,7 +5496,9 @@ class CockpitController(QObject):
                     "profile": {},
                     "error": str(exc),
                 })
-            except Exception as exc:  # noqa: BLE001 - never strand the UI
+            except Exception as exc:
+                # Any unexpected failure must still report back, or the tab
+                # stays pinned in its busy state until the app restarts.
                 LOGGER.exception("Frontier CAPI worker failed")
                 self.frontierFinished.emit({
                     "requestToken": request_token,
@@ -6817,12 +6816,6 @@ class CockpitController(QObject):
                 continue
             self._station_fingerprints[filename] = fingerprint
             self._station_rejections.pop(filename, None)
-            count = len(
-                prepared["message"].get("commodities")
-                or prepared["message"].get("modules")
-                or prepared["message"].get("ships")
-                or []
-            )
             changed = True
         if changed:
             self._save_eddn_cursor()
