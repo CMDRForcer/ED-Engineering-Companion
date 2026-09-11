@@ -514,6 +514,19 @@ def cleanup_startup_persistence_temps():
         cleanup_stale_atomic_temps(directory)
 
 
+def tray_status_text(mode, journal_health):
+    """Compose the tray Status line from the live Journal watcher state.
+
+    Deliberately independent of controller.activity, which is a one-shot
+    toast for the last user action (e.g. "Windows autostart enabled.") and
+    would otherwise freeze this persistent line until the next unrelated
+    toast fires.
+    """
+    health = journal_health if isinstance(journal_health, dict) else {}
+    journal_status = str(health.get("status") or "UNKNOWN")
+    return f"{mode} · JOURNAL {journal_status}"
+
+
 class TrayRuntime(QObject):
     """Own the optional Windows tray lifecycle without changing app logic."""
 
@@ -590,7 +603,9 @@ class TrayRuntime(QObject):
         else:
             mode = "RUNNING IN BACKGROUND" if self.enabled() and not self.window.isVisible() else "WINDOW OPEN"
         self.controller.setBackgroundRuntimeStatus(mode)
-        self.status_action.setText(f"{mode} · {self.controller.activity}")
+        self.status_action.setText(
+            tray_status_text(mode, self.controller.journalHealth)
+        )
 
     def show_window(self):
         self.window.show()
