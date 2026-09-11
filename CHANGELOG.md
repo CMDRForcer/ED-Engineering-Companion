@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.5 — 2026-09-11
+
+### Fixed
+
+- The CMDR finance ticker could raise a `ZeroDivisionError` if ever asked
+  to downsample its history to a single point (`limit=1`); it now returns
+  the most recent point instead of dividing by zero. Not reachable through
+  today's UI (the only caller uses the default limit of 180), fixed as a
+  latent landmine found during a full manual code review.
+
+### Changed
+
+- Closing pass of the full manual code-quality review started in 1.1.2:
+  read every module under `ed_companion/`, including the two largest
+  files (`state.py`, `controller.py`) in targeted high-risk slices
+  (journal caching/rewrite detection, engineer-craft reconciliation, the
+  EDDN and INARA privacy-filtering pipelines, engineering-slot
+  projection), plus whole-codebase mechanical scans (ruff's correctness
+  ruleset, duplicate-line detection, dead-code-after-return detection,
+  None/bool comparison anti-patterns). No further defects found beyond
+  the fix above; several suspected issues were investigated and confirmed
+  correct as written.
+
 ## 1.1.4 — 2026-09-11
 
 ### Fixed
