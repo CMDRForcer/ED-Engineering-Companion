@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.8 — 2026-09-11
+
+### Fixed
+
+- The Connections page's EDDN card could show `ENABLED` next to "EDDN
+  network access is disabled." on every startup where EDDN was already
+  enabled from a previous session. The status badge was always computed
+  live from the saved consent flag, but the detail text under it was
+  hardcoded to the disabled message at controller start, regardless of
+  what was actually loaded from disk.
+
 ## 1.1.7 — 2026-09-11
 
 ### Changed
