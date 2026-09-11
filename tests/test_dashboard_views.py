@@ -7,6 +7,7 @@ from ed_companion.phase14.dashboard_views import (
     build_commander_cards,
     build_finance_history,
     build_finance_summary,
+    build_interface_activity_feed,
     filter_finance_history,
     build_logbook_view,
 )
@@ -585,6 +586,69 @@ class CapiLoadoutFallbackTests(unittest.TestCase):
         self.assertNotIn("loadoutSource", merged)
 
 
+class InterfaceActivityFeedTests(unittest.TestCase):
+    def test_merges_all_three_services_newest_first(self):
+        rows = build_interface_activity_feed(
+            inara_receipts=[{
+                "timestamp": "2026-09-11T10:00:00Z",
+                "operation": "Journal batch accepted",
+                "detail": "3 accepted",
+            }],
+            eddn_queue=[{
+                "status": "sent", "sent_at": "2026-09-11T12:00:00Z",
+                "event": {"schema": "journal/1"},
+                "last_result": "Gateway accepted HTTP 200",
+            }],
+            frontier_last_sync="2026-09-11T11:00:00Z",
+        )
+
+        self.assertEqual(
+            [row["service"] for row in rows], ["EDDN", "FRONTIER CAPI", "INARA"],
+        )
+        self.assertEqual(rows[0]["summary"], "journal/1")
+        self.assertEqual(rows[0]["direction"], "SENT")
+        self.assertEqual(rows[1]["direction"], "RECEIVED")
+
+    def test_only_actually_sent_eddn_jobs_are_included(self):
+        rows = build_interface_activity_feed(
+            inara_receipts=[],
+            eddn_queue=[
+                {"status": "queued", "sent_at": "", "event": {}},
+                {"status": "retry", "sent_at": "", "event": {}},
+                {"status": "failed", "sent_at": "", "event": {}},
+                {
+                    "status": "sent", "sent_at": "2026-09-11T09:00:00Z",
+                    "event": {"schema": "commodity/3"},
+                },
+            ],
+            frontier_last_sync="",
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["summary"], "commodity/3")
+
+    def test_rows_without_a_timestamp_are_dropped(self):
+        rows = build_interface_activity_feed(
+            inara_receipts=[{"operation": "No timestamp"}],
+            eddn_queue=[{"status": "sent", "event": {}}],
+            frontier_last_sync="",
+        )
+        self.assertEqual(rows, [])
+
+    def test_respects_the_limit(self):
+        receipts = [
+            {"timestamp": f"2026-09-{day:02d}T00:00:00Z", "operation": "x"}
+            for day in range(1, 11)
+        ]
+        rows = build_interface_activity_feed(receipts, [], "", limit=3)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["timestamp"], "2026-09-10T00:00:00Z")
+
+    def test_empty_inputs_are_safe(self):
+        self.assertEqual(build_interface_activity_feed(None, None, ""), [])
+        self.assertEqual(build_interface_activity_feed([None], [None], None), [])
+
+
 class EddnInitialStatusTests(unittest.TestCase):
     def test_matches_the_status_badge_for_a_returning_user_with_consent(self):
         # Connections card status badge is "ENABLED" whenever consent is
@@ -599,6 +663,36 @@ class EddnInitialStatusTests(unittest.TestCase):
         self.assertEqual(
             CockpitController._eddn_initial_status(False),
             "EDDN network access is disabled.",
+        )
+
+
+class InaraInitialStatusTests(unittest.TestCase):
+    def test_configured_and_consenting_shows_ready_to_sync(self):
+        self.assertEqual(
+            CockpitController._inara_initial_status(
+                {"consent": True, "api_key": "k"}
+            ),
+            "Configured from saved settings. Ready to sync.",
+        )
+
+    def test_consent_without_a_key_is_distinguished(self):
+        self.assertEqual(
+            CockpitController._inara_initial_status({"consent": True}),
+            "Consent enabled, but no API key stored yet.",
+        )
+
+    def test_key_without_consent_is_distinguished(self):
+        self.assertEqual(
+            CockpitController._inara_initial_status(
+                {"consent": False, "api_key": "k"}
+            ),
+            "API key stored. Network access remains disabled.",
+        )
+
+    def test_fresh_install_shows_the_generic_default(self):
+        self.assertEqual(
+            CockpitController._inara_initial_status(None),
+            "Ready. No network request has been made.",
         )
 
 

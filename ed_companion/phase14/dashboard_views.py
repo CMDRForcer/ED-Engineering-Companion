@@ -309,3 +309,58 @@ def build_logbook_view(
     """Decorate and filter normalized Logbook rows for QML."""
     decorated = [decorate_logbook_entry(row, notes) for row in rows]
     return filter_logbook_entries(decorated, category, query)
+
+
+def build_interface_activity_feed(
+    inara_receipts: list[dict[str, Any]] | None,
+    eddn_queue: list[dict[str, Any]] | None,
+    frontier_last_sync: str = "",
+    limit: int = 30,
+) -> list[dict[str, Any]]:
+    """Merge completed INARA/EDDN/Frontier CAPI activity into one Diagnostics feed.
+
+    Only actually-completed deliveries are included (successful EDDN
+    uploads, INARA receipts). Currently queued, retrying or failed EDDN
+    jobs already have their own live view on the Connections page; this is
+    a "what was sent or received, and when" record, not a queue monitor.
+    Every field here is already public-safe (schema names, HTTP outcomes,
+    operation labels) - never raw message payloads.
+    """
+    rows: list[dict[str, Any]] = []
+    for receipt in inara_receipts or []:
+        if not isinstance(receipt, dict):
+            continue
+        timestamp = str(receipt.get("timestamp") or "")
+        if not timestamp:
+            continue
+        rows.append({
+            "service": "INARA",
+            "direction": "SENT",
+            "timestamp": timestamp,
+            "summary": str(receipt.get("operation") or "Event"),
+            "detail": str(receipt.get("detail") or ""),
+        })
+    for job in eddn_queue or []:
+        if not isinstance(job, dict) or job.get("status") != "sent":
+            continue
+        timestamp = str(job.get("sent_at") or "")
+        if not timestamp:
+            continue
+        event = job.get("event") if isinstance(job.get("event"), dict) else {}
+        rows.append({
+            "service": "EDDN",
+            "direction": "SENT",
+            "timestamp": timestamp,
+            "summary": str(event.get("schema") or "Upload"),
+            "detail": str(job.get("last_result") or ""),
+        })
+    if isinstance(frontier_last_sync, str) and frontier_last_sync:
+        rows.append({
+            "service": "FRONTIER CAPI",
+            "direction": "RECEIVED",
+            "timestamp": frontier_last_sync,
+            "summary": "Commander profile",
+            "detail": "",
+        })
+    rows.sort(key=lambda row: row["timestamp"], reverse=True)
+    return rows[:max(0, int(limit))]

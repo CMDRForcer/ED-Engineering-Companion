@@ -237,6 +237,7 @@ from .dashboard_views import (
     build_commander_cards,
     build_finance_history,
     build_finance_summary,
+    build_interface_activity_feed,
     filter_finance_history,
     build_logbook_view,
     decorate_logbook_entry,
@@ -570,7 +571,7 @@ class CockpitController(QObject):
         if journal_identity.upper().startswith("F"):
             self._inara_config["frontier_id"] = journal_identity
         self._save_inara_config()
-        self._inara_status = "Ready. No network request has been made."
+        self._inara_status = self._inara_initial_status(self._inara_config)
         self._inara_busy = False
         self._active_inara_request = None
         self._inara_pending_since = 0.0
@@ -3992,6 +3993,13 @@ class CockpitController(QObject):
         "QVariantList", lambda self: self._service_status(),
         notify=connectionChanged,
     )
+    interfaceActivity = Property(
+        "QVariantList",
+        lambda self: build_interface_activity_feed(
+            self._inara_receipts, self._eddn_queue, self._frontier_last_sync,
+        ),
+        notify=connectionChanged,
+    )
     journalHealth = Property(
         "QVariantMap", lambda self: self._journal_health(),
         notify=journalHealthChanged,
@@ -5602,6 +5610,24 @@ class CockpitController(QObject):
             "activeShipId": str(fleet_state.get("active_id") or ""),
         }
         return merge_capi_loadout(merged, profile)
+
+    @staticmethod
+    def _inara_initial_status(config):
+        """Match the Connections card's status badge from the very first frame.
+
+        Mirrors the branching saveInaraConfig already uses, worded for a
+        session start rather than a just-completed save.
+        """
+        config = config if isinstance(config, dict) else {}
+        consent = bool(config.get("consent"))
+        has_key = bool(str(config.get("api_key") or "").strip())
+        if consent and has_key:
+            return "Configured from saved settings. Ready to sync."
+        if consent:
+            return "Consent enabled, but no API key stored yet."
+        if has_key:
+            return "API key stored. Network access remains disabled."
+        return "Ready. No network request has been made."
 
     @Slot(str, str, bool, bool)
     def saveInaraConfig(self, api_key, commander, consent, auto_sync):

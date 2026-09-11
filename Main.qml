@@ -7791,6 +7791,60 @@ ApplicationWindow {
                 }
             }
         }
+
+        ShadowCard {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 260
+            ColumnLayout {
+                anchors.fill: parent; anchors.margins: 18; spacing: 8
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label { text: window.t("diagnostics.interface_activity", "INTERFACE ACTIVITY"); color: textPrimary; font.pixelSize: 13; font.bold: true }
+                    Item { Layout.fillWidth: true }
+                    Label { text: window.tf("diagnostics.interface_activity_count", "%1 EVENTS", [cockpit.interfaceActivity.length]); color: muted; font.pixelSize: 10 }
+                }
+                Label {
+                    text: window.t("diagnostics.interface_activity_help", "What was actually sent to or received from INARA, EDDN and the Frontier Companion API, and when.")
+                    color: textSecondary; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true
+                }
+                ListView {
+                    id: interfaceActivityList
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    model: cockpit.interfaceActivity
+                    clip: true; spacing: 4
+                    ScrollBar.vertical: CockpitScrollBar {}
+                    delegate: Rectangle {
+                        required property var modelData
+                        width: interfaceActivityList.width; height: 30; radius: 6
+                        color: panelRaised
+                        RowLayout {
+                            anchors.fill: parent; anchors.margins: 8; spacing: 10
+                            Label {
+                                text: modelData.service
+                                color: modelData.service === "INARA" ? cyan
+                                       : modelData.service === "EDDN" ? green : orange
+                                font.pixelSize: 10; font.bold: true; Layout.preferredWidth: 100
+                            }
+                            Label { text: modelData.direction; color: muted; font.pixelSize: 9; Layout.preferredWidth: 60 }
+                            Label { text: modelData.summary; color: textPrimary; font.pixelSize: 10; Layout.preferredWidth: 140; elide: Text.ElideRight }
+                            Label {
+                                text: Qt.formatDateTime(new Date(modelData.timestamp), "dd.MM.yyyy · HH:mm:ss")
+                                color: textSecondary; font.pixelSize: 9; Layout.preferredWidth: 150
+                            }
+                            Label { text: modelData.detail; color: muted; font.pixelSize: 9; elide: Text.ElideRight; Layout.fillWidth: true }
+                        }
+                    }
+                    EmptyState {
+                        anchors.centerIn: parent
+                        visible: interfaceActivityList.count === 0
+                        symbol: "○"
+                        title: window.t("diagnostics.no_activity", "NO INTERFACE ACTIVITY YET")
+                        detail: window.t("diagnostics.no_activity_help", "Sends and receives will appear here once a service completes one.")
+                        tone: muted
+                    }
+                }
+            }
+        }
     }
         }
     }

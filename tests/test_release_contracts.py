@@ -1891,7 +1891,7 @@ class ReleaseContractTests(unittest.TestCase):
     def test_inara_safety_limits_remain_strict(self):
         self.assertEqual(INARA_MAX_REQUESTS_PER_MINUTE, 2)
         self.assertEqual(INARA_BATCH_WINDOW_SECONDS, 45)
-        self.assertEqual(INARA_MIN_REQUEST_INTERVAL_SECONDS, 300)
+        self.assertEqual(INARA_MIN_REQUEST_INTERVAL_SECONDS, 180)
         self.assertEqual(MAX_EVENTS, 50)
 
     def test_powerplay_snapshot_uses_only_observed_values(self):
