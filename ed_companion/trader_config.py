@@ -15,7 +15,10 @@ TRADER_TYPE_STALE_DAYS = {
     "external": 30,
     "heuristic": 7,
 }
-HEURISTIC_TRADER_WARNING = "Ungeprüft – vor Ort bestätigen"
+# Interface translation key (see ed_data/i18n/*.json), not display text —
+# QML must resolve it through window.t() so every supported language shows
+# its own warning instead of this literal.
+HEURISTIC_TRADER_WARNING_KEY = "materials.trader_heuristic_warning"
 
 
 def trader_type_cache_path() -> Path:

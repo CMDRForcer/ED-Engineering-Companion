@@ -359,6 +359,7 @@
   "materials.raw_missing": "MATÉRIAUX BRUTS MANQUANTS",
   "materials.raw_order": "Seulement la demande actuelle de Wishlist · triée par grade, puis manquante quantité",
   "materials.raw_ready": "PRÊT · AUCUN MATÉRIAU BRUT REQUIS POUR LES PLANS ACTUELS",
+  "materials.trader_heuristic_warning": "Non vérifié – à confirmer sur place",
   "materials.safe_surplus": "SURPLUS SÛR",
   "materials.search": "Matériel de recherche ou catégorie...",
   "materials.show": "AFFICHER LES MATÉRIAUX",

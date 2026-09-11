@@ -359,6 +359,7 @@
   "materials.raw_missing": "FARM MISSING · MATERIALES RAW",
   "materials.raw_order": "Sólo demanda actual de la lista de deseos · clasificado por grado, luego falta cantidad",
   "materials.raw_ready": "NO FALTAN MATERIAS PRIMAS PARA LOS PLANES ACTUALES",
+  "materials.trader_heuristic_warning": "Sin verificar – confirmar en el lugar",
   "materials.safe_surplus": "SUPERÁVIT SEGURO",
   "materials.search": "Material de búsqueda o categoría...",
   "materials.show": "MOSTRAR",

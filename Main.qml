@@ -2031,7 +2031,7 @@ ApplicationWindow {
                                     }
                                     Label {
                                         visible: !!modelData.traderWarning
-                                        text: modelData.traderWarning
+                                        text: window.t(modelData.traderWarning, "Unverified – confirm on site")
                                         color: orange; font.pixelSize: 11; font.bold: true
                                     }
                                     Label {
@@ -8654,7 +8654,7 @@ ApplicationWindow {
                                     }
                                     Label {
                                         visible: !!materialDetailsOverlay.safeTrader.traderWarning
-                                        text: materialDetailsOverlay.safeTrader.traderWarning || ""
+                                        text: window.t(materialDetailsOverlay.safeTrader.traderWarning || "", "Unverified – confirm on site")
                                         color: orange; font.pixelSize: 11; font.bold: true
                                     }
                                 }

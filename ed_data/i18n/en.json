@@ -147,6 +147,7 @@
   "materials.raw_order": "Only current Wishlist demand · sorted by grade, then missing amount",
   "materials.copy_coords": "COPY COORDS",
   "materials.raw_ready": "READY · NO RAW MATERIALS MISSING FOR CURRENT PLANS",
+  "materials.trader_heuristic_warning": "Unverified – confirm on site",
   "engineers.overview": "OVERVIEW",
   "engineers.unlock_guide": "UNLOCK GUIDE",
   "engineers.tech_brokers": "TECH BROKERS",

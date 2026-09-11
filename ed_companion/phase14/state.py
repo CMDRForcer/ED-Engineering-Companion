@@ -53,7 +53,7 @@ from ed_companion.navigation import (
 from ed_companion.navigation.trader import is_material_tradeable
 from ed_companion.navigation.mining_finder import project_local_mining_evidence
 from ed_companion.navigation.trader_type_cache import normalize_timestamp
-from ed_companion.trader_config import HEURISTIC_TRADER_WARNING
+from ed_companion.trader_config import HEURISTIC_TRADER_WARNING_KEY
 from ed_companion.material_integrity import material_key
 from ed_companion.module_identity import (
     canonical_module_id,
@@ -7456,7 +7456,7 @@ def build_state(
             "traderConfidence": confidence,
             "traderSource": source,
             "traderWarning": (
-                HEURISTIC_TRADER_WARNING
+                HEURISTIC_TRADER_WARNING_KEY
                 if confidence == "heuristic" else ""
             ),
         })

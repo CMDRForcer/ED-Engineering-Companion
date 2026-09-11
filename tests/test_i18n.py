@@ -132,6 +132,36 @@ class TranslationCatalogTests(unittest.TestCase):
         self.assertIn('key = "arissalavignyduval"', qml)
         self.assertIn('t("powerplay.leader." + key + ".biography"', qml)
 
+    def test_heuristic_trader_warning_is_a_translation_key_not_literal_text(self):
+        """The Python side must hand QML a key, never display text directly.
+
+        traderWarning used to carry a hardcoded German string straight into
+        Main.qml's `text:` binding, so every language (including English)
+        showed it untranslated. QML's own static-text scan cannot catch
+        this shape (the binding is a property reference, not a literal).
+        """
+        from ed_companion.trader_config import HEURISTIC_TRADER_WARNING_KEY
+
+        root = Path(__file__).resolve().parents[1]
+        catalogs = {
+            language: json.loads(
+                (root / "ed_data" / "i18n" / f"{language}.json").read_text(
+                    encoding="utf-8-sig"
+                )
+            )
+            for language in SUPPORTED_LANGUAGES
+        }
+        for language, catalog in catalogs.items():
+            self.assertIn(HEURISTIC_TRADER_WARNING_KEY, catalog, language)
+
+        qml = (root / "Main.qml").read_text(encoding="utf-8-sig")
+        for line in qml.splitlines():
+            if "traderWarning" in line and "text:" in line:
+                self.assertTrue(
+                    "window.t(" in line or "window.tf(" in line,
+                    f"traderWarning rendered without translation: {line.strip()}",
+                )
+
     def test_missing_translation_falls_back_to_english_then_source(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

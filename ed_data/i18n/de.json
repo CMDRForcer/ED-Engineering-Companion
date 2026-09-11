@@ -186,6 +186,7 @@
   "materials.raw_missing": "FEHLENDE ROHMATERIALIEN SAMMELN",
   "materials.raw_order": "Nur aktueller Wunschlistenbedarf · nach Grad und Fehlmenge sortiert",
   "materials.raw_ready": "BEREIT · KEINE ROHMATERIALIEN FÜR AKTUELLE PLÄNE FEHLEN",
+  "materials.trader_heuristic_warning": "Ungeprüft – vor Ort bestätigen",
   "materials.search": "Material oder Kategorie suchen…",
   "materials.show": "ANZEIGEN",
   "materials.stock_protected": "Für den Build reservierter Bestand wird nie zum Tausch angeboten.",
