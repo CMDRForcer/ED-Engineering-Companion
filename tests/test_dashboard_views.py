@@ -71,6 +71,16 @@ class DashboardViewTests(unittest.TestCase):
         self.assertEqual(result[0]["note"], "Prismatic shields")
         self.assertIn("prismatic shields", result[0]["searchText"])
 
+    def test_finance_history_limit_of_one_returns_the_newest_point(self):
+        rows = build_finance_history([
+            {"event": "LoadGame", "timestamp": "2026-01-01T10:00:00Z", "Credits": 100},
+            {"event": "LoadGame", "timestamp": "2026-01-02T10:00:00Z", "Credits": 125},
+            {"event": "LoadGame", "timestamp": "2026-01-03T10:00:00Z", "Credits": 150},
+        ], limit=1)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["credits"], 150)
+
     def test_finance_history_uses_only_authoritative_snapshots(self):
         rows = build_finance_history([
             {"event": "LoadGame", "timestamp": "2026-01-01T10:00:00Z", "Credits": 100},

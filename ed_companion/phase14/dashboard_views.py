@@ -100,6 +100,8 @@ def build_finance_history(
         rows.append(row)
     if limit <= 0 or len(rows) <= limit:
         return rows
+    if limit == 1:
+        return rows[-1:]
     step = (len(rows) - 1) / float(limit - 1)
     return [rows[round(index * step)] for index in range(limit)]
 
