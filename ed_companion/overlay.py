@@ -1,6 +1,7 @@
 """Presentation-only engineering overlay settings and window geometry."""
 
 import json
+import os
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, Property, QRect, QTimer, Signal, Slot
@@ -30,8 +31,8 @@ def clamp_overlay_geometry(saved, screens, fallback_size=(420, 230)):
     ax, ay, aw, ah = (int(value) for value in available)
     width = max(300, min(int((saved or {}).get("width") or fallback_size[0]), aw))
     height = max(170, min(int((saved or {}).get("height") or fallback_size[1]), ah))
-    x = int((saved or {}).get("x", ax + 32))
-    y = int((saved or {}).get("y", ay + 32))
+    x = int((saved or {}).get("x") if (saved or {}).get("x") is not None else ax + 32)
+    y = int((saved or {}).get("y") if (saved or {}).get("y") is not None else ay + 32)
     x = max(ax, min(x, ax + aw - width))
     y = max(ay, min(y, ay + ah - height))
     return (x, y, width, height), str(screen.get("id") or "")
@@ -43,7 +44,7 @@ class OverlaySettings(QObject):
     def __init__(self, path=None, parent=None):
         super().__init__(parent)
         self.path = Path(path) if path else (
-            Path(__import__("os").environ.get("LOCALAPPDATA")
+            Path(os.environ.get("LOCALAPPDATA")
                  or (Path.home() / "AppData" / "Local"))
             / "EDEngineeringCompanion" / "overlay_settings.json"
         )

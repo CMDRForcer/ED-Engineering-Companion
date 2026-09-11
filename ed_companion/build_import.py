@@ -653,7 +653,7 @@ def preview_build(value, target_ship_type, blueprints, experimentals,
         str(row.get("slot") or ""): row
         for row in (physical_slots or []) if isinstance(row, dict)
     }
-    for position, module in enumerate(selected["modules"], 1):
+    for module in selected["modules"]:
         if not isinstance(module, dict):
             continue
         source_slot = str(

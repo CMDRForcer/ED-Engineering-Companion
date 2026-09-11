@@ -236,6 +236,7 @@ def fetch_nearest_traders(
             )
         except Exception as exc:
             errors[category] = str(exc)
+        _pause_between_requests(index, len(categories))
     return {
         "locations": locations,
         "errors": errors,
@@ -269,7 +270,6 @@ def fetch_trader_catalog_updates(
             locations.extend(rows)
         except Exception as exc:
             errors[category] = str(exc)
-        _pause_between_requests(index, len(categories))
         _pause_between_requests(index, len(categories))
     return {
         "stations": locations,

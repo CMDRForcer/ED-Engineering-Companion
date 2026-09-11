@@ -45,6 +45,18 @@ class OverlayTests(unittest.TestCase):
         self.assertLessEqual(x + width, 1380)
         self.assertLessEqual(y + height, 770)
 
+    def test_null_saved_position_falls_back_instead_of_raising(self):
+        rectangle, screen_id = clamp_overlay_geometry(
+            {"screen": "PRIMARY", "x": None, "y": None,
+             "width": 420, "height": 230},
+            [{"id": "PRIMARY", "available": (100, 50, 1280, 720),
+              "primary": True}],
+        )
+
+        x, y, _width, _height = rectangle
+        self.assertEqual(screen_id, "PRIMARY")
+        self.assertEqual((x, y), (132, 82))
+
     def test_overlay_uses_main_process_controller_state_without_domain_logic(self):
         root = Path(__file__).resolve().parents[1]
         main_source = (root / "phase14_main.py").read_text(encoding="utf-8")
