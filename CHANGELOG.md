@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.4 — 2026-09-11
+
+### Fixed
+
+- The unconfirmed-trader warning ("Unverified – confirm on site") was
+  hardcoded German text handed straight to Main.qml's display binding, so
+  it showed untranslated in every interface language, including English.
+  It is now a translation key resolved through the same catalog as the
+  rest of the interface, with entries in all four supported languages.
+
 ## 1.1.3 — 2026-09-11
 
 ### Fixed
