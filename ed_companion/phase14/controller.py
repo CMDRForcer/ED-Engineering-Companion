@@ -721,7 +721,9 @@ class CockpitController(QObject):
         # Full Journal context is projected by the startup worker below.
         self._eddn_context = {}
         self._eddn_busy = False
-        self._eddn_status = "EDDN network access is disabled."
+        self._eddn_status = self._eddn_initial_status(
+            self._eddn_config.get("consent")
+        )
         self._save_eddn()
         self._eddn_listener_status = "Disabled"
         self._state_find_refresh_status = "NOT REFRESHED THIS SESSION"
@@ -6379,6 +6381,21 @@ class CockpitController(QObject):
             f"{receipt['elapsedMs']} ms"
         )
         self.connectionChanged.emit()
+
+    @staticmethod
+    def _eddn_initial_status(consent):
+        """Match the Connections card's status badge from the very first frame.
+
+        The badge is derived live from _eddn_config.get("consent"); the
+        detail text must start from the same value instead of a hardcoded
+        "disabled" default, or a returning user with EDDN already enabled
+        sees ENABLED contradicted by "EDDN network access is disabled."
+        until an unrelated status update happens to overwrite it.
+        """
+        return (
+            "EDDN enabled from saved settings."
+            if consent else "EDDN network access is disabled."
+        )
 
     @Slot(bool, bool, bool)
     def saveEddnConfig(self, consent, upload_enabled, listener_enabled):

@@ -585,6 +585,23 @@ class CapiLoadoutFallbackTests(unittest.TestCase):
         self.assertNotIn("loadoutSource", merged)
 
 
+class EddnInitialStatusTests(unittest.TestCase):
+    def test_matches_the_status_badge_for_a_returning_user_with_consent(self):
+        # Connections card status badge is "ENABLED" whenever consent is
+        # truthy; the detail text must agree from the very first frame
+        # instead of defaulting to "disabled" regardless of saved settings.
+        self.assertEqual(
+            CockpitController._eddn_initial_status(True),
+            "EDDN enabled from saved settings.",
+        )
+
+    def test_matches_the_status_badge_when_consent_was_never_given(self):
+        self.assertEqual(
+            CockpitController._eddn_initial_status(False),
+            "EDDN network access is disabled.",
+        )
+
+
 class FrontierConsentTests(unittest.TestCase):
     def _controller(self, directory):
         controller = CockpitController.__new__(CockpitController)
