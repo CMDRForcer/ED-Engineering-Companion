@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.7 — 2026-09-11
+
+### Changed
+
+- The system tray icon, tooltip and menu ("Open ED·OPS", "Exit ED·OPS",
+  "Restart ED·OPS", the "still running" notice) used a leftover "ED·OPS"
+  name from before the project was named. They now say EDEC, matching the
+  app's window title, About dialog, and the identity it already sends to
+  INARA and EDDN ("ED Engineering Companion").
+
 ## 1.1.6 — 2026-09-11
 
 ### Fixed
