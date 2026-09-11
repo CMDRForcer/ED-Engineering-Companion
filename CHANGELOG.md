@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.1.3 — 2026-09-11
+
+### Fixed
+
+- The engineering overlay no longer fails to start if its saved position
+  was ever recorded as `null` (e.g. a hand-edited or partially written
+  `overlay_settings.json`); it now falls back to the default corner like a
+  missing value already did.
+- Spansh trader lookups now pace requests consistently: `fetch_nearest_traders`
+  was missing the pause every other multi-request lookup in the same module
+  applies, and `fetch_trader_catalog_updates` was pausing twice per request
+  instead of once.
+
+### Changed
+
+- First slice of a full manual code-quality pass: removed a stray
+  `__import__("os")`, an unused loop-ordinal variable, and two duplicated
+  `_pause_between_requests` calls. No behaviour change beyond the two fixes
+  above.
+
 ## 1.1.2 — 2026-09-10
 
 ### Fixed
