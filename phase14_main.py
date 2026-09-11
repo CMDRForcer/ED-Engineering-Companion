@@ -540,10 +540,10 @@ class TrayRuntime(QObject):
         self.available = QSystemTrayIcon.isSystemTrayAvailable()
         self.controller.setSystemTrayAvailable(self.available)
         self.tray = QSystemTrayIcon(self)
-        self.tray.setToolTip("ED\u00b7OPS · Journal and EDDN monitor")
+        self.tray.setToolTip("EDEC · Journal and EDDN monitor")
         self.tray.setIcon(app.style().standardIcon(QStyle.SP_ComputerIcon))
         self.menu = QMenu()
-        self.open_action = QAction("Open ED\u00b7OPS", self.menu)
+        self.open_action = QAction("Open EDEC", self.menu)
         self.refresh_action = QAction("Refresh Journal now", self.menu)
         self.overlay_action = QAction("Show Engineering Overlay", self.menu)
         self.overlay_action.setCheckable(True)
@@ -553,8 +553,8 @@ class TrayRuntime(QObject):
         self.overlay_click_action.setCheckable(True)
         self.status_action = QAction("Status", self.menu)
         self.status_action.setEnabled(False)
-        self.exit_action = QAction("Exit ED\u00b7OPS", self.menu)
-        self.restart_action = QAction("Restart ED\u00b7OPS", self.menu)
+        self.exit_action = QAction("Exit EDEC", self.menu)
+        self.restart_action = QAction("Restart EDEC", self.menu)
         self.menu.addAction(self.open_action)
         self.menu.addAction(self.refresh_action)
         self.menu.addSeparator()
@@ -636,7 +636,7 @@ class TrayRuntime(QObject):
             event.ignore()
             self.window.hide()
             self.tray.showMessage(
-                "ED\u00b7OPS is still running",
+                "EDEC is still running",
                 "Journal, inventory and EDDN monitoring continue in the tray.",
                 QSystemTrayIcon.MessageIcon.Information,
                 3500,
