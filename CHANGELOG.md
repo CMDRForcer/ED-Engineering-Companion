@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.0 — 2026-09-11
+
+### Added
+
+- **Interface Activity** on the Diagnostics page: a merged, newest-first
+  record of what was actually sent to or received from INARA, EDDN and the
+  Frontier Companion API, and when — service, direction, a short summary
+  (schema name / operation), and a timestamp. Only completed deliveries
+  are listed; in-flight/retrying/failed EDDN jobs keep their existing live
+  view on the Connections page. Every field is already public-safe (schema
+  names, HTTP outcomes, operation labels) — never raw message content.
+
+### Changed
+
+- INARA auto-sync now batches at least every 3 minutes instead of 5
+  (`INARA_MIN_REQUEST_INTERVAL_SECONDS` 300 → 180). The burst limit
+  (2 requests/minute) and the 429 cooldown are unchanged, so a real rate
+  limit from INARA is still respected automatically.
+- The INARA card's startup detail text now reflects whether an API key and
+  consent were already saved, instead of always showing the generic
+  first-run message — the same fix applied to EDDN's card in 1.1.8.
+
 ## 1.1.8 — 2026-09-11
 
 ### Fixed
