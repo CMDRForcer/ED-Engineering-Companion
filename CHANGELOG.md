@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.6 — 2026-09-11
+
+### Fixed
+
+- The system tray's "Status" line got permanently stuck on whatever
+  one-shot toast last fired (e.g. "WINDOW OPEN · Windows autostart
+  enabled.") instead of showing anything about the Journal watcher it
+  claims to report on, because it reused `controller.activity` - designed
+  as a transient action confirmation, not a persistent status. It now
+  shows the live Journal health (`LIVE`/`READY`/`ERROR`/`NO JOURNAL`).
+
 ## 1.1.5 — 2026-09-11
 
 ### Fixed
