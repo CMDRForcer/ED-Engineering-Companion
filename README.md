@@ -164,3 +164,5 @@ See [`requirements.txt`](requirements.txt) for runtime dependencies. EDEC is und
 EDEC is licensed under the [GNU General Public License v3.0](LICENSE) and is free to use.
 
 ED Engineering Companion is an independent third-party project and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc.
+
+Exobiology reference data (`ed_data/exobiology_species.json`, `ed_data/exobiology_colony_ranges.json`) is EDEC's own re-expression of public game facts — spawn conditions, credit values and colony-range distances — not copied code. The colony-range distances are sourced from the [Elite Dangerous Fandom wiki](https://elite-dangerous.fandom.com/wiki/Exobiology_Sample_Values_and_Details) (CC BY-SA).

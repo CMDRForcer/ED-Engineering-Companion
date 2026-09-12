@@ -301,6 +301,7 @@ class SmokeTestRunner(QObject):
         ("cmdr", 10, "qa-page-cmdr"),
         ("powerplay", 11, "qa-page-powerplay"),
         ("mining-finder", 12, "qa-page-mining-finder"),
+        ("exobiology", 13, "qa-page-exobiology"),
     ]
     DIALOG_STEPS = [
         ("dialog-build-import", "qa-dialog-build-import"),

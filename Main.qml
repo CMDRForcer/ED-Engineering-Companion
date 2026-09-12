@@ -363,6 +363,7 @@ ApplicationWindow {
         {"id": "powerplay", "label": t("nav.powerplay", "POWERPLAY"), "icon": "\uE7C1", "page": 11},
         {"id": "cmdr", "label": t("nav.commander", "CMDR"), "icon": "\uE77B", "page": 10},
         {"id": "logbook", "label": t("nav.logbook", "LOGBOOK"), "icon": "\uE8FD", "page": 9},
+        {"id": "exobiology", "label": t("nav.exobiology", "EXOBIOLOGY"), "icon": "", "iconKind": "dna", "page": 13},
         {"id": "settings", "label": t("nav.settings", "SETTINGS"), "icon": "\uE713", "page": 5}
     ]
     property var navigationOrder: cockpit.navigationOrder || []
@@ -1078,12 +1079,19 @@ ApplicationWindow {
                             anchors.horizontalCenter: window.compactSidebar ? parent.horizontalCenter : undefined
                             spacing: 13
                             Label {
+                                visible: navTile.modelData.iconKind !== "dna"
                                 width: 24
                                 text: navTile.modelData.icon
                                 color: navTile.selectedNav ? accent : accentSecondary
                                 font.family: "Segoe Fluent Icons"
                                 font.pixelSize: 18
                                 horizontalAlignment: Text.AlignHCenter
+                            }
+                            DnaIcon {
+                                visible: navTile.modelData.iconKind === "dna"
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 24; height: 20
+                                color: navTile.selectedNav ? accent : accentSecondary
                             }
                             Label {
                                 visible: !window.compactSidebar
@@ -6614,6 +6622,19 @@ ApplicationWindow {
                         tone: cyan
                     }
                 }
+            }
+        }
+    }
+
+    Loader {
+        id: pageLoader13
+        anchors.fill: parent
+        active: window.currentPage === 13
+        asynchronous: false
+        sourceComponent: Component {
+            ExobiologyPage {
+                appWindow: window
+                sidebarWidth: sidebar.width
             }
         }
     }

@@ -65,6 +65,13 @@ from ed_companion.build_import import (
     JOURNAL_BLUEPRINT_NAMES,
     JOURNAL_EXPERIMENTAL_NAMES,
 )
+from ed_companion.exobiology import (
+    exobiology_carried_summary,
+    exobiology_findings,
+    exobiology_session_summary,
+    exobiology_summary,
+    landing_targets,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -7810,10 +7817,27 @@ def build_state(
         issue for issue in persistence_issues(data_dir)
         if issue not in consistency_issues
     )
+    exobiology_species_catalog = read_json(
+        package_root / "ed_data" / "exobiology_species.json", []
+    )
+    exobiology_rows = exobiology_findings(profile_events, exobiology_species_catalog)
+    exobiology_targets = landing_targets(
+        profile_events, exobiology_species_catalog,
+        current_system_address=latest_location.get("SystemAddress"),
+    )
 
     return {
         "_profileContext": profile_context,
         "_craftBatch": craft_batch,
+        "exobiologyFindings": exobiology_rows,
+        "exobiologySummary": exobiology_summary(exobiology_rows),
+        "exobiologySessionSummary": exobiology_session_summary(
+            profile_events, exobiology_species_catalog
+        ),
+        "exobiologyCarriedSummary": exobiology_carried_summary(
+            profile_events, exobiology_species_catalog
+        ),
+        "exobiologyLandingTargets": exobiology_targets,
         "ship": ship or "No ship selected",
         "commander": commander_name,
         "commanderKnown": bool(commander_name),

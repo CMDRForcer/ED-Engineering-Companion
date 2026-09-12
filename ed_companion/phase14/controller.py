@@ -153,7 +153,8 @@ COMMANDER_CARD_IDS = (
 )
 NAVIGATION_IDS = (
     "operations", "engineering", "wishlist", "engineers", "materials",
-    "mining-finder", "state-finds", "powerplay", "cmdr", "logbook", "settings",
+    "mining-finder", "state-finds", "powerplay", "cmdr", "logbook",
+    "exobiology", "settings",
 )
 LEGACY_DEFAULT_NAVIGATION_ORDERS = {
     (
@@ -371,6 +372,7 @@ class CockpitController(QObject):
     materialsChanged = Signal()
     fleetChanged = Signal()
     wishlistChanged = Signal()
+    exobiologyChanged = Signal()
     operationsChanged = Signal()
     hgeChanged = Signal()
     miningChanged = Signal()
@@ -981,6 +983,14 @@ class CockpitController(QObject):
             )
         ):
             self.wishlistChanged.emit()
+        if previous is None or any(
+            previous.get(key) != state.get(key)
+            for key in (
+                "exobiologyFindings", "exobiologyLandingTargets",
+                "exobiologySessionSummary", "exobiologyCarriedSummary",
+            )
+        ):
+            self.exobiologyChanged.emit()
         self.operationsChanged.emit()
         self.hgeChanged.emit()
         self.journalHealthChanged.emit()
@@ -3700,6 +3710,26 @@ class CockpitController(QObject):
             if int(row.get("missing", 0) or 0) > 0
         ],
         notify=materialsChanged,
+    )
+    exobiologyFindings = Property(
+        "QVariantList", lambda self: self._get("exobiologyFindings", []),
+        notify=exobiologyChanged,
+    )
+    exobiologySummary = Property(
+        "QVariantMap", lambda self: self._get("exobiologySummary", {}),
+        notify=exobiologyChanged,
+    )
+    exobiologySessionSummary = Property(
+        "QVariantMap", lambda self: self._get("exobiologySessionSummary", {}),
+        notify=exobiologyChanged,
+    )
+    exobiologyCarriedSummary = Property(
+        "QVariantMap", lambda self: self._get("exobiologyCarriedSummary", {}),
+        notify=exobiologyChanged,
+    )
+    exobiologyLandingTargets = Property(
+        "QVariantList", lambda self: self._get("exobiologyLandingTargets", []),
+        notify=exobiologyChanged,
     )
     engineers = Property(
         "QVariantList", lambda self: self._engineer_index(),

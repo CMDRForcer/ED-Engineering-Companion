@@ -124,8 +124,8 @@ class PublishFullStateTests(unittest.TestCase):
         controller._derived_cache = {}
         for name in (
             "stateChanged", "materialsChanged", "fleetChanged",
-            "wishlistChanged", "operationsChanged", "hgeChanged",
-            "journalHealthChanged", "logbookChanged",
+            "wishlistChanged", "exobiologyChanged", "operationsChanged",
+            "hgeChanged", "journalHealthChanged", "logbookChanged",
         ):
             setattr(controller, name, _RecordingSignal())
         return controller
@@ -134,6 +134,7 @@ class PublishFullStateTests(unittest.TestCase):
         state = {
             "materials": [{"key": "iron", "have": 50}],
             "blueprints": [{"planId": "p1"}],
+            "exobiologyFindings": [{"displayName": "Aleoida Arcus"}],
             "system": "Colonia",
         }
         controller = self._controller(dict(state))
@@ -143,9 +144,23 @@ class PublishFullStateTests(unittest.TestCase):
         self.assertEqual(controller.stateChanged.calls, 1)
         self.assertEqual(controller.materialsChanged.calls, 0)
         self.assertEqual(controller.wishlistChanged.calls, 0)
+        self.assertEqual(controller.exobiologyChanged.calls, 0)
         # Domains without a cheap identity check still always notify.
         self.assertEqual(controller.fleetChanged.calls, 1)
         self.assertEqual(controller.operationsChanged.calls, 1)
+
+    def test_changed_exobiology_findings_still_notifies(self):
+        previous = {"materials": [], "blueprints": [], "exobiologyFindings": []}
+        controller = self._controller({
+            "materials": [], "blueprints": [],
+            "exobiologyFindings": [{"displayName": "Aleoida Arcus"}],
+        })
+
+        controller._publish_full_state(previous)
+
+        self.assertEqual(controller.exobiologyChanged.calls, 1)
+        self.assertEqual(controller.materialsChanged.calls, 0)
+        self.assertEqual(controller.wishlistChanged.calls, 0)
 
     def test_changed_materials_still_notifies(self):
         previous = {"materials": [{"key": "iron", "have": 50}], "blueprints": []}

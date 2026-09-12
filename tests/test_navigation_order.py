@@ -13,7 +13,7 @@ class NavigationOrderTests(unittest.TestCase):
             (
                 "operations", "engineering", "wishlist", "engineers", "materials",
                 "mining-finder", "state-finds", "powerplay", "cmdr", "logbook",
-                "settings",
+                "exobiology", "settings",
             ),
         )
 
