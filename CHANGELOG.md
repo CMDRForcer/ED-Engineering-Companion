@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.1 — 2026-09-12
+
+### Fixed
+
+- The live "distance to next sample" check on the Exobiology page never
+  actually appeared. It resolved the Commander's current system from
+  `self._state["currentSystemAddress"]`, a value only ever set transiently
+  by the live-location merge and wiped again by the very next full state
+  refresh - which happens within a fraction of a second, so the field was
+  essentially always empty by the time the check read it. It now resolves
+  the current system fresh from the Journal on every poll, the same
+  reliable way Survey Targets already does.
+
 ## 1.3.0 — 2026-09-12
 
 ### Added

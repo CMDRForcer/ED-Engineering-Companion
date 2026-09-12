@@ -8257,12 +8257,19 @@ class CockpitController(QObject):
         resulting, small dict actually differs from what QML already has.
         """
         status = read_json(journal_dir() / "Status.json", {})
+        # self._state["currentSystemAddress"] is only ever set transiently
+        # by state_with_live_location() and gets wiped by the very next
+        # full refresh, which never carries it - it is essentially always
+        # stale here. latest_profile_location() derives it fresh from the
+        # Journal every time, the same way build_state() does for
+        # landing_targets() itself.
+        current_system_address = latest_profile_location().get("currentSystemAddress")
         value = exobiology_distance_check(
             self._state.get("exobiologyFindings"),
             self._exobiology_step_positions,
             self._exobiology_species_catalog,
             self._exobiology_colony_ranges,
-            self._state.get("currentSystemAddress"),
+            current_system_address,
             status,
         )
         if value == self._exobiology_distance_check_value:

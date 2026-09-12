@@ -124,5 +124,82 @@ class NewCurrentSystemExobiologyTargetTests(unittest.TestCase):
         self.assertEqual(message, "")
 
 
+class PollExobiologyDistanceCheckTests(unittest.TestCase):
+    """Regression: ``self._state["currentSystemAddress"]`` is only ever set
+    transiently by the live-location merge and gets wiped by the very next
+    full state refresh, which never carries it forward - reading it here
+    made the whole distance check silently dead almost all the time. The
+    poll must resolve the current system the same reliable way
+    ``build_state()`` does for Survey Targets: fresh from the Journal via
+    ``latest_profile_location()``, never from ``self._state``.
+    """
+
+    def _controller(self, findings, step_positions):
+        controller = CockpitController.__new__(CockpitController)
+        controller._state = {
+            "exobiologyFindings": findings,
+            # Deliberately absent/stale, like it almost always is in
+            # practice - the poll must not depend on this key at all.
+            "currentSystemAddress": None,
+        }
+        controller._exobiology_step_positions = step_positions
+        controller._exobiology_species_catalog = [{
+            "genusCodexKey": "$Codex_Ent_Aleoids_Genus_Name;", "genus": "aleoida",
+        }]
+        controller._exobiology_colony_ranges = {"aleoida": 150}
+        controller._exobiology_distance_check_value = {}
+        controller.exobiologyDistanceCheckChanged = mock.Mock()
+        return controller
+
+    def _finding(self):
+        return {
+            "systemAddress": 1, "body": "3",
+            "genus": "$Codex_Ent_Aleoids_Genus_Name;",
+            "species": "$Codex_Ent_Aleoids_01_Name;",
+            "displayName": "Aleoida Arcus", "genusDisplay": "Aleoida",
+            "samplesDone": 1, "complete": False,
+            "lastSeen": "2026-09-12T10:00:00Z",
+        }
+
+    def test_uses_the_freshly_derived_system_address_not_the_stale_state_key(self):
+        finding = self._finding()
+        key = (1, "3", "$Codex_Ent_Aleoids_Genus_Name;", "$Codex_Ent_Aleoids_01_Name;")
+        baseline = {"lat": 0.0, "lon": 0.0, "radius": 1_000_000.0, "bodyName": "Body A"}
+        controller = self._controller([finding], {key: baseline})
+        status = {"BodyName": "Body A", "Latitude": 0.0, "Longitude": 0.0001}
+
+        with mock.patch(
+            "ed_companion.phase14.controller.read_json", return_value=status,
+        ), mock.patch(
+            "ed_companion.phase14.controller.latest_profile_location",
+            return_value={"currentSystemAddress": 1},
+        ):
+            controller._poll_exobiology_distance_check()
+
+        self.assertEqual(
+            controller._exobiology_distance_check_value.get("displayName"),
+            "Aleoida Arcus",
+        )
+        controller.exobiologyDistanceCheckChanged.emit.assert_called_once()
+
+    def test_a_mismatched_current_system_yields_no_check(self):
+        finding = self._finding()
+        key = (1, "3", "$Codex_Ent_Aleoids_Genus_Name;", "$Codex_Ent_Aleoids_01_Name;")
+        baseline = {"lat": 0.0, "lon": 0.0, "radius": 1_000_000.0, "bodyName": "Body A"}
+        controller = self._controller([finding], {key: baseline})
+        status = {"BodyName": "Body A", "Latitude": 0.0, "Longitude": 0.0001}
+
+        with mock.patch(
+            "ed_companion.phase14.controller.read_json", return_value=status,
+        ), mock.patch(
+            "ed_companion.phase14.controller.latest_profile_location",
+            return_value={"currentSystemAddress": 2},
+        ):
+            controller._poll_exobiology_distance_check()
+
+        self.assertEqual(controller._exobiology_distance_check_value, {})
+        controller.exobiologyDistanceCheckChanged.emit.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
