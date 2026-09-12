@@ -602,6 +602,46 @@ class ReleaseContractTests(unittest.TestCase):
         )
         self.assertIn("MEDIUM HARDPOINT 2 · SIZE 2", action["title"])
 
+    def test_an_in_progress_plan_is_not_preempted_by_an_earlier_route_stop(self):
+        """A module already being engineered - one grade roll banked, or
+        only its Experimental left - must stay Operations' recommendation
+        until its target Grade and any planned Experimental are both
+        applied, even if a completely untouched plan's engineer happens to
+        sit earlier in the overall travel route."""
+        in_progress_plan = {
+            "module": "Armour", "blueprint": "Lightweight",
+            "targetGrade": 5, "targetStatus": "in_progress",
+            "canCraftNext": True, "materialProgress": [],
+        }
+        not_started_plan = {
+            "module": "Thrusters", "blueprint": "Dirty Drive Tuning",
+            "targetGrade": 5, "targetStatus": "not_started",
+            "canCraftNext": True, "materialProgress": [],
+        }
+        state = {
+            "blueprints": [in_progress_plan, not_started_plan],
+            "materials": [], "trades": [],
+        }
+        # Thrusters' engineer is the FIRST stop on the route; Armour's is
+        # second. Route order alone must not win over real progress.
+        route = [
+            {
+                "name": "Professor Palin", "system": "Arque",
+                "station": "Abel Laboratory", "craftable": True,
+                "jobNames": ["Thrusters · Dirty Drive Tuning · G5"],
+            },
+            {
+                "name": "Felicity Farseer", "system": "Deciat",
+                "station": "Farseer Inc", "craftable": True,
+                "jobNames": ["Armour · Lightweight · G5"],
+            },
+        ]
+
+        action = select_operation_action(state, route)
+
+        self.assertEqual(action["moduleName"], "Armour")
+        self.assertEqual(action["blueprintName"], "Lightweight")
+
     def test_engineer_assignment_globally_minimizes_repeat_visits(self):
         plans = [
             {

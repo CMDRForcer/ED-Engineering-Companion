@@ -4277,14 +4277,20 @@ def select_operation_action(
                 return index
         return len(route)
 
+    # A plan already underway (its Grade rolls started, or only its
+    # Experimental remains) must be finished - Grade reached and any
+    # planned Experimental applied - before Operations recommends moving
+    # on. Route/stop order is only a tie-break within the same urgency
+    # tier; it must never let a not-started plan at an earlier stop
+    # preempt a plan already in progress at a later one.
     active_plans.sort(key=lambda row: (
-        assigned_stop_index(row),
-        not bool(row.get("priority")),
         {
             "experimental_pending": 0,
             "in_progress": 1,
             "not_started": 2,
         }.get(str(row.get("targetStatus") or ""), 3),
+        assigned_stop_index(row),
+        not bool(row.get("priority")),
         int(row.get("index", 0) or 0),
     ))
     active_plan = active_plans[0] if active_plans else {}

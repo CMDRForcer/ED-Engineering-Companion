@@ -4,7 +4,7 @@ import os
 import sys
 
 # Release/build identity shown by the app and sent to optional integrations.
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.2.3"
 
 
 def default_build_channel(env_value=None, *, frozen=None):

@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.3 — 2026-09-12
+
+### Fixed
+
+- Operations' "Next Best Action" could recommend a completely untouched
+  engineering plan over one already underway - for example jumping to a
+  Thrusters upgrade that was never started while a partially-rolled
+  Armour upgrade sat one Grade short of its target - whenever the
+  untouched plan's engineer happened to fall earlier in the overall
+  travel route. Route order is now only a tie-break between plans of the
+  same urgency: any plan already in progress, or only waiting on its
+  planned Experimental, is always recommended before a not-yet-started
+  one, regardless of which engineer is closer. Affects every ship,
+  blueprint and engineer route.
+
 ## 1.2.2 — 2026-09-12
 
 ### Fixed
