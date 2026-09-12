@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.3.0 — 2026-09-12
+
+### Added
+
+- **EXOBIOLOGY**: a new page tracking biological scan progress entirely from
+  the Journal's own `ScanOrganic`, `FSSBodySignals`, `SAASignalsFound` and
+  `Scan` events.
+  - Per-species scan progress (Log/Sample/Analyse) with the confirmed
+    catalog value, correctly separated by system even when two systems
+    happen to share the same body number.
+  - **Survey Targets**: which body in the Commander's current system still
+    has an unclaimed biological signal, with likely species predicted from
+    a confirmed DSS genus or planetary conditions when no DSS scan exists
+    yet. A signal stays a visible target until fully analysed - starting
+    it does not make it disappear. The full career-wide list stays one
+    click away.
+  - **THIS SESSION** and **CARRIED · UNSOLD** value tracking, scoped by the
+    most recent `LoadGame` and `SellOrganicData` events respectively - the
+    latter spans sessions on purpose, since unsold data stays in the ship
+    until it is actually sold at a Vista Genomics terminal.
+  - A live **distance to next sample** check for the species currently
+    being sampled: great-circle distance on the body's own radius from
+    `Status.json`, compared against the genus' colony-range minimum.
+  - A short activity alert the instant a fresh, unclaimed biological
+    signal appears in the Commander's current system.
+  - Reference data (`ed_data/exobiology_species.json`,
+    `ed_data/exobiology_colony_ranges.json`) is EDEC's own re-expression of
+    public game facts, not copied code; colony-range distances are
+    separately sourced from the Elite Dangerous Fandom wiki (CC BY-SA),
+    attributed in `README.md`.
+
 ## 1.2.6 — 2026-09-12
 
 ### Fixed
