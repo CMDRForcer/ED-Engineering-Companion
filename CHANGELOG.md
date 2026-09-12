@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.3.2 — 2026-09-12
+
+### Fixed
+
+- The intermittent "Cannot create delegate" QML runtime error - previously
+  believed to be a rare, unexplained flake affecting the Engineering
+  page's slot list - is now understood and fixed. Qt Quick reports a
+  lazily-unloaded page's ListView aborting an in-flight delegate
+  incubation as two separate diagnostics: a delegate-creation failure and
+  an "object or context destroyed during incubation" message for the
+  same single benign event, but does not guarantee which of the two it
+  emits first. The existing filter only recognized the teardown message
+  arriving *before* the failure; the reverse order - observed at least as
+  often - was misreported as a real error, which is what surfaced as an
+  unreliable, hard-to-reproduce test failure. The filter now recognizes
+  the pair in either order.
+
 ## 1.3.1 — 2026-09-12
 
 ### Fixed

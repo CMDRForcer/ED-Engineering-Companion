@@ -224,10 +224,17 @@ def diagnostics_dir():
 
 
 def install_diagnostics(smoke_messages=None):
+    """Install the crash hook and Qt message filter.
+
+    Returns a ``flush_pending_delegate_failure`` callback the caller should
+    invoke before relying on ``smoke_messages`` being complete (see the
+    docstring below on why a delegate failure can be held briefly).
+    """
     directory = diagnostics_dir()
     clean_diagnostic_log(directory / "phase14.log")
     previous_qt_message = ""
     last_incubation_teardown_at = 0.0
+    pending_delegate_failure = None  # (context, message), awaiting pairing
 
     def crash_hook(exc_type, exc_value, exc_traceback):
         try:
@@ -243,24 +250,7 @@ def install_diagnostics(smoke_messages=None):
         finally:
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
 
-    def qt_message_handler(_mode, context, message):
-        nonlocal previous_qt_message, last_incubation_teardown_at
-        folded = str(message or "").casefold()
-        now = time.monotonic()
-        if INCUBATION_TEARDOWN_FRAGMENT in folded:
-            last_incubation_teardown_at = now
-        teardown_recent = (
-            bool(last_incubation_teardown_at)
-            and now - last_incubation_teardown_at <= 1.0
-        )
-        benign = is_benign_qt_message(
-            message, previous_qt_message, teardown_recent
-        )
-        if INCUBATION_DELEGATE_FRAGMENT in folded:
-            last_incubation_teardown_at = 0.0
-        previous_qt_message = str(message or "")
-        if benign:
-            return
+    def emit_message(context, message):
         source = getattr(context, "file", "") or "QML"
         line = getattr(context, "line", 0) or 0
         is_qml = str(source).lower().endswith(".qml") or ".qml:" in str(message).lower()
@@ -280,8 +270,52 @@ def install_diagnostics(smoke_messages=None):
         except OSError:
             pass
 
+    def flush_pending_delegate_failure():
+        nonlocal pending_delegate_failure
+        if pending_delegate_failure is not None:
+            context, message = pending_delegate_failure
+            pending_delegate_failure = None
+            emit_message(context, message)
+
+    def qt_message_handler(_mode, context, message):
+        nonlocal previous_qt_message, last_incubation_teardown_at
+        nonlocal pending_delegate_failure
+        folded = str(message or "").casefold()
+        now = time.monotonic()
+        if INCUBATION_TEARDOWN_FRAGMENT in folded:
+            last_incubation_teardown_at = now
+            # The failure this teardown belongs to may have already
+            # arrived and still be pending - Qt does not guarantee which
+            # of the pair it emits first (see is_benign_qt_message).
+            pending_delegate_failure = None
+        teardown_recent = (
+            bool(last_incubation_teardown_at)
+            and now - last_incubation_teardown_at <= 1.0
+        )
+        benign = is_benign_qt_message(
+            message, previous_qt_message, teardown_recent
+        )
+        if INCUBATION_DELEGATE_FRAGMENT in folded:
+            last_incubation_teardown_at = 0.0
+        previous_qt_message = str(message or "")
+        if benign:
+            return
+        if INCUBATION_DELEGATE_FRAGMENT in folded:
+            # Not yet paired with a teardown message that already
+            # arrived - Qt may still emit one immediately after this one,
+            # since it does not guarantee the order. Hold it briefly
+            # rather than judge it a real failure right away; any earlier
+            # still-pending one clearly was not paired, so it is real.
+            flush_pending_delegate_failure()
+            pending_delegate_failure = (context, message)
+            QTimer.singleShot(50, flush_pending_delegate_failure)
+            return
+        flush_pending_delegate_failure()
+        emit_message(context, message)
+
     sys.excepthook = crash_hook
     qInstallMessageHandler(qt_message_handler)
+    return flush_pending_delegate_failure
 
 
 class SmokeTestRunner(QObject):
@@ -315,6 +349,7 @@ class SmokeTestRunner(QObject):
     def __init__(
         self, app, window, qml_messages, screenshot=None,
         overlay_window=None, controller=None, parent=None,
+        flush_pending_qt_diagnostics=None,
     ):
         super().__init__(parent)
         self.app = app
@@ -323,6 +358,7 @@ class SmokeTestRunner(QObject):
         self.screenshot = screenshot
         self.overlay_window = overlay_window
         self.controller = controller
+        self.flush_pending_qt_diagnostics = flush_pending_qt_diagnostics
         self.results = []
         self.steps = []
         self.step_index = 0
@@ -487,6 +523,12 @@ class SmokeTestRunner(QObject):
             QTimer.singleShot(50, self._poll)
 
     def _finish(self):
+        if self.flush_pending_qt_diagnostics is not None:
+            # A delegate failure held briefly for possible teardown
+            # pairing (see install_diagnostics) must be resolved before
+            # the report is built - otherwise one from the very last
+            # step could be silently lost once the event loop stops.
+            self.flush_pending_qt_diagnostics()
         for message in self.qml_messages:
             self.results.append({
                 "area": "qml-runtime", "status": "FAIL",
@@ -651,7 +693,7 @@ def run():
     cleanup_startup_persistence_temps()
     smoke_test = os.environ.get("PHASE14_SMOKE_TEST") == "1"
     smoke_messages = [] if smoke_test else None
-    install_diagnostics(smoke_messages)
+    flush_pending_qt_diagnostics = install_diagnostics(smoke_messages)
     app = QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 12))
     # Keep Qt's writable cache location aligned with EDEC's existing runtime
@@ -799,6 +841,7 @@ def run():
         smoke_runner = SmokeTestRunner(
             app, window, smoke_messages, screenshot=screenshot,
             overlay_window=overlay_window, controller=controller, parent=app,
+            flush_pending_qt_diagnostics=flush_pending_qt_diagnostics,
         )
         smoke_runner.start()
     elif screenshot:

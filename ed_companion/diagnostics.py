@@ -13,7 +13,8 @@ INCUBATION_DELEGATE_FRAGMENT = "qml component: cannot create delegate"
 
 
 def is_benign_qt_message(
-    message, previous_message="", incubation_teardown_recent=False
+    message, previous_message="", incubation_teardown_recent=False,
+    next_message="",
 ):
     folded = str(message or "").casefold()
     if any(
@@ -22,27 +23,30 @@ def is_benign_qt_message(
         return True
     if INCUBATION_TEARDOWN_FRAGMENT in folded:
         return True
-    # Qt emits this immediately after the teardown message when a lazy page is
-    # destroyed while its ListView is still incubating. On its own it remains
+    if INCUBATION_DELEGATE_FRAGMENT not in folded:
+        return False
+    # Qt pairs a delegate-creation failure with the teardown message for
+    # one single benign event - a lazily-unloaded page's ListView aborting
+    # an in-flight delegate incubation - but does not guarantee which of
+    # the two it emits first; observed order is the delegate failure
+    # first, immediately followed by the teardown message, as often as
+    # the reverse. On its own (paired with neither), it remains
     # actionable and must reach diagnostics and the QML smoke test.
     return (
-        INCUBATION_DELEGATE_FRAGMENT in folded
-        and (
-            incubation_teardown_recent
-            or INCUBATION_TEARDOWN_FRAGMENT
-            in str(previous_message or "").casefold()
-        )
+        incubation_teardown_recent
+        or INCUBATION_TEARDOWN_FRAGMENT in str(previous_message or "").casefold()
+        or INCUBATION_TEARDOWN_FRAGMENT in str(next_message or "").casefold()
     )
 
 
 def filtered_log_lines(lines):
+    lines = [str(line) for line in lines or []]
     result = []
-    previous = ""
-    for line in lines or []:
-        value = str(line)
-        if not is_benign_qt_message(value, previous):
+    for index, value in enumerate(lines):
+        previous = lines[index - 1] if index > 0 else ""
+        next_line = lines[index + 1] if index + 1 < len(lines) else ""
+        if not is_benign_qt_message(value, previous, next_message=next_line):
             result.append(value)
-        previous = value
     return result
 
 

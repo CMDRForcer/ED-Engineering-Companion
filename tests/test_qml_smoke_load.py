@@ -41,19 +41,27 @@ def _run_smoke(extra_env=None, timeout=240):
 
 
 class QmlSmokeLoadTests(unittest.TestCase):
-    def test_delegate_failure_is_only_benign_after_incubation_teardown(self):
+    def test_delegate_failure_is_only_benign_paired_with_incubation_teardown(self):
         teardown = "Object or context destroyed during incubation"
         delegate = "QML Component: Cannot create delegate"
 
         self.assertTrue(is_benign_qt_message(teardown))
         self.assertFalse(is_benign_qt_message(delegate))
+        # Teardown observed before the delegate failure.
         self.assertTrue(is_benign_qt_message(delegate, teardown))
         self.assertTrue(
             is_benign_qt_message(
                 delegate, "an unrelated Qt message", True
             )
         )
+        # Qt does not guarantee the order - the delegate failure is
+        # observed just as often *before* its teardown message.
+        self.assertTrue(is_benign_qt_message(delegate, next_message=teardown))
+        self.assertFalse(
+            is_benign_qt_message(delegate, next_message="an unrelated Qt message")
+        )
         self.assertEqual(filtered_log_lines([teardown, delegate]), [])
+        self.assertEqual(filtered_log_lines([delegate, teardown]), [])
         self.assertEqual(filtered_log_lines([delegate]), [delegate])
 
     def test_main_qml_loads_without_runtime_errors(self):
