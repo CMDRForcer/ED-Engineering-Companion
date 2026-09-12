@@ -500,9 +500,30 @@ def _module_identity(module):
     )
 
 
-def _ship_key(value):
+def _ship_key(value, aliases=None):
     key = _key(value)
-    return SHIP_ALIASES.get(key, key)
+    table = aliases if aliases is not None else SHIP_ALIASES
+    return table.get(key, key)
+
+
+def _ship_catalog_aliases(ship_catalog):
+    """Map every catalog ship's normalized internal symbol to its display name.
+
+    ``ed_data/ships.json`` already carries both for every hull EDEC knows,
+    including ships added after SHIP_ALIASES was last hand-curated. An
+    export whose ``Ship`` field is the raw Frontier/Coriolis symbol (e.g.
+    ``Explorer_NX``) instead of the display name (``Caspian Explorer``)
+    resolves correctly without a manual alias entry for that specific ship.
+    """
+    aliases = dict(SHIP_ALIASES)
+    for entry in ship_catalog if isinstance(ship_catalog, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        symbol_key = _key(entry.get("symbol"))
+        name_key = _key(entry.get("name"))
+        if symbol_key and name_key and symbol_key != name_key:
+            aliases[symbol_key] = name_key
+    return aliases
 
 
 def _module_types(module_id, blueprint_types, module_matcher):
@@ -621,10 +642,14 @@ def _resolve_blueprint_group(evidence, groups, module_types):
 
 
 def preview_build(value, target_ship_type, blueprints, experimentals,
-                  module_matcher, physical_slots=None):
+                  module_matcher, physical_slots=None, ship_catalog=None):
     builds = _builds(_read_input(value))
-    target_key = _ship_key(target_ship_type)
-    compatible = [build for build in builds if _ship_key(build["ship"]) == target_key]
+    aliases = _ship_catalog_aliases(ship_catalog)
+    target_key = _ship_key(target_ship_type, aliases)
+    compatible = [
+        build for build in builds
+        if _ship_key(build["ship"], aliases) == target_key
+    ]
     selected = compatible[0] if len(compatible) == 1 else None
     if selected is None:
         found = ", ".join(str(build["ship"]) for build in builds)

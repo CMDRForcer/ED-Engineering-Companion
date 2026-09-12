@@ -48,6 +48,8 @@ from ed_companion.phase14.state import (
     required_materials,
     select_operation_action,
     ship_slot_layout,
+    task_signature,
+    write_ship_tasks,
 )
 from ed_companion.loadout_export import build_loadout_export
 from ed_companion.navigation import find_nearest_catalog_trader
@@ -794,6 +796,101 @@ class ReleaseContractTests(unittest.TestCase):
             path.write_text(json.dumps(payload), encoding="utf-8")
 
             self.assertEqual(_read_input(path.as_uri()), payload)
+
+    def test_build_import_resolves_raw_ship_symbol_via_catalog(self):
+        """A build tool may export the internal Frontier/Coriolis ship
+        symbol (e.g. ``Explorer_NX``) instead of the display name EDEC
+        shows for the current fleet ship (``Caspian Explorer``). The full
+        ships.json catalog resolves this for every hull, not only the ones
+        hand-curated into the small SHIP_ALIASES table."""
+        payload = {
+            "Ship": "Explorer_NX",
+            "Modules": [{"Slot": "Armour", "Item": "explorer_nx_armour_grade1"}],
+        }
+        ship_catalog = [{"symbol": "Explorer_NX", "name": "Caspian Explorer"}]
+
+        preview = preview_build(
+            json.dumps(payload), "Caspian Explorer", [], [],
+            module_matches_type, ship_catalog=ship_catalog,
+        )
+
+        self.assertTrue(preview["compatible"])
+
+    def test_build_import_still_rejects_an_unrelated_ship_with_a_catalog(self):
+        payload = {
+            "Ship": "Explorer_NX",
+            "Modules": [{"Slot": "Armour", "Item": "explorer_nx_armour_grade1"}],
+        }
+        ship_catalog = [{"symbol": "Explorer_NX", "name": "Caspian Explorer"}]
+
+        preview = preview_build(
+            json.dumps(payload), "Python Mk II", [], [],
+            module_matches_type, ship_catalog=ship_catalog,
+        )
+
+        self.assertFalse(preview["compatible"])
+
+    def test_reapplying_a_plan_after_progress_advances_is_not_duplicated(self):
+        """Re-pinning the same physical target - e.g. re-applying a build
+        import, or clicking Apply again later - after in-game progress
+        moved the current grade forward must be recognized as the plan
+        already tracked, not appended as a second, parallel entry."""
+        blueprints_by_grade = [
+            {"Type": "Shield Booster", "Name": "Heavy Duty", "Grade": grade}
+            for grade in range(1, 6)
+        ]
+        binding = {
+            "ship_id": "1", "slot": "TinyHardpoint3",
+            "module_id": "hpt_shieldbooster_size0_class1",
+        }
+        effect = {"Name": "Super Capacitor", "ExperimentalId": "shieldbooster::supercap"}
+
+        def make_tasks(current_grade):
+            plan = build_engineering_plan(
+                blueprints_by_grade, current_grade, 5, plan_mode="combined",
+                experimental_id=effect["ExperimentalId"], **binding,
+            )
+            effect_record = dict(effect)
+            effect_record.update({
+                "Kind": "ExperimentalEffect", "Grade": None,
+                "_ParentPlanId": plan[0]["_Planner"]["plan_id"],
+                "_BoundShipId": binding["ship_id"], "_BoundSlot": binding["slot"],
+                "_BoundModuleId": binding["module_id"],
+            })
+            return [plan, [effect_record]]
+
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "ship_blueprints.json"
+            path.write_text("{}", encoding="utf-8")
+
+            self.assertEqual(write_ship_tasks(path, "TestShip", make_tasks(0)), 2)
+            # In-game progress has since reached Grade 3; re-applying the
+            # same target must not create a second entry for this module.
+            self.assertEqual(write_ship_tasks(path, "TestShip", make_tasks(3)), 0)
+
+            tasks = json.loads(path.read_text(encoding="utf-8"))["TestShip"]
+            self.assertEqual(len(tasks), 2)
+
+    def test_task_signature_ignores_progress_but_not_target_grade(self):
+        plan_low_progress = build_engineering_plan(
+            [{"Type": "Armour", "Name": "Lightweight", "Grade": g} for g in range(1, 6)],
+            0, 5, ship_id="1", slot="Armour", module_id="explorer_nx_armour_grade1",
+        )
+        plan_high_progress = build_engineering_plan(
+            [{"Type": "Armour", "Name": "Lightweight", "Grade": g} for g in range(1, 6)],
+            4, 5, ship_id="1", slot="Armour", module_id="explorer_nx_armour_grade1",
+        )
+        plan_different_target = build_engineering_plan(
+            [{"Type": "Armour", "Name": "Lightweight", "Grade": g} for g in range(1, 6)],
+            0, 3, ship_id="1", slot="Armour", module_id="explorer_nx_armour_grade1",
+        )
+
+        self.assertEqual(
+            task_signature(plan_low_progress), task_signature(plan_high_progress)
+        )
+        self.assertNotEqual(
+            task_signature(plan_low_progress), task_signature(plan_different_target)
+        )
 
     def test_build_import_preserves_matching_installed_grade_boundary(self):
         payload = {

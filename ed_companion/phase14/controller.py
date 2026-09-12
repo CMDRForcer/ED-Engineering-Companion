@@ -4938,6 +4938,7 @@ class CockpitController(QObject):
                 read_json(self._reference_data_dir / "blueprints.json", []),
                 self._experimentals, module_matches_type,
                 physical_slots=self._state.get("engineeringShipSlots", []),
+                ship_catalog=self._ship_catalog,
             )
         except BuildImportError as exc:
             preview = empty_build_import_preview(str(exc))
@@ -5148,6 +5149,13 @@ class CockpitController(QObject):
                         effect_record.update({
                             "Kind": "ExperimentalEffect", "Grade": None,
                             "_ParentPlanId": plan[0]["_Planner"]["plan_id"],
+                            # A stable anchor independent of the parent
+                            # plan_id (fresh every apply), so re-applying an
+                            # import after progress advances is recognized
+                            # as the same physical target, not a duplicate.
+                            "_BoundShipId": str(binding.get("ship_id") or ""),
+                            "_BoundSlot": str(binding.get("slot") or ""),
+                            "_BoundModuleId": str(binding.get("module_id") or ""),
                         })
                         tasks.append([effect_record])
             if not tasks:
@@ -5301,6 +5309,12 @@ class CockpitController(QObject):
                 effect["Kind"] = "ExperimentalEffect"
                 effect["Grade"] = None
                 effect["_ParentPlanId"] = plan[0]["_Planner"]["plan_id"]
+                # A stable anchor independent of the parent plan_id (fresh
+                # every save), so pinning the same module again after
+                # progress advances is recognized as the same target.
+                effect["_BoundShipId"] = str(binding.get("ship_id") or "")
+                effect["_BoundSlot"] = str(binding.get("slot") or "")
+                effect["_BoundModuleId"] = str(binding.get("module_id") or "")
                 experimental_task = [effect]
                 tasks_to_add.append(experimental_task)
         if self._editing_plan_index >= 0:

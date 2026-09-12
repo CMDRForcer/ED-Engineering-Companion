@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.1 — 2026-09-12
+
+### Fixed
+
+- Importing a build whose `Ship` field is the raw Frontier/Coriolis hull
+  symbol (e.g. `Explorer_NX`) instead of the display name shown in the
+  fleet (`Caspian Explorer`) was rejected as "incompatible with target
+  ship", even though it names the exact same hull. Ship-type matching now
+  resolves against the full `ed_data/ships.json` catalog's symbol-to-name
+  pairs for every hull EDEC knows, not only the small, hand-picked list of
+  base-game exceptions it previously relied on.
+- Applying a build import, or pinning an engineering plan a second time,
+  could add a duplicate wishlist entry for the same physical module
+  instead of recognizing it as already tracked. The de-duplication check
+  compared the plan's exact remaining-roll snapshot, which shifts as soon
+  as any progress is made in-game; re-applying the same target afterward
+  no longer matched and was added again. Plans are now identified by their
+  physical target (ship, slot, module, blueprint, target grade) instead,
+  which stays stable as progress advances. Affects every ship and both the
+  build-import Apply and the manual "pin to wishlist" action.
+
 ## 1.2.0 — 2026-09-11
 
 ### Added

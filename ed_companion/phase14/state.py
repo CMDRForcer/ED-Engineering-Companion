@@ -4711,30 +4711,39 @@ def planner_physical_identity(planner: dict[str, Any]) -> tuple[str, ...]:
 
 
 def task_signature(task):
+    """Identify a plan by its physical target and requested outcome.
+
+    Grade progress - which rolls remain, how much quality is already
+    banked - is live state that shifts every time the module is crafted or
+    an import is re-applied. Keying deduplication on it would treat the
+    same wishlist target as a brand-new plan every time progress moves
+    forward, instead of recognizing it as already tracked and skipping it.
+    """
     if not isinstance(task, list) or not task:
         return ()
     first = task[0]
     planner = first.get("_Planner", {}) if isinstance(first, dict) else {}
     if first.get("Kind") == "ExperimentalEffect":
-        return (
-            "experimental",
-            first.get("ExperimentalId") or first.get("Name"),
-            first.get("_ParentPlanId") or planner.get("instance"),
-            planner_physical_identity(planner),
-        )
+        if planner:
+            # A standalone Experimental (build_experimental_plan) carries
+            # its own full _Planner with a stable physical identity.
+            anchor = planner_physical_identity(planner)
+        elif first.get("_BoundShipId") and first.get("_BoundSlot"):
+            anchor = (
+                "bound", str(first.get("_BoundShipId")),
+                str(first.get("_BoundSlot")).casefold(),
+                module_identity_key(first.get("_BoundModuleId")),
+            )
+        else:
+            # A combined-mode effect saved before _BoundShipId existed has
+            # no stable anchor beyond its parent plan_id or instance label.
+            anchor = ("legacy", first.get("_ParentPlanId") or planner.get("instance"))
+        return ("experimental", first.get("ExperimentalId") or first.get("Name"), anchor)
     return (
         first.get("Type"),
         first.get("Name"),
         planner_physical_identity(planner),
-        tuple(
-            (item.get("Grade"), item.get("_Rolls", 1))
-            for item in task if isinstance(item, dict)
-        ),
-        tuple(
-            item.get("ExperimentalId") or item.get("Name")
-            for item in task if isinstance(item, dict)
-            and item.get("Kind") == "ExperimentalEffect"
-        ),
+        int(planner.get("target_grade") or 0),
     )
 
 
