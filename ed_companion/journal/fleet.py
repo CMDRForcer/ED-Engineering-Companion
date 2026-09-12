@@ -64,7 +64,33 @@ def read_fleet_events(journal_files: Iterable[Path]) -> list[dict[str, Any]]:
     return events
 
 
-def _readable_type(record: Mapping[str, Any]) -> str:
+def _normalize_symbol(value: object) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
+
+
+def catalog_symbol_names(ship_catalog: object) -> dict[str, str]:
+    """Map every catalog ship's normalized internal symbol to its display name.
+
+    ``ed_data/ships.json`` already carries both for every hull EDEC knows.
+    It is authoritative over guessing a name from the internal symbol, and
+    covers every past exception (``FerDeLance`` -> ``Fer-de-Lance``,
+    ``Krait_MkII`` -> ``Krait Mk II``) plus any newer or odder hull
+    (``Explorer_NX`` -> ``Caspian Explorer``) without hand-picking one.
+    """
+    lookup: dict[str, str] = {}
+    for entry in ship_catalog if isinstance(ship_catalog, list) else []:
+        if not isinstance(entry, dict):
+            continue
+        symbol = _normalize_symbol(entry.get("symbol"))
+        name = str(entry.get("name") or "").strip()
+        if symbol and name:
+            lookup[symbol] = name
+    return lookup
+
+
+def _readable_type(
+    record: Mapping[str, Any], catalog_names: Mapping[str, str] | None = None,
+) -> str:
     localized = str(
         record.get("Ship_Localised") or record.get("ShipType_Localised") or ""
     ).strip()
@@ -73,6 +99,12 @@ def _readable_type(record: Mapping[str, Any]) -> str:
     internal = str(record.get("Ship") or record.get("ShipType") or "").strip()
     if not internal:
         return ""
+    catalog_name = (catalog_names or {}).get(_normalize_symbol(internal), "")
+    if catalog_name:
+        return catalog_name
+    # Callers without a catalog on hand (or a symbol not yet in it) fall
+    # back to this small, historically hand-picked table, then the guess
+    # below - the catalog above is what keeps this from needing upkeep.
     conventional = {
         "ferdelance": "Fer-de-Lance",
         "krait_mkii": "Krait Mk II",
@@ -101,12 +133,15 @@ def _ship_label(row: Mapping[str, Any]) -> str:
     return f"Ship #{row['id']}"
 
 
-def rebuild_fleet(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+def rebuild_fleet(
+    events: Iterable[Mapping[str, Any]], ship_catalog: object = None,
+) -> dict[str, Any]:
     """Rebuild the complete fleet from Journal truth, keyed only by ShipID."""
     fleet: dict[str, dict[str, Any]] = {}
     sold_at: dict[str, datetime] = {}
     active_id = ""
     active_at = datetime.min.replace(tzinfo=timezone.utc)
+    catalog_names = catalog_symbol_names(ship_catalog)
 
     def update(
         record: Mapping[str, Any], ship_id: object, status: str,
@@ -125,7 +160,7 @@ def rebuild_fleet(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             record.get("UserShipName") or record.get("ShipName")
             or record.get("Name") or ""
         ).strip()
-        ship_type = _readable_type(record)
+        ship_type = _readable_type(record, catalog_names)
         if ship_name or any(field in record for field in ("UserShipName", "ShipName", "Name")):
             row["name"] = ship_name
         if ship_type:

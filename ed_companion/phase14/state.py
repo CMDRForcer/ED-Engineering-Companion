@@ -7254,7 +7254,8 @@ def build_state(
         ship_events, key=lambda event: str(event.get("timestamp") or ""),
         default={},
     )
-    fleet_state = rebuild_fleet(ship_events)
+    ship_catalog = read_json(package_root / "ed_data" / "ships.json", [])
+    fleet_state = rebuild_fleet(ship_events, ship_catalog)
     # Reconcile physical bindings and the installed grade boundary before
     # replaying pending EngineerCraft events. Doing this later leaves an exact
     # first craft falsely unmatched until another unrelated refresh occurs.
@@ -7287,7 +7288,6 @@ def build_state(
     engineering_slots = engineering_loadout_rows(
         module_slots, blueprint_catalog(reference_data_dir(package_root)),
     )
-    ship_catalog = read_json(package_root / "ed_data" / "ships.json", [])
     selected_ship_data = next(
         (
             row for row in (ship_catalog if isinstance(ship_catalog, list) else [])

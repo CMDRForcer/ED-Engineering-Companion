@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.5 — 2026-09-12
+
+### Fixed
+
+- A ship's registered type could silently change on its own between
+  sessions - for example "Caspian Explorer" flipping to "Explorer Nx" -
+  whenever a Journal entry lacked Frontier's localized ship name. The
+  fallback guessed a display name from the internal symbol, which only
+  spells out the real name for hulls whose symbol happens to look like
+  it (most do not: `Asp` is "Asp Explorer", `Explorer_NX` is "Caspian
+  Explorer"). Ship type now resolves against the full `ed_data/ships.json`
+  catalog first, which already carries the correct name for every hull
+  EDEC knows; only a hull missing from the catalog falls back to the old
+  guess. A relabeled ship's existing wishlist and history stay attached
+  by ship ID, as before. A player's client-language Journal localization
+  still takes priority when present.
+
 ## 1.2.4 — 2026-09-12
 
 ### Fixed
