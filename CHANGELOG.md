@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.2 — 2026-09-12
+
+### Fixed
+
+- The Materials page's stock bars could rebuild and re-fill themselves
+  several times in a row after a single jump, as if refreshing over and
+  over. Every completed Journal poll unconditionally told the UI that
+  materials, the wishlist, the fleet, and every other tracked domain had
+  all changed - even when a plain `FSDJump` (whose Journal lines often
+  land in more than one debounced refresh) left materials and the
+  wishlist byte-for-byte the same. QML then treated the unchanged list as
+  a brand-new model, tearing down and recreating every bar's delegate and
+  replaying its fill-in animation. Materials and the wishlist now only
+  notify the UI when their own data actually changed.
+
 ## 1.2.1 — 2026-09-12
 
 ### Fixed

@@ -947,14 +947,40 @@ class CockpitController(QObject):
         for issue in issues:
             self._write_log(f"CONSISTENCY · {issue}")
 
-    def _publish_full_state(self) -> None:
-        """Notify each state domain once after an atomic state replacement."""
+    def _publish_full_state(self, previous: dict | None = None) -> None:
+        """Notify each state domain once after an atomic state replacement.
+
+        A routine Journal update (a plain FSDJump, a passive Scan, ...)
+        very often leaves whole domains - materials, the wishlist - exactly
+        as they were. Emitting their change signal anyway makes QML treat
+        every list bound to it as a brand-new model, tearing down and
+        rebuilding every delegate and replaying its fill-in animation for
+        no reason - visibly, several times per jump, since a jump's
+        Journal lines usually land in more than one debounced refresh.
+        Compare against ``previous`` and skip a domain whose exposed keys
+        did not actually change; ``previous=None`` (first load, or a
+        caller that already mutated ``self._state`` in place) always
+        emits, matching the prior unconditional behavior.
+        """
         self._state_revision += 1
         self._derived_cache.clear()
         self.stateChanged.emit()
-        self.materialsChanged.emit()
+        state = self._state
+        if previous is None or any(
+            previous.get(key) != state.get(key)
+            for key in ("materials", "trades", "traderRoute", "tradeHistory")
+        ):
+            self.materialsChanged.emit()
         self.fleetChanged.emit()
-        self.wishlistChanged.emit()
+        if previous is None or any(
+            previous.get(key) != state.get(key)
+            for key in (
+                "blueprints", "craftTrackingIssues", "freshCraftTrackingIssues",
+                "historicalCraftTrackingIssues", "relevantCraftTrackingIssues",
+                "unrelatedCraftTrackingIssues",
+            )
+        ):
+            self.wishlistChanged.emit()
         self.operationsChanged.emit()
         self.hgeChanged.emit()
         self.journalHealthChanged.emit()
@@ -4284,7 +4310,7 @@ class CockpitController(QObject):
             self._activity = "Journal synchronized · live inventory loaded"
         self._log_consistency_issues(self._state)
         self._journal_state_ready = True
-        self._publish_full_state()
+        self._publish_full_state(previous)
         if (
             isinstance(state_find_rows, list)
             and source_hge_revision == self._hge_revision

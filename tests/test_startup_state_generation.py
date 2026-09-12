@@ -99,5 +99,84 @@ class StartupStateGenerationTests(unittest.TestCase):
             controller._publish_full_state.assert_not_called()
 
 
+class _RecordingSignal:
+    def __init__(self):
+        self.calls = 0
+
+    def emit(self, *_args):
+        self.calls += 1
+
+
+class PublishFullStateTests(unittest.TestCase):
+    """A plain Journal poll (e.g. a jump) very often leaves materials and
+    the wishlist untouched. Re-emitting their change signal anyway makes
+    QML tear down and rebuild every bound list's delegates - replaying the
+    Materials page's fill-in bar animation for no reason, several times
+    per jump. `_publish_full_state` must skip a domain's signal when its
+    exposed keys are unchanged from `previous`, and still emit normally
+    when nothing to compare against is given."""
+
+    @staticmethod
+    def _controller(state):
+        controller = CockpitController.__new__(CockpitController)
+        controller._state = state
+        controller._state_revision = 0
+        controller._derived_cache = {}
+        for name in (
+            "stateChanged", "materialsChanged", "fleetChanged",
+            "wishlistChanged", "operationsChanged", "hgeChanged",
+            "journalHealthChanged", "logbookChanged",
+        ):
+            setattr(controller, name, _RecordingSignal())
+        return controller
+
+    def test_unchanged_materials_and_wishlist_do_not_re_emit(self):
+        state = {
+            "materials": [{"key": "iron", "have": 50}],
+            "blueprints": [{"planId": "p1"}],
+            "system": "Colonia",
+        }
+        controller = self._controller(dict(state))
+
+        controller._publish_full_state(dict(state))
+
+        self.assertEqual(controller.stateChanged.calls, 1)
+        self.assertEqual(controller.materialsChanged.calls, 0)
+        self.assertEqual(controller.wishlistChanged.calls, 0)
+        # Domains without a cheap identity check still always notify.
+        self.assertEqual(controller.fleetChanged.calls, 1)
+        self.assertEqual(controller.operationsChanged.calls, 1)
+
+    def test_changed_materials_still_notifies(self):
+        previous = {"materials": [{"key": "iron", "have": 50}], "blueprints": []}
+        controller = self._controller({
+            "materials": [{"key": "iron", "have": 51}], "blueprints": [],
+        })
+
+        controller._publish_full_state(previous)
+
+        self.assertEqual(controller.materialsChanged.calls, 1)
+        self.assertEqual(controller.wishlistChanged.calls, 0)
+
+    def test_changed_wishlist_still_notifies(self):
+        previous = {"materials": [], "blueprints": []}
+        controller = self._controller({
+            "materials": [], "blueprints": [{"planId": "new"}],
+        })
+
+        controller._publish_full_state(previous)
+
+        self.assertEqual(controller.materialsChanged.calls, 0)
+        self.assertEqual(controller.wishlistChanged.calls, 1)
+
+    def test_no_previous_state_always_emits_everything(self):
+        controller = self._controller({"materials": [], "blueprints": []})
+
+        controller._publish_full_state()
+
+        self.assertEqual(controller.materialsChanged.calls, 1)
+        self.assertEqual(controller.wishlistChanged.calls, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
