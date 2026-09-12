@@ -505,7 +505,85 @@ class ReleaseContractTests(unittest.TestCase):
         self.assertFalse(plan["installationRequired"])
         self.assertEqual(action["kind"], "COLLECT")
 
-    def test_material_preflight_stays_first_even_at_current_engineer(self):
+    def test_in_progress_ready_craft_is_not_interrupted_by_an_unrelated_binding_gap(self):
+        """The same 'do not interrupt an already-started, ready craft'
+        rule applies to an unrelated plan's binding, loadout or
+        installation gap, not just material trades - any of these on a
+        plan nobody is working yet must not preempt one already underway."""
+        active_plan = {
+            "module": "Thrusters", "blueprint": "Dirty Drive Tuning",
+            "targetGrade": 5, "targetStatus": "in_progress",
+            "canCraftNext": True, "materialProgress": [],
+        }
+        unrelated_plan = {
+            "module": "Multi-cannon", "blueprint": "Overcharged Weapon",
+            "targetGrade": 5, "targetStatus": "not_started",
+            "canCraftNext": False, "bindingRequired": True,
+            "materialProgress": [],
+        }
+        state = {
+            "blueprints": [active_plan, unrelated_plan],
+            "materials": [], "trades": [],
+        }
+        route = [{
+            "name": "Professor Palin", "system": "Arque",
+            "station": "Abel Laboratory", "craftable": True,
+            "jobNames": ["Thrusters · Dirty Drive Tuning · G5"],
+        }]
+
+        action = select_operation_action(state, route)
+
+        self.assertEqual(action["kind"], "GRADE_CRAFT")
+        self.assertEqual(action["moduleName"], "Thrusters")
+
+    def test_in_progress_ready_craft_is_not_interrupted_by_an_unrelated_installation_gap(self):
+        active_plan = {
+            "module": "Thrusters", "blueprint": "Dirty Drive Tuning",
+            "targetGrade": 5, "targetStatus": "in_progress",
+            "canCraftNext": True, "materialProgress": [],
+        }
+        unrelated_plan = {
+            "module": "Multi-cannon", "blueprint": "Overcharged Weapon",
+            "targetGrade": 5, "targetStatus": "not_started",
+            "canCraftNext": False, "installationRequired": True,
+            "materialProgress": [],
+        }
+        state = {
+            "blueprints": [active_plan, unrelated_plan],
+            "materials": [], "trades": [],
+        }
+        route = [{
+            "name": "Professor Palin", "system": "Arque",
+            "station": "Abel Laboratory", "craftable": True,
+            "jobNames": ["Thrusters · Dirty Drive Tuning · G5"],
+        }]
+
+        action = select_operation_action(state, route)
+
+        self.assertEqual(action["kind"], "GRADE_CRAFT")
+        self.assertEqual(action["moduleName"], "Thrusters")
+
+    def test_a_ready_plans_own_binding_gap_still_blocks_it(self):
+        """The deferral only protects an UNRELATED plan's gap - a plan
+        that is itself the one about to be recommended still surfaces its
+        own binding requirement."""
+        active_plan = {
+            "module": "Thrusters", "blueprint": "Dirty Drive Tuning",
+            "targetGrade": 5, "targetStatus": "in_progress",
+            "canCraftNext": True, "bindingRequired": True,
+            "materialProgress": [],
+        }
+        state = {"blueprints": [active_plan], "materials": [], "trades": []}
+
+        action = select_operation_action(state, [])
+
+        self.assertEqual(action["kind"], "BINDING_BLOCKER")
+
+    def test_in_progress_ready_craft_outranks_preflight_for_other_plans(self):
+        """An in-progress plan that is material-ready right now must not be
+        deferred in favor of gathering materials for a different,
+        not-yet-started plan elsewhere in the wishlist - the gather-
+        everything preflight is for when nothing is underway yet."""
         state = {
             "blueprints": [
                 {
@@ -539,7 +617,8 @@ class ReleaseContractTests(unittest.TestCase):
 
         action = select_operation_action(state, route)
 
-        self.assertEqual(action["kind"], "TRADE")
+        self.assertEqual(action["kind"], "GRADE_CRAFT")
+        self.assertEqual(action["moduleName"], "Frame Shift Drive")
 
     def test_next_engineer_action_identifies_module_blueprint_and_experimental(self):
         plan = {

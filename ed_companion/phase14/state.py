@@ -4019,11 +4019,33 @@ def select_operation_action(
             "system": "", "station": "", "buttonLabel": "OPEN WISHLIST",
             "targetPage": 1, "executable": True,
         }
-    binding_blockers = [
+    # A plan already in progress - or only waiting on its planned
+    # Experimental - and material-ready right now is a workflow already
+    # underway at an Engineer. An unrelated, untouched plan's own data
+    # gap (an ambiguous binding, an unconfirmed loadout, a module not yet
+    # installed) must not interrupt it; that gap surfaces once its own
+    # plan becomes primary. If the ready plan is itself the one with the
+    # gap, the gap still applies to it.
+    ready_in_progress = next((
+        row for row in open_plans
+        if str(row.get("targetStatus") or "") in {"in_progress", "experimental_pending"}
+        and bool(
+            row.get("experimentalReady")
+            if row.get("targetStatus") == "experimental_pending"
+            else row.get("canCraftNext")
+        )
+    ), None)
+
+    def _defer_unless_it_blocks_the_ready_plan(rows):
+        if ready_in_progress is None:
+            return rows
+        return [row for row in rows if row is ready_in_progress]
+
+    binding_blockers = _defer_unless_it_blocks_the_ready_plan([
         row for row in plans
         if row.get("bindingRequired")
         and str(row.get("targetStatus") or "") != "completed"
-    ]
+    ])
     if binding_blockers:
         plan = binding_blockers[0]
         module = str(plan.get("module") or "imported module")
@@ -4042,9 +4064,9 @@ def select_operation_action(
             "targetPage": 1,
             "executable": True,
         }
-    loadout_blockers = [
+    loadout_blockers = _defer_unless_it_blocks_the_ready_plan([
         row for row in open_plans if row.get("loadoutUnknown")
-    ]
+    ])
     if loadout_blockers:
         plan = min(
             loadout_blockers,
@@ -4080,9 +4102,9 @@ def select_operation_action(
             "physicalSlotLabel": slot_label,
             "installationState": "UNKNOWN",
         }
-    installation_blockers = [
+    installation_blockers = _defer_unless_it_blocks_the_ready_plan([
         row for row in open_plans if row.get("installationRequired")
-    ]
+    ])
     if installation_blockers:
         # Pick the slot to fill first by a stable key so the guidance does not
         # depend on the incidental order of the plan list.
@@ -4418,6 +4440,18 @@ def select_operation_action(
             "system": "", "station": "", "buttonLabel": "OPEN WISHLIST",
             "targetPage": 1, "executable": True,
         }
+    # A plan already underway - a Grade roll banked, or only its planned
+    # Experimental left - is a workflow already in progress at an Engineer.
+    # Its own materials being ready must keep it primary; the global
+    # gather-everything gate below is for a not-yet-started plan only, so
+    # a craft that could happen right now is never deferred in favor of
+    # trading for a completely different, untouched plan's materials.
+    if active_craft_ready and active_status in {
+        "in_progress", "experimental_pending",
+    }:
+        return craft_action(
+            active_plan, active_stop, experimental=active_craft_experimental
+        )
     # A priority plan completes its own material/craft workflow first. Without
     # one, acquire materials for all open plans before visiting Engineers.
     if trades and missing:

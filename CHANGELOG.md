@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.4 — 2026-09-12
+
+### Fixed
+
+- Operations could send the Commander back to trade or collect materials
+  right after finishing a Grade roll or Experimental on an already
+  in-progress plan, purely because some other, completely untouched plan
+  elsewhere in the wishlist was still missing a material with a trade
+  available. A plan already underway and material-ready right now is no
+  longer deferred by an unrelated plan's outstanding trade, collection,
+  ambiguous binding, unconfirmed loadout, or pending installation - those
+  gates are for before any engineering has started; once a plan is
+  actually in progress, its own readiness decides, not the rest of the
+  backlog. A plan's own such gap still blocks it as before.
+
 ## 1.2.3 — 2026-09-12
 
 ### Fixed
