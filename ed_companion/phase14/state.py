@@ -5147,6 +5147,20 @@ def _craft_matches_unique_equivalent_slot(
     )
 
 
+def _singular_effect_key(value: object) -> str:
+    """Normalize an Experimental Effect name tolerant of a trailing plural.
+
+    A Journal Loadout's ``ExperimentalEffect`` can name the same effect as
+    the EngineerCraft catalog only with a trailing "s" added (Frontier
+    reports "Super Capacitors" there; the catalog and every EngineerCraft
+    event call it "Super Capacitor") - stripped here so that difference
+    alone never reads as "a different effect is installed". Applies to
+    every Experimental Effect this matches, not one module's exception.
+    """
+    key = normalize(value)
+    return key[:-1] if len(key) > 1 and key.endswith("s") else key
+
+
 def _experimental_craft_matches(
     planner: dict[str, Any], event: dict[str, Any]
 ) -> bool:
@@ -5158,13 +5172,13 @@ def _experimental_craft_matches(
     journal_key = normalize(journal_value)
     canonical_name = JOURNAL_EXPERIMENTAL_NAMES.get(journal_key, "")
     event_keys = {
-        normalize(value) for value in (
+        _singular_effect_key(value) for value in (
             journal_value, canonical_name,
             event.get("ExperimentalEffect_Localised"),
         ) if value
     }
     planner_keys = {
-        normalize(value) for value in (
+        _singular_effect_key(value) for value in (
             planner.get("experimental_id"),
             planner.get("experimental_name"),
         ) if value

@@ -1385,6 +1385,60 @@ class ReleaseContractTests(unittest.TestCase):
             self.assertEqual(result["status"], "applied")
             self.assertEqual(replayed["grade_progress"]["5"], 0.2)
 
+    def test_loadout_plural_experimental_name_does_not_revert_completion(self):
+        """Frontier's Journal reports some Experimental Effects with a
+        trailing plural in Loadout (``ExperimentalEffect_Localised``:
+        "Super Capacitors") that the EngineerCraft catalog and every
+        EngineerCraft event itself spell singular ("Super Capacitor").
+        A plan already confirmed complete by real craft evidence must not
+        be reverted to pending merely because of that spelling gap."""
+        with TemporaryDirectory() as directory:
+            data_dir = Path(directory)
+            planner = {
+                "plan_id": "plan-1", "ship_id": "28",
+                "slot": "TinyHardpoint3",
+                "module_id": "hpt_shieldbooster_size0_class1",
+                "current_grade": 5, "target_grade": 5,
+                "grade_progress": {"5": 1.0},
+                "experimental_id": "shield_booster::super_capacitor",
+                "experimental_name": "Super Capacitor",
+                "experimental_complete": True,
+                "plan_mode": "combined",
+            }
+            payload = {
+                "Caspian Explorer – Erda": [[{
+                    "Type": "Shield Booster", "Name": "Heavy Duty",
+                    "Grade": 5, "Engineers": ["Didi Vatermann"],
+                    "_Planner": planner,
+                }]],
+            }
+            (data_dir / "ship_blueprints.json").write_text(
+                json.dumps(payload), encoding="utf-8"
+            )
+            events = [{
+                "timestamp": "2026-09-12T10:00:00Z", "event": "Loadout",
+                "ShipID": 28,
+                "Modules": [{
+                    "Slot": "TinyHardpoint3",
+                    "Item": "hpt_shieldbooster_size0_class1",
+                    "Engineering": {
+                        "BlueprintName": "ShieldBooster_HeavyDuty", "Level": 5,
+                        "Quality": 1.0,
+                        "ExperimentalEffect": "specialshieldboosterchunky",
+                        "ExperimentalEffect_Localised": "Super Capacitors",
+                    },
+                }],
+            }]
+            fleet = {"ships": [{"label": "Caspian Explorer – Erda", "id": "28"}]}
+
+            migrate_wishlist_bindings(data_dir, fleet, events)
+
+            saved = json.loads(
+                (data_dir / "ship_blueprints.json").read_text(encoding="utf-8")
+            )
+            saved_planner = saved["Caspian Explorer – Erda"][0][0]["_Planner"]
+            self.assertTrue(saved_planner["experimental_complete"])
+
     def test_qt_cache_and_runtime_data_share_the_canonical_app_directory(self):
         root = Path(__file__).resolve().parents[1]
         entrypoint = (root / "phase14_main.py").read_text(encoding="utf-8")

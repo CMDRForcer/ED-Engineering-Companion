@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.6 — 2026-09-12
+
+### Fixed
+
+- A fully-crafted Experimental Effect could stay stuck showing "Experimental
+  pending" forever, with its material recipe reported as unresolved, even
+  though the correct effect was genuinely installed and the craft had
+  already been tracked. The Journal's Loadout event names some Experimental
+  Effects with a trailing plural ("Super Capacitors") that the EngineerCraft
+  catalog and every EngineerCraft event itself spell singular ("Super
+  Capacitor"); comparing them exactly treated that spelling gap as "a
+  different effect is installed" and reverted the plan's confirmed
+  completion back to pending on every refresh. Effect names are now
+  compared tolerant of that trailing "s", for every Experimental Effect on
+  every module, not only the one this was first found on.
+
 ## 1.2.5 — 2026-09-12
 
 ### Fixed
