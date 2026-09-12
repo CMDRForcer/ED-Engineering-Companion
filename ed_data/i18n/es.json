@@ -681,5 +681,10 @@
   "exobiology.this_session": "ESTA SESIÓN",
   "exobiology.carried_unsold": "A BORDO · SIN VENDER",
   "exobiology.session_value": "%1 · %2",
-  "exobiology.carried_value": "%1 · %2"
+  "exobiology.carried_value": "%1 · %2",
+  "exobiology.distance_check_title": "DISTANCIA HASTA LA PRÓXIMA MUESTRA · %1",
+  "exobiology.distance_check_ready": "LISTO PARA %1 · %2 M / %3 M",
+  "exobiology.distance_check_not_ready": "SIGUE MOVIÉNDOTE ANTES DE LA SIGUIENTE %1 · %2 M / %3 M",
+  "exobiology.step_sample": "MUESTRA",
+  "exobiology.step_analyse": "ANÁLISIS"
 }

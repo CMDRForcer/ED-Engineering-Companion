@@ -20,6 +20,7 @@ file itself.
 """
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -449,3 +450,110 @@ def landing_targets(
         -row["bestValue"], row["distanceLs"],
     ))
     return targets
+
+
+# --- Live "distance to next sample" check: on-foot geometry, not Journal
+# replay - the game never records where a sample was taken, only that it
+# was. -----------------------------------------------------------------
+
+def great_circle_distance_m(
+    lat1: float, lon1: float, lat2: float, lon2: float, radius_m: float,
+) -> float:
+    """Surface distance in meters between two lat/long points on a body.
+
+    Elite Dangerous' own colony-range check is exactly this: great-circle
+    distance on the body's own sphere (``PlanetRadius`` from ``Status.json``),
+    not a flat-map approximation.
+    """
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(delta_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    )
+    return 2 * radius_m * math.asin(min(1.0, math.sqrt(a)))
+
+
+def colony_range_for_genus(
+    genus_codex_key: str,
+    species_catalog: list[dict[str, Any]] | None,
+    colony_ranges: dict[str, Any] | None,
+) -> float | None:
+    """Minimum required distance (meters) between samples of this genus.
+
+    ``species_catalog`` maps a raw Codex genus key to the catalog's own
+    lowercase module name (e.g. "aleoida"); ``colony_ranges`` is keyed by
+    that same module name. Returns ``None`` when either lookup misses -
+    an unrecognized or not-yet-catalogued genus never blocks the rest of
+    the check, it just has no known requirement to show.
+    """
+    module_name = next(
+        (
+            row.get("genus") for row in species_catalog or []
+            if isinstance(row, dict) and row.get("genusCodexKey") == genus_codex_key
+        ),
+        None,
+    )
+    if not module_name:
+        return None
+    value = (colony_ranges or {}).get(module_name)
+    return float(value) if isinstance(value, (int, float)) else None
+
+
+def exobiology_distance_check(
+    findings: list[dict[str, Any]] | None,
+    step_positions: dict[tuple, dict[str, Any]] | None,
+    species_catalog: list[dict[str, Any]] | None,
+    colony_ranges: dict[str, Any] | None,
+    current_system_address: object,
+    status: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Live "how far to the next sample" check for the one species the
+    Commander is actively working on right now.
+
+    ``step_positions`` is the caller's own in-memory, never-persisted
+    record of where the Commander was standing at each find's most recent
+    step - Journal replay has no position data to reconstruct this from,
+    so this only ever covers scans made while the app has been running.
+    ``status`` is the raw ``Status.json`` payload; only used while the
+    Commander is on foot or in an SRV with a body underfoot.
+    """
+    status = status if isinstance(status, dict) else {}
+    body_name = status.get("BodyName")
+    lat, lon = status.get("Latitude"), status.get("Longitude")
+    if (
+        not body_name
+        or not isinstance(lat, (int, float))
+        or not isinstance(lon, (int, float))
+    ):
+        return {}
+    candidates = [
+        row for row in findings or []
+        if isinstance(row, dict) and not row.get("complete")
+        and row.get("systemAddress") == current_system_address
+    ]
+    if not candidates:
+        return {}
+    candidates.sort(key=lambda row: row.get("lastSeen") or "", reverse=True)
+    row = candidates[0]
+    key = (row.get("systemAddress"), row.get("body"), row.get("genus"), row.get("species"))
+    baseline = (step_positions or {}).get(key)
+    if not baseline or baseline.get("bodyName") != body_name:
+        return {}
+    required = colony_range_for_genus(row["genus"], species_catalog, colony_ranges)
+    if required is None:
+        return {}
+    distance = great_circle_distance_m(
+        float(lat), float(lon),
+        float(baseline["lat"]), float(baseline["lon"]),
+        float(baseline["radius"]),
+    )
+    return {
+        "displayName": row.get("displayName"),
+        "genusDisplay": row.get("genusDisplay"),
+        "nextStep": "Analyse" if row.get("samplesDone") == 2 else "Sample",
+        "distanceM": round(distance),
+        "requiredM": round(required),
+        "ready": distance >= required,
+    }

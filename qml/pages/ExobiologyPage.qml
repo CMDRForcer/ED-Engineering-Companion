@@ -30,9 +30,15 @@ ColumnLayout {
     readonly property var displayedTargets: exobiologyPage.showAllSystems
                                              ? exobiologyPage.landingTargets
                                              : exobiologyPage.currentSystemTargets
+    readonly property var distanceCheck: cockpit.exobiologyDistanceCheck || ({})
 
     function formatCr(value) {
         return Number(value || 0).toLocaleString(Qt.locale(), "f", 0) + " CR"
+    }
+    function stepLabel(step) {
+        return step === "Analyse"
+               ? appWindow.t("exobiology.step_analyse", "ANALYSE")
+               : appWindow.t("exobiology.step_sample", "SAMPLE")
     }
 
     objectName: "qa-page-exobiology"
@@ -86,6 +92,47 @@ ColumnLayout {
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
+                }
+            }
+        }
+    }
+
+    ShadowCard {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 68
+        accent: exobiologyPage.distanceCheck.ready ? green : orange
+        visible: Object.keys(exobiologyPage.distanceCheck).length > 0
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 14
+            spacing: 4
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 3
+                Label {
+                    text: appWindow.tf(
+                        "exobiology.distance_check_title", "DISTANCE TO NEXT SAMPLE · %1",
+                        [exobiologyPage.distanceCheck.displayName || ""])
+                    color: muted; font.pixelSize: 10; font.bold: true
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
+                }
+                Label {
+                    text: exobiologyPage.distanceCheck.ready
+                          ? appWindow.tf(
+                                "exobiology.distance_check_ready", "READY TO %1 · %2 M / %3 M",
+                                [exobiologyPage.stepLabel(exobiologyPage.distanceCheck.nextStep),
+                                 exobiologyPage.distanceCheck.distanceM,
+                                 exobiologyPage.distanceCheck.requiredM])
+                          : appWindow.tf(
+                                "exobiology.distance_check_not_ready", "KEEP MOVING BEFORE THE NEXT %1 · %2 M / %3 M",
+                                [exobiologyPage.stepLabel(exobiologyPage.distanceCheck.nextStep),
+                                 exobiologyPage.distanceCheck.distanceM,
+                                 exobiologyPage.distanceCheck.requiredM])
+                    color: exobiologyPage.distanceCheck.ready ? green : orange
+                    font.pixelSize: 15; font.bold: true
+                    elide: Text.ElideRight
+                    Layout.fillWidth: true
                 }
             }
         }

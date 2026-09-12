@@ -681,5 +681,10 @@
   "exobiology.this_session": "THIS SESSION",
   "exobiology.carried_unsold": "CARRIED · UNSOLD",
   "exobiology.session_value": "%1 · %2",
-  "exobiology.carried_value": "%1 · %2"
+  "exobiology.carried_value": "%1 · %2",
+  "exobiology.distance_check_title": "DISTANCE TO NEXT SAMPLE · %1",
+  "exobiology.distance_check_ready": "READY TO %1 · %2 M / %3 M",
+  "exobiology.distance_check_not_ready": "KEEP MOVING BEFORE THE NEXT %1 · %2 M / %3 M",
+  "exobiology.step_sample": "SAMPLE",
+  "exobiology.step_analyse": "ANALYSE"
 }

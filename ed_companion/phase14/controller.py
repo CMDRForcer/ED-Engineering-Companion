@@ -233,6 +233,7 @@ from ed_companion.services import (
     partition_upload_queue,
 )
 from ed_companion.diagnostics import filtered_log_lines
+from ed_companion.exobiology import exobiology_distance_check
 
 from .dashboard_views import (
     build_commander_cards,
@@ -373,6 +374,7 @@ class CockpitController(QObject):
     fleetChanged = Signal()
     wishlistChanged = Signal()
     exobiologyChanged = Signal()
+    exobiologyDistanceCheckChanged = Signal()
     operationsChanged = Signal()
     hgeChanged = Signal()
     miningChanged = Signal()
@@ -776,6 +778,19 @@ class CockpitController(QObject):
             )
             if isinstance(record, dict)
         ]
+        self._exobiology_species_catalog = read_json(
+            self._reference_data_dir / "exobiology_species.json", []
+        )
+        self._exobiology_colony_ranges = read_json(
+            self._reference_data_dir / "exobiology_colony_ranges.json", {}
+        )
+        # Best-effort, in-memory only: where the Commander was standing at
+        # each in-progress find's most recent scan step, keyed by
+        # (systemAddress, body, genus, species). Journal replay has no
+        # position data to reconstruct this from, so a restart mid-scan
+        # simply waits for the next step to re-establish a baseline.
+        self._exobiology_step_positions = {}
+        self._exobiology_distance_check_value = {}
         self._activity = "Connecting to Elite Journal…"
         self._last_journal_stamp = None
         self._last_commander_status_stamp = None
@@ -3731,6 +3746,10 @@ class CockpitController(QObject):
         "QVariantList", lambda self: self._get("exobiologyLandingTargets", []),
         notify=exobiologyChanged,
     )
+    exobiologyDistanceCheck = Property(
+        "QVariantMap", lambda self: self._exobiology_distance_check_value,
+        notify=exobiologyDistanceCheckChanged,
+    )
     engineers = Property(
         "QVariantList", lambda self: self._engineer_index(),
         notify=operationsChanged,
@@ -4338,6 +4357,17 @@ class CockpitController(QObject):
             # It must not repeatedly interrupt the Commander with a toast.
         elif not applied_crafts:
             self._activity = "Journal synchronized · live inventory loaded"
+        if previous:
+            self._record_exobiology_step_positions(
+                previous.get("exobiologyFindings"),
+                self._state.get("exobiologyFindings"),
+            )
+            new_target_alert = self._new_current_system_exobiology_target(
+                previous, self._state,
+            )
+            if new_target_alert and not applied_crafts:
+                self._activity = new_target_alert
+                self.activityChanged.emit()
         self._log_consistency_issues(self._state)
         self._journal_state_ready = True
         self._publish_full_state(previous)
@@ -8059,6 +8089,7 @@ class CockpitController(QObject):
             self._process_eddn_queue()
             return
         self._poll_commander_status_credits()
+        self._poll_exobiology_distance_check()
         stamp = journal_change_signature()
         if self._last_journal_stamp is None:
             self._last_journal_stamp = stamp
@@ -8152,6 +8183,92 @@ class CockpitController(QObject):
         self._state_revision += 1
         self._derived_cache.clear()
         self.stateChanged.emit()
+
+    def _record_exobiology_step_positions(self, previous_findings, new_findings):
+        """Snapshot where the Commander is standing the moment a scan step
+        lands, so the next poll can tell how far they still need to move.
+
+        Best-effort and in-memory only - see the note on
+        ``self._exobiology_step_positions`` in ``__init__``.
+        """
+        if not isinstance(new_findings, list):
+            return
+        status = read_json(journal_dir() / "Status.json", {})
+        lat, lon = status.get("Latitude"), status.get("Longitude")
+        radius = status.get("PlanetRadius")
+        body_name = status.get("BodyName")
+        if (
+            not body_name
+            or not isinstance(lat, (int, float))
+            or not isinstance(lon, (int, float))
+            or not isinstance(radius, (int, float))
+        ):
+            return
+        previous_by_key = {
+            (row.get("systemAddress"), row.get("body"), row.get("genus"), row.get("species")): row
+            for row in previous_findings or [] if isinstance(row, dict)
+        }
+        for row in new_findings:
+            if not isinstance(row, dict) or row.get("complete"):
+                continue
+            key = (row.get("systemAddress"), row.get("body"), row.get("genus"), row.get("species"))
+            previous_row = previous_by_key.get(key)
+            previous_done = previous_row.get("samplesDone") if previous_row else 0
+            if row.get("samplesDone", 0) > (previous_done or 0):
+                self._exobiology_step_positions[key] = {
+                    "lat": float(lat), "lon": float(lon),
+                    "radius": float(radius), "bodyName": str(body_name),
+                }
+
+    def _new_current_system_exobiology_target(self, previous, state):
+        """A short activity message the instant a fresh, unclaimed
+        biological signal appears in the Commander's current system - so
+        they do not have to keep tabbing to Exobiology after every FSS
+        honk to notice one. Only ever for a target brand new since the
+        last published state; never for career-wide leads elsewhere.
+        """
+        new_targets = state.get("exobiologyLandingTargets")
+        if not isinstance(new_targets, list):
+            return ""
+        old_keys = {
+            (row.get("systemAddress"), row.get("bodyId"))
+            for row in previous.get("exobiologyLandingTargets") or []
+            if isinstance(row, dict) and row.get("inCurrentSystem")
+        }
+        for row in new_targets:
+            if not isinstance(row, dict) or not row.get("inCurrentSystem"):
+                continue
+            key = (row.get("systemAddress"), row.get("bodyId"))
+            if key in old_keys:
+                continue
+            return (
+                f"EXOBIOLOGY · {int(row.get('signalCount') or 0)} biological "
+                f"signal(s) detected on {row.get('bodyName') or 'a nearby body'}"
+            )
+        return ""
+
+    def _poll_exobiology_distance_check(self):
+        """Refresh the live "distance to next sample" check every tick.
+
+        Unlike the credits poll, a real position change must be reflected
+        immediately while the Commander is walking - Status.json's own
+        stat signature changes on essentially every heartbeat regardless,
+        so this recomputes unconditionally and only emits when the
+        resulting, small dict actually differs from what QML already has.
+        """
+        status = read_json(journal_dir() / "Status.json", {})
+        value = exobiology_distance_check(
+            self._state.get("exobiologyFindings"),
+            self._exobiology_step_positions,
+            self._exobiology_species_catalog,
+            self._exobiology_colony_ranges,
+            self._state.get("currentSystemAddress"),
+            status,
+        )
+        if value == self._exobiology_distance_check_value:
+            return
+        self._exobiology_distance_check_value = value
+        self.exobiologyDistanceCheckChanged.emit()
 
     @Slot(float)
     def setUiScale(self, value):

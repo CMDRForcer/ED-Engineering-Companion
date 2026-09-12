@@ -1,19 +1,26 @@
 import json
+import math
 import unittest
 from pathlib import Path
 
 from ed_companion.exobiology import (
+    colony_range_for_genus,
     exobiology_carried_summary,
+    exobiology_distance_check,
     exobiology_findings,
     exobiology_scan_progress,
     exobiology_session_summary,
     exobiology_summary,
+    great_circle_distance_m,
     landing_targets,
 )
 
 REFERENCE_DATA_DIR = Path(__file__).resolve().parents[1] / "ed_data"
 SPECIES_CATALOG = json.loads(
     (REFERENCE_DATA_DIR / "exobiology_species.json").read_text(encoding="utf-8")
+)
+COLONY_RANGES = json.loads(
+    (REFERENCE_DATA_DIR / "exobiology_colony_ranges.json").read_text(encoding="utf-8")
 )
 
 
@@ -414,6 +421,107 @@ class LandingTargetsTests(unittest.TestCase):
 
         self.assertTrue(targets[0]["inCurrentSystem"])
         self.assertEqual(targets[0]["bodyId"], 3)
+
+
+class GreatCircleDistanceTests(unittest.TestCase):
+    def test_the_same_point_is_zero_distance_away(self):
+        self.assertEqual(great_circle_distance_m(10, 20, 10, 20, 1_000_000), 0)
+
+    def test_a_quarter_of_the_way_around_is_a_quarter_circumference(self):
+        radius = 1_000_000.0
+        distance = great_circle_distance_m(0, 0, 0, 90, radius)
+        self.assertAlmostEqual(distance, math.pi / 2 * radius, places=3)
+
+
+class ColonyRangeLookupTests(unittest.TestCase):
+    def test_a_catalogued_genus_resolves_its_module_names_range(self):
+        self.assertEqual(
+            colony_range_for_genus(
+                "$Codex_Ent_Aleoids_Genus_Name;", SPECIES_CATALOG, COLONY_RANGES,
+            ),
+            150,
+        )
+
+    def test_an_unrecognized_genus_has_no_known_range(self):
+        self.assertIsNone(
+            colony_range_for_genus(
+                "$Codex_Ent_Made_Up_Genus_Name;", SPECIES_CATALOG, COLONY_RANGES,
+            )
+        )
+
+
+def _status(body_name, lat, lon):
+    return {"BodyName": body_name, "Latitude": lat, "Longitude": lon}
+
+
+class ExobiologyDistanceCheckTests(unittest.TestCase):
+    """Aleoida's colony range is 150 m (see ed_data/exobiology_colony_ranges.json)."""
+
+    def _in_progress_finding(self, samples_done=1, **overrides):
+        finding = {
+            "systemAddress": 1, "body": "3",
+            "genus": "$Codex_Ent_Aleoids_Genus_Name;",
+            "species": "$Codex_Ent_Aleoids_01_Name;",
+            "displayName": "Aleoida Arcus", "genusDisplay": "Aleoida",
+            "samplesDone": samples_done, "complete": False,
+            "lastSeen": "2026-09-12T10:00:00Z",
+        }
+        finding.update(overrides)
+        return finding
+
+    def test_no_status_position_yields_no_check(self):
+        result = exobiology_distance_check(
+            [self._in_progress_finding()], {}, SPECIES_CATALOG, COLONY_RANGES,
+            current_system_address=1, status={},
+        )
+        self.assertEqual(result, {})
+
+    def test_no_in_progress_finding_in_the_current_system_yields_no_check(self):
+        result = exobiology_distance_check(
+            [self._in_progress_finding(systemAddress=2)], {}, SPECIES_CATALOG,
+            COLONY_RANGES, current_system_address=1,
+            status=_status("Body A", 0.0, 0.0),
+        )
+        self.assertEqual(result, {})
+
+    def test_no_recorded_baseline_position_yields_no_check(self):
+        result = exobiology_distance_check(
+            [self._in_progress_finding()], {}, SPECIES_CATALOG, COLONY_RANGES,
+            current_system_address=1, status=_status("Body A", 0.0, 0.0),
+        )
+        self.assertEqual(result, {})
+
+    def test_a_baseline_on_a_different_body_yields_no_check(self):
+        key = (1, "3", "$Codex_Ent_Aleoids_Genus_Name;", "$Codex_Ent_Aleoids_01_Name;")
+        positions = {key: {"lat": 0.0, "lon": 0.0, "radius": 1_000_000.0, "bodyName": "Body B"}}
+        result = exobiology_distance_check(
+            [self._in_progress_finding()], positions, SPECIES_CATALOG, COLONY_RANGES,
+            current_system_address=1, status=_status("Body A", 0.0, 0.0),
+        )
+        self.assertEqual(result, {})
+
+    def test_still_too_close_reports_not_ready(self):
+        key = (1, "3", "$Codex_Ent_Aleoids_Genus_Name;", "$Codex_Ent_Aleoids_01_Name;")
+        positions = {key: {"lat": 0.0, "lon": 0.0, "radius": 1_000_000.0, "bodyName": "Body A"}}
+        result = exobiology_distance_check(
+            [self._in_progress_finding(samples_done=1)], positions, SPECIES_CATALOG,
+            COLONY_RANGES, current_system_address=1,
+            status=_status("Body A", 0.0, 0.0001),  # ~11 m away
+        )
+        self.assertFalse(result["ready"])
+        self.assertEqual(result["requiredM"], 150)
+        self.assertEqual(result["nextStep"], "Sample")
+
+    def test_far_enough_away_reports_ready(self):
+        key = (1, "3", "$Codex_Ent_Aleoids_Genus_Name;", "$Codex_Ent_Aleoids_01_Name;")
+        positions = {key: {"lat": 0.0, "lon": 0.0, "radius": 1_000_000.0, "bodyName": "Body A"}}
+        result = exobiology_distance_check(
+            [self._in_progress_finding(samples_done=2)], positions, SPECIES_CATALOG,
+            COLONY_RANGES, current_system_address=1,
+            status=_status("Body A", 0.0, 0.01),  # ~1745 m away
+        )
+        self.assertTrue(result["ready"])
+        self.assertEqual(result["nextStep"], "Analyse")
 
 
 if __name__ == "__main__":
