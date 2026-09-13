@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.5.2 — 2026-09-13
+
+### Changed
+
+- Internal maintainability refactor, no behavior change: `state.py` had
+  grown to ~7 950 lines covering eight unrelated domains (engineering
+  wishlist/craft-tracking, materials, fleet/loadout, logbook,
+  commander/CAPI-merge, Powerplay, engineer routing, and Operations
+  action-selection). Split into eight focused modules
+  (`state_core.py`, `state_materials.py`, `state_fleet.py`,
+  `state_logbook.py`, `state_engineering.py`,
+  `state_engineering_routing.py`, `state_engineering_operations.py`,
+  `state_commander.py`); `state.py` itself is now ~1 200 lines and
+  re-exports every name it used to define directly, so nothing outside
+  it needed to change. Verified with the full test suite (437 tests)
+  and the QML smoke test after every single extraction step.
+
 ## 1.5.1 — 2026-09-13
 
 ### Fixed
