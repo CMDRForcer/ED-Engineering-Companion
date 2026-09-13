@@ -382,8 +382,6 @@ class CockpitController(
     LogbookMixin, CoreControllerMixin, QObject,
 ):
     materialsChanged = Signal()
-    wishlistChanged = Signal()
-    operationsChanged = Signal()
     hgeChanged = Signal()
     miningChanged = Signal()
     miningSyncFinished = Signal(object)
@@ -394,7 +392,6 @@ class CockpitController(
     rendererChanged = Signal()
     activityChanged = Signal()
     materialSelectionChanged = Signal()
-    engineeringChanged = Signal()
     traderSyncFinished = Signal(bool, str)
     techBrokerSyncFinished = Signal(bool, str)
     historyExportFinished = Signal(object)
@@ -2838,7 +2835,7 @@ class CockpitController(
     nextAction = Property(str, lambda self: self._next_action(), notify=CoreControllerMixin.stateChanged)
     operationAction = Property(
         "QVariantMap", lambda self: self._operation_action(),
-        notify=operationsChanged,
+        notify=CoreControllerMixin.operationsChanged,
     )
     completion = Property(float, lambda self: float(self._get("completion", 0.0)), notify=CoreControllerMixin.stateChanged)
     materialStatus = Property(
@@ -2855,23 +2852,23 @@ class CockpitController(
     )
     craftTrackingIssues = Property(
         "QVariantList", lambda self: self._get("craftTrackingIssues", []),
-        notify=wishlistChanged,
+        notify=CoreControllerMixin.wishlistChanged,
     )
     freshCraftTrackingIssues = Property(
         "QVariantList", lambda self: self._get("freshCraftTrackingIssues", []),
-        notify=wishlistChanged,
+        notify=CoreControllerMixin.wishlistChanged,
     )
     historicalCraftTrackingIssues = Property(
         "QVariantList", lambda self: self._get("historicalCraftTrackingIssues", []),
-        notify=wishlistChanged,
+        notify=CoreControllerMixin.wishlistChanged,
     )
     relevantCraftTrackingIssues = Property(
         "QVariantList", lambda self: self._get("relevantCraftTrackingIssues", []),
-        notify=wishlistChanged,
+        notify=CoreControllerMixin.wishlistChanged,
     )
     unrelatedCraftTrackingIssues = Property(
         "QVariantList", lambda self: self._get("unrelatedCraftTrackingIssues", []),
-        notify=wishlistChanged,
+        notify=CoreControllerMixin.wishlistChanged,
     )
     covered = Property(int, lambda self: int(self._get("covered", 0)), notify=CoreControllerMixin.stateChanged)
     required = Property(int, lambda self: int(self._get("required", 0)), notify=CoreControllerMixin.stateChanged)
@@ -2901,14 +2898,14 @@ class CockpitController(
         str, lambda self: self._get("lastChangeReason", ""),
         notify=CoreControllerMixin.stateChanged,
     )
-    blueprints = Property("QVariantList", lambda self: self._get("blueprints", []), notify=wishlistChanged)
+    blueprints = Property("QVariantList", lambda self: self._get("blueprints", []), notify=CoreControllerMixin.wishlistChanged)
     activeBlueprints = Property(
         "QVariantList",
         lambda self: [
             row for row in self._get("blueprints", [])
             if str(row.get("targetStatus") or "") != "completed"
         ],
-        notify=wishlistChanged,
+        notify=CoreControllerMixin.wishlistChanged,
     )
     materials = Property("QVariantList", lambda self: self._get("materials", []), notify=materialsChanged)
     missingMaterials = Property(
@@ -2924,31 +2921,31 @@ class CockpitController(
     # exactly up to far more than any realistic credit balance.
     engineers = Property(
         "QVariantList", lambda self: self._engineer_index(),
-        notify=operationsChanged,
+        notify=CoreControllerMixin.operationsChanged,
     )
     techBrokerGuide = Property(
         "QVariantList", lambda self: self._get("techBrokerGuide", []),
-        notify=operationsChanged,
+        notify=CoreControllerMixin.operationsChanged,
     )
     techBrokerTrack = Property(
         "QVariantMap", lambda self: self._get("techBrokerTrack", {}),
-        notify=operationsChanged,
+        notify=CoreControllerMixin.operationsChanged,
     )
     trackedItems = Property(
         "QVariantList", lambda self: self._get("trackedItems", []),
-        notify=operationsChanged,
+        notify=CoreControllerMixin.operationsChanged,
     )
     engineerMissionRoute = Property(
         "QVariantList", lambda self: self._engineer_mission_route(),
-        notify=operationsChanged,
+        notify=CoreControllerMixin.operationsChanged,
     )
     engineerUnlockTasks = Property(
         "QVariantList", lambda self: self._engineer_unlock_tasks(),
-        notify=operationsChanged,
+        notify=CoreControllerMixin.operationsChanged,
     )
     engineeringRunPreflight = Property(
         "QVariantMap", lambda self: self._engineering_run_preflight(),
-        notify=operationsChanged,
+        notify=CoreControllerMixin.operationsChanged,
     )
     nextEngineerStop = Property(
         "QVariantMap",
@@ -2956,7 +2953,7 @@ class CockpitController(
             self._engineer_mission_route()[0]
             if self._engineer_mission_route() else {}
         ),
-        notify=operationsChanged,
+        notify=CoreControllerMixin.operationsChanged,
     )
     activity = Property(str, lambda self: self._activity, notify=activityChanged)
     rendererMode = Property(str, lambda self: self._renderer_mode, notify=rendererChanged)
@@ -3151,38 +3148,38 @@ class CockpitController(
     )
     blueprintCatalog = Property(
         "QVariantList", lambda self: self._blueprint_catalog,
-        notify=engineeringChanged,
+        notify=CoreControllerMixin.engineeringChanged,
     )
     selectedBlueprint = Property(
         "QVariantMap", lambda self: self._selected_blueprint,
-        notify=engineeringChanged,
+        notify=CoreControllerMixin.engineeringChanged,
     )
     currentGrade = Property(
-        int, lambda self: self._current_grade, notify=engineeringChanged
+        int, lambda self: self._current_grade, notify=CoreControllerMixin.engineeringChanged
     )
     targetGrade = Property(
-        int, lambda self: self._target_grade, notify=engineeringChanged
+        int, lambda self: self._target_grade, notify=CoreControllerMixin.engineeringChanged
     )
     editingGradeComplete = Property(
-        bool, lambda self: self._editing_grade_complete, notify=engineeringChanged
+        bool, lambda self: self._editing_grade_complete, notify=CoreControllerMixin.engineeringChanged
     )
     selectedExperimentalId = Property(
         str, lambda self: self._selected_experimental_id,
-        notify=engineeringChanged,
+        notify=CoreControllerMixin.engineeringChanged,
     )
-    planMode = Property(str, lambda self: self._plan_mode, notify=engineeringChanged)
+    planMode = Property(str, lambda self: self._plan_mode, notify=CoreControllerMixin.engineeringChanged)
     canPinEngineeringPlan = Property(
         bool, lambda self: self._can_pin_engineering_plan(),
-        notify=engineeringChanged,
+        notify=CoreControllerMixin.engineeringChanged,
     )
     selectedEngineer = Property(
-        str, lambda self: self._selected_engineer, notify=engineeringChanged
+        str, lambda self: self._selected_engineer, notify=CoreControllerMixin.engineeringChanged
     )
     engineeringStatus = Property(
-        str, lambda self: self._engineering_status, notify=engineeringChanged
+        str, lambda self: self._engineering_status, notify=CoreControllerMixin.engineeringChanged
     )
     craftConfirmation = Property(
-        str, lambda self: self._craft_confirmation, notify=engineeringChanged
+        str, lambda self: self._craft_confirmation, notify=CoreControllerMixin.engineeringChanged
     )
 
     def _can_pin_engineering_plan(self) -> bool:
@@ -3212,23 +3209,23 @@ class CockpitController(
             "grade_only", "experimental_only", "combined",
         }
     fleetStatus = Property(
-        str, lambda self: self._fleet_status, notify=engineeringChanged
+        str, lambda self: self._fleet_status, notify=CoreControllerMixin.engineeringChanged
     )
     armedPlanId = Property(
-        str, lambda self: self._armed_plan_id, notify=engineeringChanged
+        str, lambda self: self._armed_plan_id, notify=CoreControllerMixin.engineeringChanged
     )
     editingPlanIndex = Property(
-        int, lambda self: self._editing_plan_index, notify=engineeringChanged
+        int, lambda self: self._editing_plan_index, notify=CoreControllerMixin.engineeringChanged
     )
     moduleInstance = Property(
-        str, lambda self: self._module_instance, notify=engineeringChanged
+        str, lambda self: self._module_instance, notify=CoreControllerMixin.engineeringChanged
     )
     selectedModuleSlot = Property(
-        str, lambda self: self._selected_module_slot, notify=engineeringChanged
+        str, lambda self: self._selected_module_slot, notify=CoreControllerMixin.engineeringChanged
     )
     moduleSlotOptions = Property(
         "QVariantList", lambda self: self._module_slot_options,
-        notify=engineeringChanged,
+        notify=CoreControllerMixin.engineeringChanged,
     )
     traderPreference = Property(
         str, lambda self: self._trader_preference, notify=CoreControllerMixin.uiChanged,
@@ -3257,7 +3254,7 @@ class CockpitController(
     )
     buildImportPreview = Property(
         "QVariantMap", lambda self: self._build_import_preview,
-        notify=engineeringChanged,
+        notify=CoreControllerMixin.engineeringChanged,
     )
 
     @Slot()

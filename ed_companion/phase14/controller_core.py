@@ -19,3 +19,6 @@ class CoreControllerMixin:
     connectionChanged = Signal()
     stateChanged = Signal()
     uiChanged = Signal()
+    engineeringChanged = Signal()
+    operationsChanged = Signal()
+    wishlistChanged = Signal()
