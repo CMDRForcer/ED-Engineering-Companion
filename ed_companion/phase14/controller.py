@@ -249,6 +249,7 @@ from .dashboard_views import (
 
 from .controller_commander import CommanderMixin
 from .controller_eddn import EddnMixin
+from .controller_logbook import LogbookMixin
 from .controller_exobiology import ExobiologyMixin
 from .controller_frontier_capi import FrontierCapiMixin
 from .controller_inara import InaraMixin
@@ -378,7 +379,7 @@ def _eddn_relay_relevant(payload: Any) -> bool:
 
 class CockpitController(
     CommanderMixin, EddnMixin, ExobiologyMixin, FrontierCapiMixin, InaraMixin,
-    CoreControllerMixin, QObject,
+    LogbookMixin, CoreControllerMixin, QObject,
 ):
     materialsChanged = Signal()
     wishlistChanged = Signal()
@@ -390,7 +391,6 @@ class CockpitController(
     miningRowsReady = Signal(object)
     journalHealthChanged = Signal()
     diagnosticsChanged = Signal()
-    logbookChanged = Signal()
     rendererChanged = Signal()
     activityChanged = Signal()
     materialSelectionChanged = Signal()
@@ -558,12 +558,7 @@ class CockpitController(
         self._build_import_target = ""
         self._fleet_status = "Fleet ready."
         self._deferred_engineers = set()
-        self._logbook_entries = []
-        self._logbook_filter = "ALL"
-        self._logbook_query = ""
-        self._selected_logbook_entry = {}
-        self._logbook_revision = 0
-        self._logbook_notes = load_logbook_notes(self.config_dir)
+        self._init_logbook()
         self._init_inara()
         self._init_frontier_capi()
         self._eddn_profile_identity = self.profile_context.identity
@@ -1314,85 +1309,13 @@ class CockpitController(
             if key[0] in names:
                 self._derived_cache.pop(key, None)
 
-    def _filtered_logbook_entries(self) -> list[dict[str, object]]:
-        revision = (
-            self._logbook_revision, self._logbook_filter, self._logbook_query,
-        )
 
-        def build() -> list[dict[str, object]]:
-            return build_logbook_view(
-                self._logbook_entries, self._logbook_notes,
-                self._logbook_filter, self._logbook_query,
-            )
 
-        return self._cached_derived("logbook", revision, build)
 
-    def _logbook_entry_with_note(
-        self, row: dict[str, object],
-    ) -> dict[str, object]:
-        return decorate_logbook_entry(row, self._logbook_notes)
 
-    @Slot(str)
-    def setLogbookFilter(self, value: str) -> None:
-        value = str(value or "ALL").upper()
-        if value not in LOGBOOK_FILTERS:
-            value = "ALL"
-        if value != self._logbook_filter:
-            self._logbook_filter = value
-            self._drop_derived({"logbook"})
-            self.logbookChanged.emit()
 
-    @Slot(str)
-    def setLogbookQuery(self, value: str) -> None:
-        value = str(value or "").strip().casefold()
-        if value != self._logbook_query:
-            self._logbook_query = value
-            self._drop_derived({"logbook"})
-            self.logbookChanged.emit()
 
-    @Slot(str)
-    def selectLogbookEntry(self, entry_id: str) -> None:
-        entry_id = str(entry_id or "")
-        selected = next(
-            (row for row in self._logbook_entries if row.get("id") == entry_id),
-            {},
-        )
-        self._selected_logbook_entry = (
-            self._logbook_entry_with_note(selected) if selected else {}
-        )
-        self.logbookChanged.emit()
 
-    @Slot(str, str)
-    def setLogbookNote(self, entry_id: str, note: str) -> None:
-        entry_id = str(entry_id or "").strip()
-        if not any(row.get("id") == entry_id for row in self._logbook_entries):
-            return
-        self._logbook_notes = write_logbook_note(
-            self.config_dir, entry_id, note,
-        )
-        if self._selected_logbook_entry.get("id") == entry_id:
-            selected = next(
-                row for row in self._logbook_entries if row.get("id") == entry_id
-            )
-            self._selected_logbook_entry = self._logbook_entry_with_note(selected)
-        self._logbook_revision += 1
-        self._drop_derived({"logbook"})
-        self._activity = (
-            "Logbook note saved."
-            if self._logbook_notes.get(entry_id) else "Logbook note removed."
-        )
-        self.logbookChanged.emit()
-        self.activityChanged.emit()
-
-    @Slot(str)
-    def deleteLogbookNote(self, entry_id: str) -> None:
-        self.setLogbookNote(entry_id, "")
-
-    @Slot()
-    def clearSelectedLogbookEntry(self) -> None:
-        if self._selected_logbook_entry:
-            self._selected_logbook_entry = {}
-            self.logbookChanged.emit()
 
     def _journal_health(self):
         directory = journal_dir()
@@ -3188,31 +3111,6 @@ class CockpitController(
         "QVariantMap",
         lambda self: recent_unverified_hge_summary(self._hge_sightings),
         notify=hgeChanged,
-    )
-    logbookEntries = Property(
-        "QVariantList", lambda self: self._filtered_logbook_entries(),
-        notify=logbookChanged,
-    )
-    logbookFilters = Property(
-        "QStringList", lambda self: list(LOGBOOK_FILTERS), constant=True,
-    )
-    logbookFilter = Property(
-        str, lambda self: self._logbook_filter, notify=logbookChanged,
-    )
-    logbookQuery = Property(
-        str, lambda self: self._logbook_query, notify=logbookChanged,
-    )
-    selectedLogbookEntry = Property(
-        "QVariantMap", lambda self: self._selected_logbook_entry,
-        notify=logbookChanged,
-    )
-    currentSession = Property(
-        "QVariantMap", lambda self: self._state.get("currentSession", {}),
-        notify=logbookChanged,
-    )
-    recentSessions = Property(
-        "QVariantList", lambda self: self._state.get("recentSessions", []),
-        notify=logbookChanged,
     )
     serviceStatus = Property(
         "QVariantList", lambda self: self._service_status(),
