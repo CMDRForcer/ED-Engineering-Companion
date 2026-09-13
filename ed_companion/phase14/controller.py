@@ -235,6 +235,8 @@ from ed_companion.services import (
 from ed_companion.diagnostics import filtered_log_lines
 from ed_companion.exobiology import exobiology_distance_check
 
+from .controller_core import CoreControllerMixin
+
 from .dashboard_views import (
     build_commander_cards,
     build_finance_history,
@@ -368,8 +370,7 @@ def _eddn_relay_relevant(payload: Any) -> bool:
     )
 
 
-class CockpitController(QObject):
-    stateChanged = Signal()
+class CockpitController(CoreControllerMixin, QObject):
     materialsChanged = Signal()
     fleetChanged = Signal()
     wishlistChanged = Signal()
@@ -389,7 +390,6 @@ class CockpitController(QObject):
     materialSelectionChanged = Signal()
     engineeringChanged = Signal()
     uiChanged = Signal()
-    connectionChanged = Signal()
     commanderCardsChanged = Signal()
     inaraFinished = Signal(object)
     inaraJournalScanReady = Signal(object)
@@ -3587,21 +3587,21 @@ class CockpitController(QObject):
             },
         ]
 
-    ship = Property(str, lambda self: self._get("ship", "No ship"), notify=stateChanged)
-    ships = Property("QStringList", lambda self: self._get("ships", []), notify=stateChanged)
+    ship = Property(str, lambda self: self._get("ship", "No ship"), notify=CoreControllerMixin.stateChanged)
+    ships = Property("QStringList", lambda self: self._get("ships", []), notify=CoreControllerMixin.stateChanged)
     commanderKnown = Property(
-        bool, lambda self: bool(self._get("commanderKnown", False)), notify=stateChanged
+        bool, lambda self: bool(self._get("commanderKnown", False)), notify=CoreControllerMixin.stateChanged
     )
     commander = Property(
-        str, lambda self: str(self._get("commander", "")), notify=stateChanged
+        str, lambda self: str(self._get("commander", "")), notify=CoreControllerMixin.stateChanged
     )
     commanderOverview = Property(
         "QVariantMap", lambda self: self._get("commanderOverview", {}),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     powerplayOverview = Property(
         "QVariantMap", lambda self: self._get("powerplayOverview", {}),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     commanderCards = Property(
         "QVariantMap", lambda self: self._commander_cards(),
@@ -3632,35 +3632,35 @@ class CockpitController(QObject):
         notify=uiChanged,
     )
     fleetKnown = Property(
-        bool, lambda self: bool(self._get("fleetKnown", False)), notify=stateChanged
+        bool, lambda self: bool(self._get("fleetKnown", False)), notify=CoreControllerMixin.stateChanged
     )
     emptyStateReason = Property(
-        str, lambda self: str(self._get("emptyStateReason", "")), notify=stateChanged
+        str, lambda self: str(self._get("emptyStateReason", "")), notify=CoreControllerMixin.stateChanged
     )
     activeShip = Property(
-        str, lambda self: self._get("activeShip", ""), notify=stateChanged
+        str, lambda self: self._get("activeShip", ""), notify=CoreControllerMixin.stateChanged
     )
     followActiveShip = Property(
-        bool, lambda self: self._follow_active_ship, notify=stateChanged
+        bool, lambda self: self._follow_active_ship, notify=CoreControllerMixin.stateChanged
     )
-    system = Property(str, lambda self: self._get("system", "Unknown"), notify=stateChanged)
-    nextAction = Property(str, lambda self: self._next_action(), notify=stateChanged)
+    system = Property(str, lambda self: self._get("system", "Unknown"), notify=CoreControllerMixin.stateChanged)
+    nextAction = Property(str, lambda self: self._next_action(), notify=CoreControllerMixin.stateChanged)
     operationAction = Property(
         "QVariantMap", lambda self: self._operation_action(),
         notify=operationsChanged,
     )
-    completion = Property(float, lambda self: float(self._get("completion", 0.0)), notify=stateChanged)
+    completion = Property(float, lambda self: float(self._get("completion", 0.0)), notify=CoreControllerMixin.stateChanged)
     materialStatus = Property(
         str, lambda self: str(self._get("materialStatus", "MISSING")),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     completionReliable = Property(
         bool, lambda self: bool(self._get("completionReliable", False)),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     planProgressStatus = Property(
         str, lambda self: str(self._get("planProgressStatus", "NOT STARTED")),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     craftTrackingIssues = Property(
         "QVariantList", lambda self: self._get("craftTrackingIssues", []),
@@ -3682,13 +3682,13 @@ class CockpitController(QObject):
         "QVariantList", lambda self: self._get("unrelatedCraftTrackingIssues", []),
         notify=wishlistChanged,
     )
-    covered = Property(int, lambda self: int(self._get("covered", 0)), notify=stateChanged)
-    required = Property(int, lambda self: int(self._get("required", 0)), notify=stateChanged)
+    covered = Property(int, lambda self: int(self._get("covered", 0)), notify=CoreControllerMixin.stateChanged)
+    required = Property(int, lambda self: int(self._get("required", 0)), notify=CoreControllerMixin.stateChanged)
     calculationWarning = Property(
         str, lambda self: str(self._get("calculationWarning", "")),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
-    missingKinds = Property(int, lambda self: int(self._get("missingKinds", 0)), notify=stateChanged)
+    missingKinds = Property(int, lambda self: int(self._get("missingKinds", 0)), notify=CoreControllerMixin.stateChanged)
     trades = Property("QVariantList", lambda self: self._get("trades", []), notify=materialsChanged)
     traderRoute = Property(
         "QVariantList", lambda self: self._get("traderRoute", []),
@@ -3700,15 +3700,15 @@ class CockpitController(QObject):
     )
     routeDistance = Property(
         float, lambda self: float(self._get("routeDistance", 0.0)),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     recentCrafts = Property(
         "QVariantList", lambda self: self._get("recentCrafts", []),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     lastChangeReason = Property(
         str, lambda self: self._get("lastChangeReason", ""),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     blueprints = Property("QVariantList", lambda self: self._get("blueprints", []), notify=wishlistChanged)
     activeBlueprints = Property(
@@ -3858,84 +3858,84 @@ class CockpitController(QObject):
     )
     inaraCommander = Property(
         str, lambda self: str(self._inara_config.get("commander_name") or ""),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     inaraApiKey = Property(
         str, lambda self: str(self._inara_config.get("api_key") or ""),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     inaraConsent = Property(
         bool, lambda self: bool(self._inara_config.get("consent")),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     inaraAutoSync = Property(
         bool, lambda self: bool(self._inara_config.get("auto_sync")),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     inaraKeyConfigured = Property(
         bool, lambda self: bool(self._inara_config.get("api_key")),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     inaraStatus = Property(
-        str, lambda self: self._inara_status, notify=connectionChanged,
+        str, lambda self: self._inara_status, notify=CoreControllerMixin.connectionChanged,
     )
     inaraBusy = Property(
-        bool, lambda self: self._inara_busy, notify=connectionChanged,
+        bool, lambda self: self._inara_busy, notify=CoreControllerMixin.connectionChanged,
     )
     historyExportBusy = Property(
         bool, lambda self: self._history_export_busy,
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     inaraReceipts = Property(
         "QVariantList", lambda self: self._inara_receipts,
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     frontierConnected = Property(
         bool, lambda self: self._frontier_tokens is not None,
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     frontierBusy = Property(
         bool, lambda self: self._frontier_busy,
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     frontierStatus = Property(
         str, lambda self: self._frontier_status,
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     frontierLastSync = Property(
         str, lambda self: self._frontier_last_sync,
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     frontierConsent = Property(
         bool, lambda self: bool(self._frontier_config.get("consent")),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     eddnConsent = Property(
         bool, lambda self: bool(self._eddn_config.get("consent")),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     eddnUploadEnabled = Property(
         bool, lambda self: bool(self._eddn_config.get("upload_enabled")),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     eddnListenerEnabled = Property(
         bool, lambda self: bool(self._eddn_config.get("listener_enabled")),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     eddnStatus = Property(
-        str, lambda self: self._eddn_status, notify=connectionChanged,
+        str, lambda self: self._eddn_status, notify=CoreControllerMixin.connectionChanged,
     )
     eddnParity = Property(
         "QVariantMap", lambda self: schema_parity_report(),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     eddnStationStatus = Property(
         str, lambda self: self._eddn_station_status_summary(),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     eddnListenerStatus = Property(
         str, lambda self: self._eddn_listener_status,
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     stateFindRefreshStatus = Property(
         str, lambda self: self._state_find_refresh_status,
@@ -3951,7 +3951,7 @@ class CockpitController(QObject):
     )
     miningCommodityFilters = Property(
         "QStringList", lambda self: self._mining_commodity_filters(),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     miningRevision = Property(
         int,
@@ -3959,11 +3959,11 @@ class CockpitController(QObject):
             self._mining_catalog.get("candidates", [])
             if isinstance(self._mining_catalog, dict) else []
         ),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     miningCacheSummary = Property(
         "QVariantMap", lambda self: self._mining_cache_summary(),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     miningSyncBusy = Property(
         bool, lambda self: self._mining_sync_busy, notify=miningChanged,
@@ -3972,44 +3972,44 @@ class CockpitController(QObject):
         str, lambda self: self._mining_sync_status, notify=miningChanged,
     )
     eddnBusy = Property(
-        bool, lambda self: self._eddn_busy, notify=connectionChanged,
+        bool, lambda self: self._eddn_busy, notify=CoreControllerMixin.connectionChanged,
     )
     eddnQueue = Property(
         "QVariantList", lambda self: self._eddn_queue_view(),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     eddnQuarantine = Property(
         "QVariantList", lambda self: self._eddn_quarantine_view(),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     eddnDeliverySummary = Property(
         "QVariantMap", lambda self: self._eddn_delivery_summary(),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     eddnStationSnapshots = Property(
         "QVariantList", lambda self: self._eddn_station_snapshot_view(),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     edmcParallelStatus = Property(
         "QVariantMap", lambda self: self._edmc_parallel_status(),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     traderSyncBusy = Property(
-        bool, lambda self: self._trader_sync_busy, notify=connectionChanged,
+        bool, lambda self: self._trader_sync_busy, notify=CoreControllerMixin.connectionChanged,
     )
     traderSyncStatus = Property(
-        str, lambda self: self._trader_sync_status, notify=connectionChanged,
+        str, lambda self: self._trader_sync_status, notify=CoreControllerMixin.connectionChanged,
     )
     techBrokerSyncBusy = Property(
-        bool, lambda self: self._tech_broker_sync_busy, notify=connectionChanged,
+        bool, lambda self: self._tech_broker_sync_busy, notify=CoreControllerMixin.connectionChanged,
     )
     techBrokerSyncStatus = Property(
-        str, lambda self: self._tech_broker_sync_status, notify=connectionChanged,
+        str, lambda self: self._tech_broker_sync_status, notify=CoreControllerMixin.connectionChanged,
     )
     spanshCatalogSyncBusy = Property(
         bool,
         lambda self: self._trader_sync_busy or self._tech_broker_sync_busy,
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     spanshCatalogSyncStatus = Property(
         str,
@@ -4017,7 +4017,7 @@ class CockpitController(QObject):
             f"MATERIAL TRADERS · {self._trader_sync_status}\n"
             f"TECH BROKERS · {self._tech_broker_sync_status}"
         ),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     hgeTargets = Property(
         "QVariantList", lambda self: self._hge_targets(),
@@ -4087,14 +4087,14 @@ class CockpitController(QObject):
     )
     serviceStatus = Property(
         "QVariantList", lambda self: self._service_status(),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     interfaceActivity = Property(
         "QVariantList",
         lambda self: build_interface_activity_feed(
             self._inara_receipts, self._eddn_queue, self._frontier_last_sync,
         ),
-        notify=connectionChanged,
+        notify=CoreControllerMixin.connectionChanged,
     )
     journalHealth = Property(
         "QVariantMap", lambda self: self._journal_health(),
@@ -4113,7 +4113,7 @@ class CockpitController(QObject):
         lambda self: self._selected_material,
         notify=materialSelectionChanged,
     )
-    journalPath = Property(str, lambda self: str(journal_dir()), notify=stateChanged)
+    journalPath = Property(str, lambda self: str(journal_dir()), notify=CoreControllerMixin.stateChanged)
     dataPath = Property(
         str,
         lambda self: str(self.package_root / "ed_data"),
@@ -4209,24 +4209,24 @@ class CockpitController(QObject):
     engineeringInstalledModules = Property(
         "QVariantList",
         lambda self: self._state.get("engineeringModuleSlots", []),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     engineeringShipSlots = Property(
         "QVariantList",
         lambda self: self._state.get("engineeringShipSlots", []),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     engineeringShipCatalog = Property(
         "QVariantList", lambda self: self._ship_catalog, constant=True,
     )
     selectedShipType = Property(
         str, lambda self: str(self._state.get("selectedShipType") or ""),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     selectedShipStats = Property(
         "QVariantMap",
         lambda self: self._state.get("selectedShipStats", {}),
-        notify=stateChanged,
+        notify=CoreControllerMixin.stateChanged,
     )
     buildImportPreview = Property(
         "QVariantMap", lambda self: self._build_import_preview,
