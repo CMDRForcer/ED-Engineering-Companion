@@ -312,13 +312,13 @@ class ProfileContextTests(unittest.TestCase):
             trader, broker = self._spansh_results()
 
             with mock.patch(
-                "ed_companion.phase14.controller.fetch_trader_catalog_updates",
+                "ed_companion.phase14.controller_navigation.fetch_trader_catalog_updates",
                 return_value=trader,
             ), mock.patch(
                 "ed_companion.phase14.controller_engineering.fetch_tech_broker_catalog_updates",
                 return_value=broker,
             ), mock.patch(
-                "ed_companion.phase14.controller.TraderTypeCache"
+                "ed_companion.phase14.controller_navigation.TraderTypeCache"
             ):
                 controller.updateSpanshCatalogs()
                 workers["trader-catalog-sync"]()
@@ -358,13 +358,13 @@ class ProfileContextTests(unittest.TestCase):
             original_bravo_broker = bravo_broker.read_bytes()
 
             with mock.patch(
-                "ed_companion.phase14.controller.fetch_trader_catalog_updates",
+                "ed_companion.phase14.controller_navigation.fetch_trader_catalog_updates",
                 return_value=trader,
             ), mock.patch(
                 "ed_companion.phase14.controller_engineering.fetch_tech_broker_catalog_updates",
                 return_value=broker,
             ), mock.patch(
-                "ed_companion.phase14.controller.TraderTypeCache"
+                "ed_companion.phase14.controller_navigation.TraderTypeCache"
             ):
                 controller.updateSpanshCatalogs()
                 controller._bind_profile_paths(bravo)

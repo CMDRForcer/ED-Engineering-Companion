@@ -61,7 +61,7 @@ class MiningFinderProjectionTests(unittest.TestCase):
         } for index in range(5000)])
 
         with patch(
-            "ed_companion.phase14.controller.mining_commodity_id",
+            "ed_companion.phase14.controller_navigation.mining_commodity_id",
             wraps=__import__(
                 "ed_companion.phase14.controller", fromlist=["mining_commodity_id"]
             ).mining_commodity_id,
