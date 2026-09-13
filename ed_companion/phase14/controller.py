@@ -249,6 +249,7 @@ from .dashboard_views import (
 
 from .controller_commander import CommanderMixin
 from .controller_eddn import EddnMixin
+from .controller_fleet_materials import FleetMaterialsMixin
 from .controller_engineering import EngineeringMixin
 from .controller_logbook import LogbookMixin
 from .controller_exobiology import ExobiologyMixin
@@ -380,7 +381,8 @@ def _eddn_relay_relevant(payload: Any) -> bool:
 
 class CockpitController(
     CommanderMixin, EddnMixin, EngineeringMixin, ExobiologyMixin,
-    FrontierCapiMixin, InaraMixin, LogbookMixin, CoreControllerMixin, QObject,
+    FleetMaterialsMixin, FrontierCapiMixin, InaraMixin, LogbookMixin,
+    CoreControllerMixin, QObject,
 ):
     materialsChanged = Signal()
     miningChanged = Signal()
@@ -391,7 +393,6 @@ class CockpitController(
     diagnosticsChanged = Signal()
     rendererChanged = Signal()
     activityChanged = Signal()
-    materialSelectionChanged = Signal()
     traderSyncFinished = Signal(bool, str)
     historyExportFinished = Signal(object)
     startupStateReady = Signal(object)
@@ -908,20 +909,7 @@ class CockpitController(
     def _load_ui_config(self):
         return load_json_file(self.config_file, {}, encoding="utf-8")
 
-    def _load_fleet_images(self):
-        loaded = load_json_file(self.fleet_images_file, {}, encoding="utf-8")
-        return {
-            str(ship_id): str(filename)
-            for ship_id, filename in (
-                loaded.items() if isinstance(loaded, dict) else []
-            )
-            if str(ship_id).strip() and str(filename).strip()
-        }
 
-    def _save_fleet_images(self):
-        return self._persist_json(
-            self.fleet_images_file, self._fleet_images, "Fleet images"
-        )
 
     def _load_trader_sync_status(self):
         data = self._read_local_json(self.trader_catalog_file, {})
@@ -1226,49 +1214,7 @@ class CockpitController(
         return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
 
 
-    @Slot(str, str, result=bool)
-    def setFleetShipImage(self, ship_id, source):
-        ship_id = str(ship_id or "").strip()
-        source_path = Path(QUrl(str(source or "")).toLocalFile())
-        if (
-            not ship_id or not source_path.is_file()
-            or source_path.suffix.casefold()
-            not in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
-        ):
-            return False
-        try:
-            self.fleet_images_dir.mkdir(parents=True, exist_ok=True)
-            safe_id = re.sub(r"[^A-Za-z0-9_-]+", "_", ship_id)[:64] or "ship"
-            filename = (
-                f"{safe_id}-{uuid.uuid4().hex[:10]}"
-                f"{source_path.suffix.casefold()}"
-            )
-            shutil.copy2(source_path, self.fleet_images_dir / filename)
-            previous = dict(self._fleet_images)
-            self._fleet_images[ship_id] = filename
-            if not self._save_fleet_images():
-                self._fleet_images = previous
-                return False
-        except OSError as exc:
-            LOGGER.error(
-                "Fleet image import failed for ShipID %s: %s", ship_id, exc
-            )
-            return False
-        self.fleetChanged.emit()
-        return True
 
-    @Slot(str, result=bool)
-    def clearFleetShipImage(self, ship_id):
-        ship_id = str(ship_id or "").strip()
-        if ship_id not in self._fleet_images:
-            return True
-        previous = dict(self._fleet_images)
-        self._fleet_images.pop(ship_id, None)
-        if not self._save_fleet_images():
-            self._fleet_images = previous
-            return False
-        self.fleetChanged.emit()
-        return True
 
     def _cached_derived(
         self, name: str, revision: object, builder: Callable[[], Any],
@@ -1712,20 +1658,6 @@ class CockpitController(
             })
         return rows
 
-    def _hge_material_filters(self):
-        self._hge_candidate_rows()
-        if self._hge_material_filter_cache is not None:
-            return self._hge_material_filter_cache
-        names = set()
-        for row in self._hge_candidate_cache_rows:
-            for name in str(row.get("materials") or "").split(","):
-                name = name.strip()
-                if name and "not predictable" not in name.casefold():
-                    names.add(name)
-        self._hge_material_filter_cache = (
-            ["ALL HGE MATERIALS"] + sorted(names, key=str.casefold)
-        )
-        return self._hge_material_filter_cache
 
     def _state_find_rows(self):
         return self._cached_derived(
@@ -2445,100 +2377,6 @@ class CockpitController(
             "latestAt": latest.replace("T", " ")[:16] if latest else "—",
         }
 
-    def _material_source_routes(self, material):
-        """Add live, distance-sorted collection routes to a material card."""
-        routes = [dict(card) for card in material.get("sourceCards", [])]
-        # HGE farming is only a valid direct or farm-and-trade route for
-        # materials in the standard Manufactured Material Trader table.
-        # Thargoid, Guardian and other special manufactured materials share
-        # the broad journal category but cannot be obtained through that table.
-        if not is_hge_route_relevant(material):
-            return routes
-
-        name = str(material.get("name") or material.get("key") or "material")
-        live_rows = [
-            row for row in self._hge_finder_rows()
-            if not row.get("selfTest") and row.get("system")
-        ]
-        direct_rows = [
-            row for row in live_rows
-            if name.casefold() in str(row.get("materials") or "").casefold()
-        ]
-        target = (direct_rows or live_rows or [{}])[0]
-        if not target:
-            candidates = [
-                row for row in self._hge_candidate_rows()
-                if name.casefold() in str(row.get("materials") or "").casefold()
-            ] or self._hge_candidate_rows()
-            if not candidates:
-                return routes
-            candidate = candidates[0]
-            distance = float(candidate.get("distance", -1) or -1)
-            location = str(candidate.get("system") or "")
-            if distance >= 0:
-                location += f" · {distance:.1f} ly"
-            routes.insert(0, {
-                "kind": "HGE_CANDIDATE",
-                "label": "NEAREST HGE CANDIDATE · SCAN REQUIRED",
-                "detail": (
-                    f"{location} · last community report "
-                    f"{candidate.get('lastReportedMinutes', 0)} min ago · "
-                    f"{candidate.get('states')}. Possible contents: "
-                    f"{candidate.get('materials')}. Farm those standard "
-                    f"Manufactured materials and exchange them for {name} at "
-                    "a Manufactured Material Trader. Jump there, scan the Nav "
-                    "Beacon or use the FSS; the app will then show locally "
-                    "verified signals and their real lifetime."
-                ),
-                "system": str(candidate.get("system") or ""),
-                "distanceLy": distance,
-                "candidateOnly": True,
-                "verified": False,
-            })
-            return routes
-
-        direct = bool(direct_rows)
-        distance = float(target.get("distance", -1) or -1)
-        location = str(target.get("system") or "")
-        if distance >= 0:
-            location += f" · {distance:.1f} ly"
-        location += f" · {int(target.get('remainingMinutes', 0) or 0)} min left"
-        probable = str(target.get("materials") or "Contents not predictable")
-        if direct:
-            instruction = (
-                f"Likely direct source for {name}. Scan the system Nav Beacon, "
-                "enter the HGE and collect with limpets."
-            )
-            label = "NEAREST LIVE HGE · DIRECT SOURCE"
-        else:
-            trader = material.get("trader") or {}
-            trader_route = ""
-            if trader.get("system"):
-                trader_route = (
-                    f" Then trade at {trader.get('station') or 'the trader'} "
-                    f"in {trader.get('system')}."
-                )
-            instruction = (
-                f"Collect the listed high-grade Manufactured materials, then "
-                f"exchange them for {name} at a Manufactured Material Trader."
-                f"{trader_route}"
-            )
-            label = "NEAREST LIVE HGE · FARM & TRADE"
-        routes.insert(0, {
-            "kind": "LIVE_HGE",
-            "label": label,
-            "detail": (
-                f"{location} · {target.get('faction') or 'Unknown faction'} · "
-                f"{target.get('state') or 'Unknown state'}. "
-                f"Likely contents: {probable}. {instruction}"
-            ),
-            "system": str(target.get("system") or ""),
-            "distanceLy": distance,
-            "remainingMinutes": int(target.get("remainingMinutes", 0) or 0),
-            "live": True,
-            "verified": direct,
-        })
-        return routes
 
     def _service_status(self):
         return self._cached_derived(
@@ -2627,9 +2465,6 @@ class CockpitController(
         "QVariantList", lambda self: list(self._navigation_order),
         notify=CoreControllerMixin.uiChanged,
     )
-    fleetKnown = Property(
-        bool, lambda self: bool(self._get("fleetKnown", False)), notify=CoreControllerMixin.stateChanged
-    )
     emptyStateReason = Property(
         str, lambda self: str(self._get("emptyStateReason", "")), notify=CoreControllerMixin.stateChanged
     )
@@ -2646,10 +2481,6 @@ class CockpitController(
         notify=CoreControllerMixin.operationsChanged,
     )
     completion = Property(float, lambda self: float(self._get("completion", 0.0)), notify=CoreControllerMixin.stateChanged)
-    materialStatus = Property(
-        str, lambda self: str(self._get("materialStatus", "MISSING")),
-        notify=CoreControllerMixin.stateChanged,
-    )
     completionReliable = Property(
         bool, lambda self: bool(self._get("completionReliable", False)),
         notify=CoreControllerMixin.stateChanged,
@@ -2830,10 +2661,6 @@ class CockpitController(
         "QVariantList", lambda self: self._hge_candidate_rows(),
         notify=CoreControllerMixin.hgeChanged,
     )
-    hgeMaterialFilters = Property(
-        "QStringList", lambda self: self._hge_material_filters(),
-        notify=CoreControllerMixin.hgeChanged,
-    )
     stateFindTypeFilters = Property(
         "QStringList",
         lambda self: [
@@ -2882,11 +2709,6 @@ class CockpitController(
         "QVariantList", lambda self: self._crash_reports(),
         notify=diagnosticsChanged,
     )
-    selectedMaterial = Property(
-        "QVariantMap",
-        lambda self: self._selected_material,
-        notify=materialSelectionChanged,
-    )
     journalPath = Property(str, lambda self: str(journal_dir()), notify=CoreControllerMixin.stateChanged)
     dataPath = Property(
         str,
@@ -2910,19 +2732,6 @@ class CockpitController(
         notify=CoreControllerMixin.engineeringChanged,
     )
 
-    fleetStatus = Property(
-        str, lambda self: self._fleet_status, notify=CoreControllerMixin.engineeringChanged
-    )
-    moduleInstance = Property(
-        str, lambda self: self._module_instance, notify=CoreControllerMixin.engineeringChanged
-    )
-    selectedModuleSlot = Property(
-        str, lambda self: self._selected_module_slot, notify=CoreControllerMixin.engineeringChanged
-    )
-    moduleSlotOptions = Property(
-        "QVariantList", lambda self: self._module_slot_options,
-        notify=CoreControllerMixin.engineeringChanged,
-    )
     traderPreference = Property(
         str, lambda self: self._trader_preference, notify=CoreControllerMixin.uiChanged,
     )
@@ -3195,25 +3004,7 @@ class CockpitController(
         self._engineering_status = self._fleet_status
         self.engineeringChanged.emit()
 
-    @Slot(str)
-    def selectMaterial(self, key):
-        self._selected_material = next(
-            (
-                dict(row) for row in self._state.get("materials", [])
-                if row.get("key") == str(key)
-            ),
-            {},
-        )
-        if self._selected_material:
-            self._selected_material["sourceCards"] = (
-                self._material_source_routes(self._selected_material)
-            )
-        self.materialSelectionChanged.emit()
 
-    @Slot()
-    def clearSelectedMaterial(self):
-        self._selected_material = {}
-        self.materialSelectionChanged.emit()
 
 
 
@@ -3240,24 +3031,7 @@ class CockpitController(
 
 
 
-    @Slot(str)
-    def setModuleInstance(self, label):
-        self.clearCraftConfirmation()
-        value = str(label or "").strip()
-        self._module_instance = value[:48] or "Module 1"
-        self.engineeringChanged.emit()
 
-    @Slot(str)
-    def setSelectedModuleSlot(self, slot):
-        self.clearCraftConfirmation()
-        selected = next(
-            (row for row in self._module_slot_options if row.get("slot") == slot),
-            {},
-        )
-        self._selected_module_slot = str(selected.get("slot") or "")
-        self._selected_module_id = str(selected.get("moduleId") or "")
-        self._apply_installed_slot_engineering()
-        self.engineeringChanged.emit()
 
 
 
