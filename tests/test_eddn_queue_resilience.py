@@ -200,10 +200,10 @@ class EddnQueueResilienceTests(unittest.TestCase):
             }}
 
             with mock.patch(
-                "ed_companion.phase14.controller.station_snapshot_mismatch_reason",
+                "ed_companion.phase14.controller_eddn.station_snapshot_mismatch_reason",
                 return_value="",
             ), mock.patch(
-                "ed_companion.phase14.controller.prepare_station_snapshot",
+                "ed_companion.phase14.controller_eddn.prepare_station_snapshot",
                 return_value={"schema": "outfitting/3", "message": {}},
             ):
                 rows = controller._eddn_station_snapshot_view(directory)

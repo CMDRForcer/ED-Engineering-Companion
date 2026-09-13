@@ -129,7 +129,7 @@ class EddnRetryAndDeliveryWindowTests(unittest.TestCase):
             controller.eddn_queue_file = queue_path
             controller.eddn_quarantine_file = root / "quarantine.json"
             with self.assertLogs(
-                "ed_companion.phase14.controller", level="WARNING"
+                "ed_companion.phase14.controller_eddn", level="WARNING"
             ) as captured:
                 loaded = controller._load_eddn_queue()
             self.assertEqual(loaded[0]["status"], "retry")

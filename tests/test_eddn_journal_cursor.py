@@ -54,7 +54,7 @@ class EddnJournalCursorTests(unittest.TestCase):
 
     def _scan(self, controller, paths):
         with mock.patch(
-            "ed_companion.phase14.controller.journal_change_signature",
+            "ed_companion.phase14.controller_eddn.journal_change_signature",
             return_value=self._signature(paths),
         ):
             controller._scan_eddn_journal()
@@ -205,7 +205,7 @@ class EddnJournalCursorTests(unittest.TestCase):
                 return real_atomic_write(target, text, encoding)
 
             with mock.patch(
-                "ed_companion.phase14.controller.atomic_write",
+                "ed_companion.phase14.controller_eddn.atomic_write",
                 side_effect=fail_queue_save,
             ):
                 self._scan(controller, [path])

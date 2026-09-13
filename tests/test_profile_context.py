@@ -189,7 +189,7 @@ class ProfileContextTests(unittest.TestCase):
             controller.saveEddnConfig(True, True, True)
 
             with mock.patch(
-                "ed_companion.phase14.controller.resolve_profile_context",
+                "ed_companion.phase14.controller_eddn.resolve_profile_context",
                 return_value=bravo,
             ):
                 self.assertTrue(controller._sync_eddn_profile())
@@ -211,7 +211,7 @@ class ProfileContextTests(unittest.TestCase):
             self.assertEqual(controller.eddn_queue_file.parent.name, f"profile-{bravo.key}")
 
             with mock.patch(
-                "ed_companion.phase14.controller.resolve_profile_context",
+                "ed_companion.phase14.controller_eddn.resolve_profile_context",
                 return_value=alpha,
             ):
                 self.assertTrue(controller._sync_eddn_profile())
@@ -243,7 +243,7 @@ class ProfileContextTests(unittest.TestCase):
             )
 
             with mock.patch(
-                "ed_companion.phase14.controller.resolve_profile_context",
+                "ed_companion.phase14.controller_eddn.resolve_profile_context",
                 return_value=bravo,
             ):
                 self.assertTrue(controller._sync_eddn_profile())
@@ -271,7 +271,7 @@ class ProfileContextTests(unittest.TestCase):
             controller.inaraFinished = _Signal(controller._finish_inara)
 
             with mock.patch(
-                "ed_companion.phase14.controller.resolve_profile_context",
+                "ed_companion.phase14.controller_eddn.resolve_profile_context",
                 return_value=alpha,
             ):
                 self.assertTrue(controller._start_inara("test"))
@@ -282,13 +282,13 @@ class ProfileContextTests(unittest.TestCase):
             self.assertTrue(request["request_id"])
 
             with mock.patch(
-                "ed_companion.phase14.controller.resolve_profile_context",
+                "ed_companion.phase14.controller_eddn.resolve_profile_context",
                 return_value=bravo,
             ):
                 self.assertTrue(controller._sync_eddn_profile())
 
             with mock.patch(
-                "ed_companion.phase14.controller.send_events",
+                "ed_companion.phase14.controller_inara.send_events",
                 return_value=({
                     "timestamp": "2026-08-30T10:00:00Z",
                     "httpStatus": 200,
