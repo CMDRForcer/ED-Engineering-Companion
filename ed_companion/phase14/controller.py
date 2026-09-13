@@ -183,38 +183,6 @@ def initial_navigation_order(configured):
     return order
 
 
-def state_with_live_location(state, location):
-    """Apply an exact Journal location without waiting for a full state build."""
-    if not isinstance(location, dict):
-        return state, False
-    system = str(location.get("system") or "").strip()
-    position = location.get("currentPosition")
-    if (
-        not system or not isinstance(position, (list, tuple))
-        or len(position) != 3
-    ):
-        return state, False
-    try:
-        position = [float(value) for value in position]
-    except (TypeError, ValueError):
-        return state, False
-    if not all(math.isfinite(value) for value in position):
-        return state, False
-    current = dict(state or {})
-    changed = (
-        str(current.get("system") or "").strip() != system
-        or list(current.get("currentPosition") or []) != position
-    )
-    if not changed:
-        return state, False
-    current.update({
-        "system": system,
-        "currentPosition": position,
-        "currentSystemAddress": location.get("currentSystemAddress"),
-    })
-    return current, True
-
-
 from ed_companion.navigation.trader_search import (
     fetch_tech_broker_catalog_updates,
     fetch_trader_catalog_updates,
@@ -248,7 +216,8 @@ from .dashboard_views import (
 )
 
 from .controller_commander import CommanderMixin
-from .controller_eddn import EddnMixin
+from .controller_eddn import EddnMixin, _eddn_relay_relevant
+from .controller_journal_health import JournalHealthMixin, _last_complete_json_record
 from .controller_ui_settings import UiSettingsMixin
 from .controller_navigation import NavigationMixin
 from .controller_fleet_materials import FleetMaterialsMixin
@@ -336,57 +305,12 @@ LOGGER = logging.getLogger(__name__)
 FRONTIER_REQUEST_WATCHDOG_MS = 120_000
 
 
-def _last_complete_json_record(path: Path) -> dict[str, Any]:
-    """Read only the final newline-complete Journal record."""
-    with path.open("rb") as handle:
-        handle.seek(0, os.SEEK_END)
-        end = handle.tell()
-        if end <= 0:
-            return {}
-        handle.seek(end - 1)
-        if handle.read(1) not in {b"\n", b"\r"}:
-            return {}
-        position = end
-        buffer = b""
-        while position > 0:
-            chunk_size = min(65536, position)
-            position -= chunk_size
-            handle.seek(position)
-            buffer = handle.read(chunk_size) + buffer
-            lines = buffer.splitlines()
-            if position == 0 or len(lines) >= 2:
-                line = lines[-1] if lines else b""
-                if line:
-                    record = json.loads(line.decode("utf-8-sig", errors="replace"))
-                    return record if isinstance(record, dict) else {}
-        return {}
-
-
-def _eddn_relay_relevant(payload: Any) -> bool:
-    """Keep only relay frames consumed by State Finds or Mining Finder."""
-    if not isinstance(payload, dict):
-        return False
-    schema = str(payload.get("$schemaRef") or "").casefold()
-    if "/fsssignaldiscovered/" in schema:
-        return True
-    if "/fssbodysignals/" in schema:
-        return True
-    message = payload.get("message")
-    return (
-        "/journal/1" in schema
-        and isinstance(message, dict)
-        and str(message.get("event") or "") in {
-            "FSDJump", "Location", "CarrierJump", "Scan", "SAASignalsFound",
-        }
-    )
-
-
 class CockpitController(
     CommanderMixin, EddnMixin, EngineeringMixin, ExobiologyMixin,
-    FleetMaterialsMixin, FrontierCapiMixin, InaraMixin, LogbookMixin,
-    NavigationMixin, UiSettingsMixin, CoreControllerMixin, QObject,
+    FleetMaterialsMixin, FrontierCapiMixin, InaraMixin, JournalHealthMixin,
+    LogbookMixin, NavigationMixin, UiSettingsMixin, CoreControllerMixin,
+    QObject,
 ):
-    journalHealthChanged = Signal()
     diagnosticsChanged = Signal()
     activityChanged = Signal()
     historyExportFinished = Signal(object)
@@ -981,56 +905,6 @@ class CockpitController(
 
 
 
-    def _journal_health(self):
-        directory = journal_dir()
-        try:
-            files = sorted(
-                directory.glob("Journal.*.log"),
-                key=lambda path: path.stat().st_mtime,
-            )
-        except OSError:
-            files = []
-        latest = files[-1] if files else None
-        age = -1
-        size = 0
-        parser_ok = False
-        last_event = ""
-        error = ""
-        if latest:
-            try:
-                stat = latest.stat()
-                age = max(0, int(time.time() - stat.st_mtime))
-                size = int(stat.st_size)
-                record = _last_complete_json_record(latest)
-                if record:
-                    parser_ok = isinstance(record, dict)
-                    last_event = str(record.get("event") or "")
-            except (OSError, ValueError, TypeError) as exc:
-                error = str(exc)
-        status = (
-            "LIVE" if latest and parser_ok and age <= 15
-            else "READY" if latest and parser_ok
-            else "ERROR" if latest else "NO JOURNAL"
-        )
-        return {
-            "status": status,
-            "directoryExists": directory.exists(),
-            "fileCount": len(files),
-            "latestFile": latest.name if latest else "",
-            "ageSeconds": age,
-            "sizeBytes": size,
-            "parserOk": parser_ok,
-            "lastEvent": last_event,
-            "watcherActive": bool(
-                self._journal_auto
-                and
-                getattr(self, "timer", None)
-                and self.timer.isActive()
-            ),
-            "pollIntervalMs": 1200 if self._journal_auto else 0,
-            "error": error,
-            "renderer": self._renderer_active,
-        }
 
     def _diagnostic_logs(self):
         path = self.config_dir / "phase14.log"
@@ -1633,9 +1507,6 @@ class CockpitController(
     )
     activity = Property(str, lambda self: self._activity, notify=activityChanged)
     lastPage = Property(int, lambda self: self._last_page, notify=CoreControllerMixin.uiChanged)
-    journalAuto = Property(
-        bool, lambda self: self._journal_auto, notify=CoreControllerMixin.uiChanged,
-    )
     systemTrayAvailable = Property(
         bool, lambda self: self._system_tray_available, notify=CoreControllerMixin.uiChanged,
     )
@@ -1679,10 +1550,6 @@ class CockpitController(
         "QVariantList", lambda self: self._service_status(),
         notify=CoreControllerMixin.connectionChanged,
     )
-    journalHealth = Property(
-        "QVariantMap", lambda self: self._journal_health(),
-        notify=journalHealthChanged,
-    )
     diagnosticLogs = Property(
         "QStringList", lambda self: self._diagnostic_logs(),
         notify=diagnosticsChanged,
@@ -1691,7 +1558,6 @@ class CockpitController(
         "QVariantList", lambda self: self._crash_reports(),
         notify=diagnosticsChanged,
     )
-    journalPath = Property(str, lambda self: str(journal_dir()), notify=CoreControllerMixin.stateChanged)
     dataPath = Property(
         str,
         lambda self: str(self.package_root / "ed_data"),
@@ -2610,21 +2476,6 @@ class CockpitController(
 
 
 
-    @Slot(bool)
-    def setJournalAuto(self, enabled):
-        self._journal_auto = bool(enabled)
-        saved = self._save_ui_config()
-        if not saved:
-            self.uiChanged.emit()
-            self.journalHealthChanged.emit()
-            return
-        self._activity = (
-            "Automatic Journal updates enabled."
-            if self._journal_auto else "Automatic Journal updates paused."
-        )
-        self.uiChanged.emit()
-        self.activityChanged.emit()
-        self.journalHealthChanged.emit()
 
 
     @Slot(bool)
@@ -2635,65 +2486,8 @@ class CockpitController(
 
 
 
-    @Slot()
-    def reloadJournalNow(self):
-        self.clearCraftConfirmation()
-        self.refresh()
-        self._scan_eddn_journal()
 
-    @Slot(str)
-    def setJournalPath(self, path):
-        if set_journal_dir(path):
-            self._last_journal_stamp = None
-            self._last_commander_status_stamp = None
-            self._selected_ship = ""
-            self.refresh()
-            self._activity = "Journal directory updated."
-        else:
-            value = Path(str(path or "").strip()).expanduser()
-            self._activity = (
-                "Journal directory could not be saved; previous path remains active."
-                if value.is_dir()
-                else "Journal directory does not exist."
-            )
-        self.activityChanged.emit()
 
-    @Slot()
-    def pollJournal(self):
-        if self._shutdown_complete:
-            return
-        if not self._journal_auto:
-            self._maybe_start_inara_auto()
-            self._process_eddn_queue()
-            return
-        # The startup/refresh worker owns the large Journal parse. Avoid
-        # contending for its cache lock from Qt while the first projection is
-        # still being built.
-        if not self._journal_state_ready:
-            self._maybe_start_inara_auto()
-            self._process_eddn_queue()
-            return
-        self._poll_commander_status_credits()
-        self._poll_exobiology_distance_check()
-        stamp = journal_change_signature()
-        if self._last_journal_stamp is None:
-            self._last_journal_stamp = stamp
-            self._queue_inara_journal_scan()
-        elif stamp != self._last_journal_stamp:
-            self._last_journal_stamp = stamp
-            live_state, location_changed = state_with_live_location(
-                self._state, latest_profile_location()
-            )
-            if location_changed:
-                self._state = live_state
-                self._state_revision += 1
-                self._derived_cache.clear()
-                self.stateChanged.emit()
-                self.hgeChanged.emit()
-            self.refresh()
-        self._maybe_start_inara_auto()
-        self._scan_eddn_journal()
-        self._process_eddn_queue()
 
 
 

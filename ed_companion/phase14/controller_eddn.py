@@ -221,6 +221,25 @@ EDDN_ACTIVE_RECEIPT_LIMIT = 100
 from .controller_core import CoreControllerMixin
 
 
+def _eddn_relay_relevant(payload: Any) -> bool:
+    """Keep only relay frames consumed by State Finds or Mining Finder."""
+    if not isinstance(payload, dict):
+        return False
+    schema = str(payload.get("$schemaRef") or "").casefold()
+    if "/fsssignaldiscovered/" in schema:
+        return True
+    if "/fssbodysignals/" in schema:
+        return True
+    message = payload.get("message")
+    return (
+        "/journal/1" in schema
+        and isinstance(message, dict)
+        and str(message.get("event") or "") in {
+            "FSDJump", "Location", "CarrierJump", "Scan", "SAASignalsFound",
+        }
+    )
+
+
 class EddnMixin:
     """Extracted from CockpitController (controller.py modularization).
 
