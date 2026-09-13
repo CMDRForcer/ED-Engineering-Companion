@@ -395,7 +395,6 @@ class CockpitController(
     activityChanged = Signal()
     materialSelectionChanged = Signal()
     engineeringChanged = Signal()
-    uiChanged = Signal()
     commanderCardsChanged = Signal()
     traderSyncFinished = Signal(bool, str)
     techBrokerSyncFinished = Signal(bool, str)
@@ -3015,11 +3014,11 @@ class CockpitController(
     )
     commanderCardOrder = Property(
         "QVariantList", lambda self: list(self._commander_card_order),
-        notify=uiChanged,
+        notify=CoreControllerMixin.uiChanged,
     )
     navigationOrder = Property(
         "QVariantList", lambda self: list(self._navigation_order),
-        notify=uiChanged,
+        notify=CoreControllerMixin.uiChanged,
     )
     fleetKnown = Property(
         bool, lambda self: bool(self._get("fleetKnown", False)), notify=CoreControllerMixin.stateChanged
@@ -3161,10 +3160,10 @@ class CockpitController(
     rendererMode = Property(str, lambda self: self._renderer_mode, notify=rendererChanged)
     rendererActive = Property(str, lambda self: self._renderer_active, notify=rendererChanged)
     restartRequired = Property(bool, lambda self: self._restart_required, notify=rendererChanged)
-    uiScale = Property(float, lambda self: self._ui_scale, notify=uiChanged)
-    theme = Property(str, lambda self: self._theme, notify=uiChanged)
+    uiScale = Property(float, lambda self: self._ui_scale, notify=CoreControllerMixin.uiChanged)
+    theme = Property(str, lambda self: self._theme, notify=CoreControllerMixin.uiChanged)
     interfaceLanguage = Property(
-        str, lambda self: self._interface_language, notify=uiChanged,
+        str, lambda self: self._interface_language, notify=CoreControllerMixin.uiChanged,
     )
     interfaceLanguages = Property(
         "QVariantList",
@@ -3179,32 +3178,32 @@ class CockpitController(
         ],
         constant=True,
     )
-    reducedMotion = Property(bool, lambda self: self._reduced_motion, notify=uiChanged)
+    reducedMotion = Property(bool, lambda self: self._reduced_motion, notify=CoreControllerMixin.uiChanged)
     commanderUpdatePopups = Property(
-        bool, lambda self: self._commander_update_popups, notify=uiChanged,
+        bool, lambda self: self._commander_update_popups, notify=CoreControllerMixin.uiChanged,
     )
     enhancedVisuals = Property(
-        bool, lambda self: self._enhanced_visuals, notify=uiChanged,
+        bool, lambda self: self._enhanced_visuals, notify=CoreControllerMixin.uiChanged,
     )
     onboardingComplete = Property(
-        bool, lambda self: self._onboarding_complete, notify=uiChanged
+        bool, lambda self: self._onboarding_complete, notify=CoreControllerMixin.uiChanged
     )
-    lastPage = Property(int, lambda self: self._last_page, notify=uiChanged)
-    debugMode = Property(bool, lambda self: self._debug_mode, notify=uiChanged)
+    lastPage = Property(int, lambda self: self._last_page, notify=CoreControllerMixin.uiChanged)
+    debugMode = Property(bool, lambda self: self._debug_mode, notify=CoreControllerMixin.uiChanged)
     journalAuto = Property(
-        bool, lambda self: self._journal_auto, notify=uiChanged,
+        bool, lambda self: self._journal_auto, notify=CoreControllerMixin.uiChanged,
     )
     backgroundMode = Property(
-        bool, lambda self: self._background_mode, notify=uiChanged,
+        bool, lambda self: self._background_mode, notify=CoreControllerMixin.uiChanged,
     )
     autostartEnabled = Property(
-        bool, lambda self: self._autostart_enabled, notify=uiChanged,
+        bool, lambda self: self._autostart_enabled, notify=CoreControllerMixin.uiChanged,
     )
     systemTrayAvailable = Property(
-        bool, lambda self: self._system_tray_available, notify=uiChanged,
+        bool, lambda self: self._system_tray_available, notify=CoreControllerMixin.uiChanged,
     )
     backgroundRuntimeStatus = Property(
-        str, lambda self: self._background_runtime_status, notify=uiChanged,
+        str, lambda self: self._background_runtime_status, notify=CoreControllerMixin.uiChanged,
     )
     historyExportBusy = Property(
         bool, lambda self: self._history_export_busy,
@@ -3458,7 +3457,7 @@ class CockpitController(
         notify=engineeringChanged,
     )
     traderPreference = Property(
-        str, lambda self: self._trader_preference, notify=uiChanged,
+        str, lambda self: self._trader_preference, notify=CoreControllerMixin.uiChanged,
     )
     engineeringInstalledModules = Property(
         "QVariantList",

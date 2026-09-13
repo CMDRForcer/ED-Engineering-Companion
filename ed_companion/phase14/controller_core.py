@@ -18,3 +18,4 @@ from PySide6.QtCore import Signal
 class CoreControllerMixin:
     connectionChanged = Signal()
     stateChanged = Signal()
+    uiChanged = Signal()
