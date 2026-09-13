@@ -222,13 +222,18 @@ ColumnLayout {
                         spacing: 8
                         RowLayout {
                             Layout.fillWidth: true
+                            spacing: 8
                             Label {
                                 text: modelData.bodyName
                                 color: textPrimary; font.pixelSize: 16; font.bold: true
                                 Layout.fillWidth: true; Layout.minimumWidth: 0
+                                Layout.alignment: Qt.AlignTop
+                                wrapMode: Text.WordWrap
+                                maximumLineCount: 2
                                 elide: Text.ElideRight
                             }
                             StatusBadge {
+                                Layout.alignment: Qt.AlignTop
                                 statusText: modelData.confidence === "confirmed_genus"
                                             ? appWindow.t("exobiology.confirmed", "CONFIRMED")
                                             : appWindow.t("exobiology.predicted", "PREDICTED")

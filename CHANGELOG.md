@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.3 — 2026-09-13
+
+### Fixed
+
+- A long body name on a Survey Target card (e.g. "Phylur PY-Z d13-56 A 2
+  e") was truncated with an ellipsis even though the card had unused
+  vertical space. The name now wraps onto up to two lines instead of
+  eliding on one, while the CONFIRMED/PREDICTED badge stays pinned to
+  the top-right corner.
+
 ## 1.4.2 — 2026-09-13
 
 ### Fixed
