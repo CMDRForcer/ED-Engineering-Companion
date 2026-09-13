@@ -4,15 +4,20 @@ import unittest
 from pathlib import Path
 
 from ed_companion.exobiology import (
+    best_find,
     colony_range_for_genus,
     exobiology_carried_summary,
     exobiology_distance_check,
     exobiology_findings,
+    exobiology_lifetime_earned,
     exobiology_scan_progress,
     exobiology_session_summary,
     exobiology_summary,
+    footfalled_bodies,
     great_circle_distance_m,
     landing_targets,
+    populated_systems,
+    remaining_signals_at_body,
 )
 
 REFERENCE_DATA_DIR = Path(__file__).resolve().parents[1] / "ed_data"
@@ -421,6 +426,162 @@ class LandingTargetsTests(unittest.TestCase):
 
         self.assertTrue(targets[0]["inCurrentSystem"])
         self.assertEqual(targets[0]["bodyId"], 3)
+
+
+class FirstFootfallEligibilityTests(unittest.TestCase):
+    """firstFootfallPossible is a pre-filter, never a promise: it can only
+    ever rule the bonus OUT (already landed here, or a populated system),
+    never confirm it IN - whether another Commander already has is not
+    knowable from a local Journal at all."""
+
+    def _base_events(self, **jump_overrides):
+        jump = {
+            "event": "FSDJump", "SystemAddress": 1, "StarSystem": "Test System",
+            "Population": 0,
+        }
+        jump.update(jump_overrides)
+        return [jump, _signals_event(1, 3, 2), _planet_scan_event(1, 3)]
+
+    def test_an_untouched_body_in_an_unpopulated_system_is_possible(self):
+        targets = landing_targets(self._base_events(), SPECIES_CATALOG)
+        self.assertTrue(targets[0]["firstFootfallPossible"])
+
+    def test_a_body_the_commander_has_already_touched_down_on_is_not_possible(self):
+        events = self._base_events() + [{
+            "event": "Touchdown", "PlayerControlled": True,
+            "SystemAddress": 1, "BodyID": 3,
+        }]
+        targets = landing_targets(events, SPECIES_CATALOG)
+        self.assertFalse(targets[0]["firstFootfallPossible"])
+
+    def test_a_populated_system_is_never_possible(self):
+        targets = landing_targets(self._base_events(Population=1_000_000), SPECIES_CATALOG)
+        self.assertFalse(targets[0]["firstFootfallPossible"])
+
+    def test_an_npc_controlled_touchdown_does_not_count_as_the_commanders_own(self):
+        events = self._base_events() + [{
+            "event": "Touchdown", "PlayerControlled": False,
+            "SystemAddress": 1, "BodyID": 3,
+        }]
+        targets = landing_targets(events, SPECIES_CATALOG)
+        self.assertTrue(targets[0]["firstFootfallPossible"])
+
+    def test_footfalled_bodies_tracks_system_and_body_together(self):
+        events = [{
+            "event": "Touchdown", "PlayerControlled": True,
+            "SystemAddress": 1, "BodyID": 3,
+        }]
+        self.assertEqual(footfalled_bodies(events), {(1, 3)})
+
+    def test_populated_systems_ignores_a_system_with_no_population(self):
+        events = [
+            {"event": "FSDJump", "SystemAddress": 1, "Population": 0},
+            {"event": "FSDJump", "SystemAddress": 2, "Population": 500},
+        ]
+        self.assertEqual(populated_systems(events), {2})
+
+
+class RemainingSignalsAtBodyTests(unittest.TestCase):
+    def test_no_body_name_in_status_yields_no_result(self):
+        events = [_signals_event(1, 3, 2), _planet_scan_event(1, 3)]
+        self.assertIsNone(remaining_signals_at_body(events, SPECIES_CATALOG, {}))
+
+    def test_a_body_never_fss_scanned_yields_no_result(self):
+        result = remaining_signals_at_body(
+            [], SPECIES_CATALOG, {"BodyName": "Nowhere"},
+        )
+        self.assertIsNone(result)
+
+    def test_an_untouched_body_reports_its_full_signal_and_candidate_count(self):
+        events = [_signals_event(1, 3, 2), _planet_scan_event(1, 3)]
+        result = remaining_signals_at_body(
+            events, SPECIES_CATALOG, {"BodyName": "Test Body"},
+        )
+        self.assertEqual(result["totalSignals"], 2)
+        self.assertGreater(result["remaining"], 0)
+
+    def test_a_fully_claimed_body_reports_zero_remaining_not_none(self):
+        # Every genus this body could hold has already been completed -
+        # genuinely "0 left here", which must read differently from
+        # "nothing detected here at all" (None).
+        events = [
+            _signals_event(1, 3, 2), _planet_scan_event(1, 3),
+            {
+                "event": "SAASignalsFound", "SystemAddress": 1, "BodyID": 3,
+                "Signals": [{"Type": "$SAA_SignalType_Biological;", "Count": 2}],
+                "Genuses": [{"Genus": "$Codex_Ent_Aleoids_Genus_Name;"}],
+            },
+            _scan_event("Log", "2026-09-12T10:00:00Z", Body="3", BodyID=3, SystemAddress=1),
+            _scan_event("Sample", "2026-09-12T10:02:00Z", Body="3", BodyID=3, SystemAddress=1),
+            _scan_event("Analyse", "2026-09-12T10:04:00Z", Body="3", BodyID=3, SystemAddress=1),
+        ]
+        result = remaining_signals_at_body(
+            events, SPECIES_CATALOG, {"BodyName": "Test Body"},
+        )
+        self.assertEqual(result, {"totalSignals": 2, "remaining": 0})
+
+
+class LifetimeEarnedTests(unittest.TestCase):
+    def test_no_sales_ever_is_zero(self):
+        self.assertEqual(exobiology_lifetime_earned([]), 0)
+
+    def test_sums_value_and_bonus_across_every_sale(self):
+        events = [
+            {
+                "event": "SellOrganicData",
+                "BioData": [
+                    {"Value": 1000000, "Bonus": 0},
+                    {"Value": 500000, "Bonus": 2000000},
+                ],
+            },
+            {
+                "event": "SellOrganicData",
+                "BioData": [{"Value": 250000, "Bonus": 0}],
+            },
+        ]
+        self.assertEqual(exobiology_lifetime_earned(events), 3750000)
+
+
+class BestFindTests(unittest.TestCase):
+    def _finding(self, value, complete=True, value_known=True, **overrides):
+        row = {
+            "displayName": "Some Species", "value": value,
+            "complete": complete, "valueKnown": value_known,
+        }
+        row.update(overrides)
+        return row
+
+    def test_no_findings_yields_none(self):
+        self.assertIsNone(best_find([]))
+
+    def test_picks_the_highest_value_completed_finding(self):
+        findings = [
+            self._finding(1000, displayName="Cheap"),
+            self._finding(9000000, displayName="Expensive"),
+            self._finding(5000, displayName="Middling"),
+        ]
+        self.assertEqual(best_find(findings)["displayName"], "Expensive")
+
+    def test_an_incomplete_finding_never_wins_even_if_valuable(self):
+        findings = [
+            self._finding(9000000, complete=False, displayName="Unfinished"),
+            self._finding(1000, displayName="Finished"),
+        ]
+        self.assertEqual(best_find(findings)["displayName"], "Finished")
+
+    def test_an_unrecognized_species_never_wins_despite_a_zero_value(self):
+        findings = [
+            self._finding(0, value_known=False, displayName="Unknown"),
+            self._finding(1000, displayName="Known"),
+        ]
+        self.assertEqual(best_find(findings)["displayName"], "Known")
+
+    def test_only_unrecognized_or_incomplete_findings_yields_none(self):
+        findings = [
+            self._finding(9000000, value_known=False),
+            self._finding(9000000, complete=False),
+        ]
+        self.assertIsNone(best_find(findings))
 
 
 class GreatCircleDistanceTests(unittest.TestCase):

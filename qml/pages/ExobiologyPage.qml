@@ -11,6 +11,7 @@ ColumnLayout {
     readonly property color cyan: appWindow.cyan
     readonly property color green: appWindow.green
     readonly property color orange: appWindow.orange
+    readonly property color accentColor: appWindow.accent
     readonly property color textPrimary: appWindow.textPrimary
     readonly property color textSecondary: appWindow.textSecondary
     readonly property color muted: appWindow.muted
@@ -22,6 +23,8 @@ ColumnLayout {
     readonly property var summary: cockpit.exobiologySummary || ({})
     readonly property var sessionSummary: cockpit.exobiologySessionSummary || ({})
     readonly property var carriedSummary: cockpit.exobiologyCarriedSummary || ({})
+    readonly property var bestFind: cockpit.exobiologyBestFind || ({})
+    readonly property var remainingOnBody: cockpit.exobiologyRemainingOnBody || ({})
     readonly property var landingTargets: cockpit.exobiologyLandingTargets || []
     readonly property var currentSystemTargets: exobiologyPage.landingTargets.filter(function(target) {
         return target.inCurrentSystem
@@ -62,41 +65,6 @@ ColumnLayout {
         statusTone: cockpit.journalAuto ? green : orange
     }
 
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: 12
-        Repeater {
-            model: [
-                {"label": appWindow.t("exobiology.species_found", "SPECIES FOUND"), "value": exobiologyPage.summary.totalSpecies || 0, "tone": cyan},
-                {"label": appWindow.t("exobiology.complete", "COMPLETE"), "value": exobiologyPage.summary.completeSpecies || 0, "tone": green},
-                {"label": appWindow.t("exobiology.in_progress", "IN PROGRESS"), "value": exobiologyPage.summary.inProgressSpecies || 0, "tone": orange},
-                {"label": appWindow.t("exobiology.this_session", "THIS SESSION"), "value": appWindow.tf(
-                     "exobiology.session_value", "%1 · %2",
-                     [exobiologyPage.sessionSummary.speciesCount || 0, exobiologyPage.formatCr(exobiologyPage.sessionSummary.totalValue)]), "tone": green},
-                {"label": appWindow.t("exobiology.carried_unsold", "CARRIED · UNSOLD"), "value": appWindow.tf(
-                     "exobiology.carried_value", "%1 · %2",
-                     [exobiologyPage.carriedSummary.speciesCount || 0, exobiologyPage.formatCr(exobiologyPage.carriedSummary.totalValue)]), "tone": orange}
-            ]
-            delegate: ShadowCard {
-                required property var modelData
-                required property int index
-                objectName: index === 0 ? "qa-card-exobiology" : ""
-                Layout.fillWidth: true
-                Layout.preferredHeight: 88
-                ColumnLayout {
-                    anchors.fill: parent; anchors.margins: 15
-                    Label { text: modelData.label; color: muted; font.pixelSize: 10; font.bold: true }
-                    Label {
-                        text: modelData.value; color: modelData.tone
-                        font.pixelSize: 18; font.bold: true
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-                }
-            }
-        }
-    }
-
     ShadowCard {
         Layout.fillWidth: true
         Layout.preferredHeight: 68
@@ -133,6 +101,57 @@ ColumnLayout {
                     font.pixelSize: 15; font.bold: true
                     elide: Text.ElideRight
                     Layout.fillWidth: true
+                }
+            }
+        }
+    }
+
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: 12
+        Repeater {
+            model: [
+                {"label": appWindow.t("exobiology.species_found", "SPECIES FOUND"), "value": String(exobiologyPage.summary.totalSpecies || 0), "detail": "", "tone": cyan},
+                {"label": appWindow.t("exobiology.lifetime_earned", "LIFETIME EARNED"), "value": exobiologyPage.formatCr(cockpit.exobiologyLifetimeEarned),
+                 "detail": Object.keys(exobiologyPage.bestFind).length > 0
+                           ? appWindow.tf("exobiology.best_find_detail", "BEST · %1 · %2", [exobiologyPage.bestFind.displayName, exobiologyPage.formatCr(exobiologyPage.bestFind.value)])
+                           : "", "tone": green},
+                {"label": appWindow.t("exobiology.remaining_on_body", "REMAINING ON THIS PLANET"),
+                 "value": Object.keys(exobiologyPage.remainingOnBody).length > 0 ? String(exobiologyPage.remainingOnBody.remaining) : "—",
+                 "detail": "",
+                 "tone": Object.keys(exobiologyPage.remainingOnBody).length === 0
+                         ? muted
+                         : (exobiologyPage.remainingOnBody.remaining === 0 ? green : orange)},
+                {"label": appWindow.t("exobiology.this_session", "THIS SESSION"), "value": appWindow.tf(
+                     "exobiology.session_value", "%1 · %2",
+                     [exobiologyPage.sessionSummary.speciesCount || 0, exobiologyPage.formatCr(exobiologyPage.sessionSummary.totalValue)]), "detail": "", "tone": green},
+                {"label": appWindow.t("exobiology.carried_unsold", "CARRIED · UNSOLD"), "value": appWindow.tf(
+                     "exobiology.carried_value", "%1 · %2",
+                     [exobiologyPage.carriedSummary.speciesCount || 0, exobiologyPage.formatCr(exobiologyPage.carriedSummary.totalValue)]), "detail": "", "tone": orange}
+            ]
+            delegate: ShadowCard {
+                required property var modelData
+                required property int index
+                objectName: index === 0 ? "qa-card-exobiology" : ""
+                Layout.fillWidth: true
+                Layout.preferredHeight: 92
+                ColumnLayout {
+                    anchors.fill: parent; anchors.margins: 15
+                    spacing: 2
+                    Label { text: modelData.label; color: muted; font.pixelSize: 10; font.bold: true }
+                    Label {
+                        text: modelData.value; color: modelData.tone
+                        font.pixelSize: 18; font.bold: true
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                    Label {
+                        visible: modelData.detail.length > 0
+                        text: modelData.detail
+                        color: muted; font.pixelSize: 9
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
                 }
             }
         }
@@ -218,11 +237,22 @@ ColumnLayout {
                             font.pixelSize: 13; font.bold: modelData.inCurrentSystem
                             Layout.fillWidth: true; elide: Text.ElideRight
                         }
-                        Label {
-                            text: appWindow.tf(
-                                "exobiology.signal_count", "%1 BIOLOGICAL SIGNAL(S)",
-                                [modelData.signalCount])
-                            color: cyan; font.pixelSize: 13; font.bold: true
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                text: appWindow.tf(
+                                    "exobiology.signal_count", "%1 BIOLOGICAL SIGNAL(S)",
+                                    [modelData.signalCount])
+                                color: cyan; font.pixelSize: 13; font.bold: true
+                            }
+                            Item { Layout.fillWidth: true }
+                            StatusBadge {
+                                visible: modelData.firstFootfallPossible
+                                statusText: appWindow.t("exobiology.footfall_possible", "FOOTFALL BONUS POSSIBLE")
+                                tone: accentColor
+                                compact: true
+                            }
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
                         Repeater {
@@ -238,9 +268,13 @@ ColumnLayout {
                         Item { Layout.fillHeight: true }
                         Label {
                             Layout.fillWidth: true
-                            text: appWindow.tf(
-                                "exobiology.best_value", "UP TO %1",
-                                [exobiologyPage.formatCr(modelData.bestValue)])
+                            text: modelData.firstFootfallPossible
+                                  ? appWindow.tf(
+                                        "exobiology.best_value_base", "BASE UP TO %1",
+                                        [exobiologyPage.formatCr(modelData.bestValue)])
+                                  : appWindow.tf(
+                                        "exobiology.best_value", "UP TO %1",
+                                        [exobiologyPage.formatCr(modelData.bestValue)])
                             color: green; font.pixelSize: 17; font.bold: true
                         }
                     }

@@ -66,11 +66,14 @@ from ed_companion.build_import import (
     JOURNAL_EXPERIMENTAL_NAMES,
 )
 from ed_companion.exobiology import (
+    best_find,
     exobiology_carried_summary,
     exobiology_findings,
+    exobiology_lifetime_earned,
     exobiology_session_summary,
     exobiology_summary,
     landing_targets,
+    remaining_signals_at_body,
 )
 
 
@@ -7825,6 +7828,7 @@ def build_state(
         profile_events, exobiology_species_catalog,
         current_system_address=latest_location.get("SystemAddress"),
     )
+    exobiology_status_snapshot = read_json(journal_dir() / "Status.json", {})
 
     return {
         "_profileContext": profile_context,
@@ -7838,6 +7842,11 @@ def build_state(
             profile_events, exobiology_species_catalog
         ),
         "exobiologyLandingTargets": exobiology_targets,
+        "exobiologyLifetimeEarned": exobiology_lifetime_earned(profile_events),
+        "exobiologyBestFind": best_find(exobiology_rows),
+        "exobiologyRemainingOnBody": remaining_signals_at_body(
+            profile_events, exobiology_species_catalog, exobiology_status_snapshot,
+        ),
         "ship": ship or "No ship selected",
         "commander": commander_name,
         "commanderKnown": bool(commander_name),

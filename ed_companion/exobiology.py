@@ -214,6 +214,39 @@ def exobiology_carried_summary(
     }
 
 
+def exobiology_lifetime_earned(events: list[dict[str, Any]] | None) -> int:
+    """Total credits actually banked from Exobiology sales, across the
+    whole career - every ``SellOrganicData`` event's ``Value`` plus
+    ``Bonus``. Unlike ``exobiology_summary()``'s ``bankedValue`` (the
+    catalog's own value for every analysed species, sold or not), this is
+    only what Frontier has actually paid out at a Vista Genomics terminal.
+    """
+    total = 0
+    for event in events or []:
+        if not isinstance(event, dict) or event.get("event") != "SellOrganicData":
+            continue
+        for row in event.get("BioData") or []:
+            if isinstance(row, dict):
+                total += int(row.get("Value") or 0) + int(row.get("Bonus") or 0)
+    return total
+
+
+def best_find(findings: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+    """The single highest-value completed, catalog-known species found -
+    a personal-record highlight.
+
+    Excludes unrecognized species (``valueKnown`` False, reported as 0)
+    so an uncatalogued find never looks like a record by default.
+    """
+    candidates = [
+        row for row in findings or []
+        if isinstance(row, dict) and row.get("complete") and row.get("valueKnown")
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda row: int(row.get("value") or 0))
+
+
 # --- Landing targets: which scanned bodies are worth visiting, and what
 # is likely there before a single sample is taken. ------------------------
 
@@ -328,30 +361,62 @@ def scanned_bodies(events: list[dict[str, Any]] | None) -> dict[str, dict[str, A
     return bodies
 
 
-def landing_targets(
-    events: list[dict[str, Any]] | None,
-    species_catalog: list[dict[str, Any]] | None,
-    current_system_address: object = None,
-) -> list[dict[str, Any]]:
-    """Rank scanned bodies with unclaimed biological signals to visit next.
+def footfalled_bodies(events: list[dict[str, Any]] | None) -> set[tuple[object, object]]:
+    """(SystemAddress, BodyID) pairs the Commander has personally touched
+    down on, ever.
 
-    Combines three Journal sources: ``FSSBodySignals`` (how many
-    biological signals a body has, from an FSS honk alone),
-    ``SAASignalsFound`` (the confirmed genus list, once a Detailed
-    Surface Scan probe has read that body), and ``Scan`` (the body's
-    physical properties, used to predict candidate species via the
-    catalog's rulesets when no DSS confirmation exists yet). A body
-    already fully sampled for every signal it has is left out - nothing
-    left to go there for.
-
-    ``current_system_address`` (the Commander's present ``SystemAddress``)
-    is optional context, not a filter: every known target across the
-    whole Journal is still returned, but one in the current system is
-    ranked to the top - "what should I check out right here" after an
-    FSS honk, without discarding older, still-unvisited leads elsewhere.
+    This is the only footfall fact a local Journal can answer. Whether
+    any OTHER Commander has already landed there first - the fact that
+    actually decides the First Footfall bonus - is not knowable locally
+    at all; see the ``firstFootfallPossible`` note on ``landing_targets``.
     """
-    events = events or []
-    species_catalog = [row for row in species_catalog or [] if isinstance(row, dict)]
+    result: set[tuple[object, object]] = set()
+    for event in events or []:
+        if (
+            not isinstance(event, dict) or event.get("event") != "Touchdown"
+            or event.get("PlayerControlled") is False
+        ):
+            continue
+        address, body_id = event.get("SystemAddress"), event.get("BodyID")
+        if address is not None and body_id is not None:
+            result.add((address, body_id))
+    return result
+
+
+def populated_systems(events: list[dict[str, Any]] | None) -> set[object]:
+    """System addresses with any recorded population.
+
+    First Footfall never applies there - a populated system's bodies are
+    already settled. Derived from every ``FSDJump``/``Location``/
+    ``CarrierJump`` event ever, not just the current one, so a target
+    body in a system visited long ago is still correctly judged.
+    """
+    result: set[object] = set()
+    for event in events or []:
+        if (
+            not isinstance(event, dict)
+            or event.get("event") not in ("FSDJump", "Location", "CarrierJump")
+        ):
+            continue
+        population = event.get("Population")
+        address = event.get("SystemAddress")
+        if isinstance(population, (int, float)) and population > 0 and address is not None:
+            result.add(address)
+    return result
+
+
+def _all_body_targets(
+    events: list[dict[str, Any]], species_catalog: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Every scanned body with a recorded biological signal, keyed by
+    ``"{SystemAddress}:{BodyID}"`` - including one with zero remaining
+    candidates (fully claimed already).
+
+    ``landing_targets()`` filters those out, since there is nothing left
+    to suggest visiting; ``remaining_signals_at_body()`` needs to tell
+    "nothing detected here" apart from "already fully explored here", so
+    it needs them kept.
+    """
     bodies = scanned_bodies(events)
 
     signal_counts: dict[str, int] = {}
@@ -393,8 +458,10 @@ def landing_targets(
         for row in exobiology_findings(events, species_catalog)
         if row["complete"]
     }
+    footfalled = footfalled_bodies(events)
+    populated = populated_systems(events)
 
-    targets = []
+    targets: dict[str, dict[str, Any]] = {}
     for key, signal_count in signal_counts.items():
         body = bodies.get(key)
         if body is None:
@@ -413,15 +480,9 @@ def landing_targets(
             row for row in candidates
             if (body["systemAddress"], body_id_str, row.get("genusCodexKey")) not in already_found
         ]
-        if not candidates:
-            continue
-        best_value = max(int(row.get("value") or 0) for row in candidates)
+        best_value = max((int(row.get("value") or 0) for row in candidates), default=0)
         total_value = sum(int(row.get("value") or 0) for row in candidates)
-        in_current_system = (
-            current_system_address is not None
-            and body["systemAddress"] == current_system_address
-        )
-        targets.append({
+        targets[key] = {
             "systemAddress": body["systemAddress"],
             "bodyId": body["bodyId"],
             "bodyName": body["bodyName"] or f"Body {body['bodyId']}",
@@ -429,7 +490,6 @@ def landing_targets(
             "planetClass": body["planetClass"],
             "landable": body["landable"],
             "distanceLs": body["distanceLs"],
-            "inCurrentSystem": in_current_system,
             "signalCount": signal_count,
             "confidence": confidence,
             "candidateCount": len(candidates),
@@ -443,13 +503,86 @@ def landing_targets(
             )[:8],
             "bestValue": best_value,
             "totalPotentialValue": total_value,
-        })
+            # Never a promise, only a pre-filter: this Commander has not
+            # personally landed here yet and the system carries no
+            # recorded population. Whether anyone else already has is
+            # unknowable from a local Journal - see footfalled_bodies().
+            "firstFootfallPossible": (
+                (body["systemAddress"], body["bodyId"]) not in footfalled
+                and body["systemAddress"] not in populated
+            ),
+        }
+    return targets
+
+
+def landing_targets(
+    events: list[dict[str, Any]] | None,
+    species_catalog: list[dict[str, Any]] | None,
+    current_system_address: object = None,
+) -> list[dict[str, Any]]:
+    """Rank scanned bodies with unclaimed biological signals to visit next.
+
+    Combines three Journal sources: ``FSSBodySignals`` (how many
+    biological signals a body has, from an FSS honk alone),
+    ``SAASignalsFound`` (the confirmed genus list, once a Detailed
+    Surface Scan probe has read that body), and ``Scan`` (the body's
+    physical properties, used to predict candidate species via the
+    catalog's rulesets when no DSS confirmation exists yet). A body
+    already fully sampled for every signal it has is left out - nothing
+    left to go there for.
+
+    ``current_system_address`` (the Commander's present ``SystemAddress``)
+    is optional context, not a filter: every known target across the
+    whole Journal is still returned, but one in the current system is
+    ranked to the top - "what should I check out right here" after an
+    FSS honk, without discarding older, still-unvisited leads elsewhere.
+    """
+    events = events or []
+    species_catalog = [row for row in species_catalog or [] if isinstance(row, dict)]
+    targets = []
+    for target in _all_body_targets(events, species_catalog).values():
+        if target["candidateCount"] == 0:
+            continue
+        row = dict(target)
+        row["inCurrentSystem"] = (
+            current_system_address is not None
+            and row["systemAddress"] == current_system_address
+        )
+        targets.append(row)
     targets.sort(key=lambda row: (
         not row["inCurrentSystem"],
         row["confidence"] != "confirmed_genus",
         -row["bestValue"], row["distanceLs"],
     ))
     return targets
+
+
+def remaining_signals_at_body(
+    events: list[dict[str, Any]] | None,
+    species_catalog: list[dict[str, Any]] | None,
+    status: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """How many of the biological signals at the Commander's current body
+    (matched by ``Status.json``'s own ``BodyName``, the same identity the
+    live distance check uses) are still unclaimed.
+
+    Returns ``None`` when the current body has no detected biological
+    signal at all - "nothing to report" - as opposed to a genuine ``0``
+    once everything detected there has already been fully analysed.
+    """
+    status = status if isinstance(status, dict) else {}
+    body_name = status.get("BodyName")
+    if not body_name:
+        return None
+    events = events or []
+    species_catalog = [row for row in species_catalog or [] if isinstance(row, dict)]
+    for target in _all_body_targets(events, species_catalog).values():
+        if target["bodyName"] == body_name:
+            return {
+                "totalSignals": target["signalCount"],
+                "remaining": target["candidateCount"],
+            }
+    return None
 
 
 # --- Live "distance to next sample" check: on-foot geometry, not Journal

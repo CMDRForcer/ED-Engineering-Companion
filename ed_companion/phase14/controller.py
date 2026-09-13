@@ -1003,6 +1003,8 @@ class CockpitController(QObject):
             for key in (
                 "exobiologyFindings", "exobiologyLandingTargets",
                 "exobiologySessionSummary", "exobiologyCarriedSummary",
+                "exobiologyLifetimeEarned", "exobiologyBestFind",
+                "exobiologyRemainingOnBody",
             )
         ):
             self.exobiologyChanged.emit()
@@ -3744,6 +3746,21 @@ class CockpitController(QObject):
     )
     exobiologyLandingTargets = Property(
         "QVariantList", lambda self: self._get("exobiologyLandingTargets", []),
+        notify=exobiologyChanged,
+    )
+    # float, not int: a career total can exceed the 32-bit range a plain
+    # int Property would truncate to; QML's Number already handles this
+    # exactly up to far more than any realistic credit balance.
+    exobiologyLifetimeEarned = Property(
+        float, lambda self: float(self._get("exobiologyLifetimeEarned", 0) or 0),
+        notify=exobiologyChanged,
+    )
+    exobiologyBestFind = Property(
+        "QVariantMap", lambda self: self._get("exobiologyBestFind", {}) or {},
+        notify=exobiologyChanged,
+    )
+    exobiologyRemainingOnBody = Property(
+        "QVariantMap", lambda self: self._get("exobiologyRemainingOnBody", {}) or {},
         notify=exobiologyChanged,
     )
     exobiologyDistanceCheck = Property(

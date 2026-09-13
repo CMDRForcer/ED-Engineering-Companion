@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.4.0 — 2026-09-13
+
+### Added
+
+- Exobiology page redesign, replacing two career-wide, non-actionable
+  stats with ones scoped to what the Commander can actually act on:
+  - **DISTANCE TO NEXT SAMPLE** now leads the page, above the stat tiles
+    - the live "what do I do right now" moment comes first.
+  - **LIFETIME EARNED** replaces `COMPLETE`: the sum of every real
+    `SellOrganicData` sale's `Value` plus `Bonus` across the whole
+    career - what Exobiology has actually paid out, not a derived count.
+    Shows the Commander's best-ever single find underneath.
+  - **REMAINING ON THIS PLANET** replaces `IN PROGRESS`: how many of the
+    biological signals detected at the body the Commander is currently
+    standing on are still unclaimed, instead of a career-wide count with
+    no connection to where they are right now.
+  - Survey Target cards show a **FOOTFALL BONUS POSSIBLE** badge when
+    the Commander has not personally landed there yet and the system
+    carries no recorded population - a pre-filter, never a promise:
+    whether another Commander has already landed there first is not
+    knowable from a local Journal at all, so it is never added into a
+    promised total.
+
 ## 1.3.2 — 2026-09-12
 
 ### Fixed

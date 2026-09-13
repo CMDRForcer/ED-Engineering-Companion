@@ -686,5 +686,10 @@
   "exobiology.distance_check_ready": "PRÊT POUR %1 · %2 M / %3 M",
   "exobiology.distance_check_not_ready": "CONTINUEZ À AVANCER AVANT LE PROCHAIN %1 · %2 M / %3 M",
   "exobiology.step_sample": "PRÉLÈVEMENT",
-  "exobiology.step_analyse": "ANALYSE"
+  "exobiology.step_analyse": "ANALYSE",
+  "exobiology.lifetime_earned": "GAINS TOTAUX",
+  "exobiology.remaining_on_body": "RESTANT SUR CETTE PLANÈTE",
+  "exobiology.best_find_detail": "MEILLEUR · %1 · %2",
+  "exobiology.footfall_possible": "BONUS DE PREMIER PAS POSSIBLE",
+  "exobiology.best_value_base": "BASE JUSQU'À %1"
 }
