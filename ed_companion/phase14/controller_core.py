@@ -23,3 +23,4 @@ class CoreControllerMixin:
     operationsChanged = Signal()
     wishlistChanged = Signal()
     hgeChanged = Signal()
+    materialsChanged = Signal()

@@ -384,7 +384,6 @@ class CockpitController(
     FleetMaterialsMixin, FrontierCapiMixin, InaraMixin, LogbookMixin,
     CoreControllerMixin, QObject,
 ):
-    materialsChanged = Signal()
     miningChanged = Signal()
     miningSyncFinished = Signal(object)
     miningCatalogLoaded = Signal(object)
@@ -2492,14 +2491,14 @@ class CockpitController(
         notify=CoreControllerMixin.stateChanged,
     )
     missingKinds = Property(int, lambda self: int(self._get("missingKinds", 0)), notify=CoreControllerMixin.stateChanged)
-    trades = Property("QVariantList", lambda self: self._get("trades", []), notify=materialsChanged)
+    trades = Property("QVariantList", lambda self: self._get("trades", []), notify=CoreControllerMixin.materialsChanged)
     traderRoute = Property(
         "QVariantList", lambda self: self._get("traderRoute", []),
-        notify=materialsChanged,
+        notify=CoreControllerMixin.materialsChanged,
     )
     tradeHistory = Property(
         "QVariantList", lambda self: self._get("tradeHistory", []),
-        notify=materialsChanged,
+        notify=CoreControllerMixin.materialsChanged,
     )
     routeDistance = Property(
         float, lambda self: float(self._get("routeDistance", 0.0)),
@@ -2522,14 +2521,14 @@ class CockpitController(
         ],
         notify=CoreControllerMixin.wishlistChanged,
     )
-    materials = Property("QVariantList", lambda self: self._get("materials", []), notify=materialsChanged)
+    materials = Property("QVariantList", lambda self: self._get("materials", []), notify=CoreControllerMixin.materialsChanged)
     missingMaterials = Property(
         "QVariantList",
         lambda self: [
             row for row in self._get("materials", [])
             if int(row.get("missing", 0) or 0) > 0
         ],
-        notify=materialsChanged,
+        notify=CoreControllerMixin.materialsChanged,
     )
     # float, not int: a career total can exceed the 32-bit range a plain
     # int Property would truncate to; QML's Number already handles this
