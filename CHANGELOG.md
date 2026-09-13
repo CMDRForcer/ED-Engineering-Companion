@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.1 — 2026-09-13
+
+### Fixed
+
+- Engineer-name matching for `EngineerContribution` events relied on a
+  hardcoded fix for the one known case of Frontier splicing an in-fiction
+  nickname into the Journal's `Engineer` field (`"Tod 'The Blaster'
+  McQuinn"` vs. the catalog's `"Tod McQuinn"`). It now matches whenever
+  the catalog name's words all appear, in order, anywhere in the
+  Journal-reported name, so any future engineer Frontier does the same to
+  resolves automatically instead of needing a new one-off patch.
+
 ## 1.5.0 — 2026-09-13
 
 ### Added

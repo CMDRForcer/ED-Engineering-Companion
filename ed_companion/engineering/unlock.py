@@ -55,10 +55,31 @@ def _token(value):
     return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
 
 
+def _name_words(value):
+    return re.findall(r"[a-z0-9]+", str(value or "").casefold())
+
+
 def _engineer_name(value, catalog):
-    wanted = _token(value).replace("theblaster", "")
+    """Match a Journal-reported Engineer name against the catalog.
+
+    Frontier sometimes reports an Engineer's name with an extra in-fiction
+    nickname spliced in (e.g. ``"Tod 'The Blaster' McQuinn"`` instead of the
+    catalog's plain ``"Tod McQuinn"``). Rather than special-case that one
+    known nickname literally, treat the catalog name as a match whenever
+    its words all appear, in order, somewhere in the Journal name - any
+    extra decoration in between or around them is ignored. This covers the
+    known McQuinn case and any future engineer Frontier does the same to,
+    without needing a new hardcoded fix each time.
+    """
+    event_words = _name_words(value)
+    if not event_words:
+        return ""
     for name in catalog or {}:
-        if _token(name).replace("theblaster", "") == wanted:
+        catalog_words = _name_words(name)
+        if not catalog_words:
+            continue
+        remaining = iter(event_words)
+        if all(word in remaining for word in catalog_words):
             return name
     return ""
 
