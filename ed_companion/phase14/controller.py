@@ -383,7 +383,6 @@ class CockpitController(
     FrontierCapiMixin, InaraMixin, LogbookMixin, CoreControllerMixin, QObject,
 ):
     materialsChanged = Signal()
-    hgeChanged = Signal()
     miningChanged = Signal()
     miningSyncFinished = Signal(object)
     miningCatalogLoaded = Signal(object)
@@ -2764,15 +2763,15 @@ class CockpitController(
     )
     stateFindRefreshStatus = Property(
         str, lambda self: self._state_find_refresh_status,
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     stateFindCacheSummary = Property(
         "QVariantMap", lambda self: self._state_find_cache_summary(),
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     stateFindRefreshSummary = Property(
         "QVariantMap", lambda self: dict(self._last_state_find_refresh_stats),
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     miningCommodityFilters = Property(
         "QStringList", lambda self: self._mining_commodity_filters(),
@@ -2821,19 +2820,19 @@ class CockpitController(
     )
     hgeTargets = Property(
         "QVariantList", lambda self: self._hge_targets(),
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     hgeFinderRows = Property(
         "QVariantList", lambda self: self._hge_finder_rows(),
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     hgeCandidateRows = Property(
         "QVariantList", lambda self: self._hge_candidate_rows(),
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     hgeMaterialFilters = Property(
         "QStringList", lambda self: self._hge_material_filters(),
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     stateFindTypeFilters = Property(
         "QStringList",
@@ -2841,24 +2840,24 @@ class CockpitController(
             "ALL FIND TYPES", "HGE", "CONFLICT_ZONE",
             "SEEKING_MEDS", "SEEKING_FOODS",
         ],
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     stateFindStateFilters = Property(
         "QStringList",
         lambda self: self._state_find_filter_values("stateValues", "ALL STATES"),
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     stateFindAllegianceFilters = Property(
         "QStringList",
         lambda self: self._state_find_filter_values(
             "allegianceValues", "ALL ALLEGIANCES"
         ),
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     hgeUnverifiedSummary = Property(
         "QVariantMap",
         lambda self: recent_unverified_hge_summary(self._hge_sightings),
-        notify=hgeChanged,
+        notify=CoreControllerMixin.hgeChanged,
     )
     serviceStatus = Property(
         "QVariantList", lambda self: self._service_status(),

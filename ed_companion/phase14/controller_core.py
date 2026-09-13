@@ -22,3 +22,4 @@ class CoreControllerMixin:
     engineeringChanged = Signal()
     operationsChanged = Signal()
     wishlistChanged = Signal()
+    hgeChanged = Signal()
