@@ -691,5 +691,10 @@
   "exobiology.remaining_on_body": "PENDIENTE EN ESTE PLANETA",
   "exobiology.best_find_detail": "MEJOR · %1 · %2",
   "exobiology.footfall_possible": "BONO DE PRIMERA PISADA POSIBLE",
-  "exobiology.best_value_base": "BASE HASTA %1"
+  "exobiology.best_value_base": "BASE HASTA %1",
+  "exobiology.genus_progress": "PROGRESO DE GÉNEROS",
+  "exobiology.genus_progress_count": "%1 / %2 ENCONTRADOS",
+  "exobiology.show_missing_genera": "MOSTRAR FALTANTES",
+  "exobiology.hide_missing_genera": "OCULTAR",
+  "exobiology.genus_all_found": "TODOS LOS GÉNEROS CONOCIDOS ENCONTRADOS"
 }

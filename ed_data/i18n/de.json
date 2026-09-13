@@ -691,5 +691,10 @@
   "exobiology.remaining_on_body": "OFFEN AUF DIESEM PLANETEN",
   "exobiology.best_find_detail": "BESTE · %1 · %2",
   "exobiology.footfall_possible": "FOOTFALL-BONUS MÖGLICH",
-  "exobiology.best_value_base": "BASIS BIS ZU %1"
+  "exobiology.best_value_base": "BASIS BIS ZU %1",
+  "exobiology.genus_progress": "GATTUNGSFORTSCHRITT",
+  "exobiology.genus_progress_count": "%1 / %2 GEFUNDEN",
+  "exobiology.show_missing_genera": "FEHLENDE ANZEIGEN",
+  "exobiology.hide_missing_genera": "AUSBLENDEN",
+  "exobiology.genus_all_found": "ALLE BEKANNTEN GATTUNGEN GEFUNDEN"
 }

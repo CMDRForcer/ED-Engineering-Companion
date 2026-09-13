@@ -691,5 +691,10 @@
   "exobiology.remaining_on_body": "REMAINING ON THIS PLANET",
   "exobiology.best_find_detail": "BEST · %1 · %2",
   "exobiology.footfall_possible": "FOOTFALL BONUS POSSIBLE",
-  "exobiology.best_value_base": "BASE UP TO %1"
+  "exobiology.best_value_base": "BASE UP TO %1",
+  "exobiology.genus_progress": "GENUS PROGRESS",
+  "exobiology.genus_progress_count": "%1 / %2 FOUND",
+  "exobiology.show_missing_genera": "SHOW MISSING",
+  "exobiology.hide_missing_genera": "HIDE",
+  "exobiology.genus_all_found": "ALL KNOWN GENERA FOUND"
 }

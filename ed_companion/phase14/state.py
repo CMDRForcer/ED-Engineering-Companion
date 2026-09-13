@@ -66,12 +66,14 @@ from ed_companion.build_import import (
     JOURNAL_EXPERIMENTAL_NAMES,
 )
 from ed_companion.exobiology import (
+    augmented_species_catalog,
     best_find,
     exobiology_carried_summary,
     exobiology_findings,
     exobiology_lifetime_earned,
     exobiology_session_summary,
     exobiology_summary,
+    genus_completion,
     landing_targets,
     remaining_signals_at_body,
 )
@@ -7820,8 +7822,13 @@ def build_state(
         issue for issue in persistence_issues(data_dir)
         if issue not in consistency_issues
     )
-    exobiology_species_catalog = read_json(
+    exobiology_bundled_catalog = read_json(
         package_root / "ed_data" / "exobiology_species.json", []
+    )
+    # Filled out with anything learned from the Commander's own sales for a
+    # species the bundled catalog doesn't know - see augmented_species_catalog().
+    exobiology_species_catalog = augmented_species_catalog(
+        exobiology_bundled_catalog, profile_events
     )
     exobiology_rows = exobiology_findings(profile_events, exobiology_species_catalog)
     exobiology_targets = landing_targets(
@@ -7846,6 +7853,9 @@ def build_state(
         "exobiologyBestFind": best_find(exobiology_rows),
         "exobiologyRemainingOnBody": remaining_signals_at_body(
             profile_events, exobiology_species_catalog, exobiology_status_snapshot,
+        ),
+        "exobiologyGenusCompletion": genus_completion(
+            exobiology_rows, exobiology_species_catalog
         ),
         "ship": ship or "No ship selected",
         "commander": commander_name,

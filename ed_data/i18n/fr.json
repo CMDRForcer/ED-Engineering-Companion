@@ -691,5 +691,10 @@
   "exobiology.remaining_on_body": "RESTANT SUR CETTE PLANÈTE",
   "exobiology.best_find_detail": "MEILLEUR · %1 · %2",
   "exobiology.footfall_possible": "BONUS DE PREMIER PAS POSSIBLE",
-  "exobiology.best_value_base": "BASE JUSQU'À %1"
+  "exobiology.best_value_base": "BASE JUSQU'À %1",
+  "exobiology.genus_progress": "PROGRESSION DES GENRES",
+  "exobiology.genus_progress_count": "%1 / %2 TROUVÉS",
+  "exobiology.show_missing_genera": "AFFICHER LES MANQUANTS",
+  "exobiology.hide_missing_genera": "MASQUER",
+  "exobiology.genus_all_found": "TOUS LES GENRES CONNUS TROUVÉS"
 }

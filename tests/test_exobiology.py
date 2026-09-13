@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from ed_companion.exobiology import (
+    augmented_species_catalog,
     best_find,
     colony_range_for_genus,
     exobiology_carried_summary,
@@ -14,8 +15,10 @@ from ed_companion.exobiology import (
     exobiology_session_summary,
     exobiology_summary,
     footfalled_bodies,
+    genus_completion,
     great_circle_distance_m,
     landing_targets,
+    learned_species_from_sales,
     populated_systems,
     remaining_signals_at_body,
 )
@@ -605,6 +608,157 @@ class BestFindTests(unittest.TestCase):
             self._finding(9000000, complete=False),
         ]
         self.assertIsNone(best_find(findings))
+
+
+class SpeciesCatalogIntegrityTests(unittest.TestCase):
+    """Regression coverage for the bundled ed_data/exobiology_species.json
+    catalog itself - a bad conversion here silently corrupts every
+    genus/species-derived feature, not just the function under test.
+    """
+
+    def test_no_duplicate_genus_species_pairs(self):
+        seen = set()
+        for row in SPECIES_CATALOG:
+            key = (row["genusCodexKey"], row["speciesCodexKey"])
+            self.assertNotIn(key, seen, f"duplicate catalog row for {key}")
+            seen.add(key)
+
+    def test_no_species_has_a_phantom_standalone_duplicate(self):
+        # A species that legitimately shares a genus with siblings (e.g.
+        # Stratum) must never ALSO appear as its own self-referential
+        # genusCodexKey == speciesCodexKey row: that duplicate is dead,
+        # unmatchable-by-any-real-Journal-event data that inflates the
+        # genus count reported by genus_completion() and - before
+        # _species_candidates() required a non-empty ruleset - used to
+        # falsely predict on every single landing target.
+        by_species_key: dict[str, list[dict]] = {}
+        for row in SPECIES_CATALOG:
+            by_species_key.setdefault(row["speciesCodexKey"], []).append(row)
+        for species_key, rows in by_species_key.items():
+            genus_keys = {row["genusCodexKey"] for row in rows}
+            self.assertEqual(
+                len(genus_keys), 1,
+                f"{species_key} appears under more than one genus key "
+                f"({genus_keys}) - a standalone duplicate should be removed",
+            )
+
+
+class LearnedSpeciesFromSalesTests(unittest.TestCase):
+    def _sale(self, genus, species, value, species_localised=None):
+        return {
+            "event": "SellOrganicData",
+            "BioData": [
+                {
+                    "Genus": genus, "Species": species, "Value": value,
+                    "Species_Localised": species_localised,
+                }
+            ],
+        }
+
+    def test_no_sales_ever_learns_nothing(self):
+        self.assertEqual(learned_species_from_sales([]), [])
+
+    def test_a_sale_is_learned_with_its_exact_paid_value_and_name(self):
+        events = [self._sale(
+            "$Codex_Ent_Fonticulus_Genus_Name;", "$Codex_Ent_Fonticulus_01_Name;",
+            18314900, species_localised="Fonticulua Campestris",
+        )]
+        learned = learned_species_from_sales(events)
+        self.assertEqual(len(learned), 1)
+        row = learned[0]
+        self.assertEqual(row["genusCodexKey"], "$Codex_Ent_Fonticulus_Genus_Name;")
+        self.assertEqual(row["speciesCodexKey"], "$Codex_Ent_Fonticulus_01_Name;")
+        self.assertEqual(row["name"], "Fonticulua Campestris")
+        self.assertEqual(row["value"], 18314900)
+        self.assertEqual(row["rulesets"], [])
+
+    def test_missing_localised_name_falls_back_to_a_humanized_codex_key(self):
+        events = [self._sale(
+            "$Codex_Ent_Fonticulus_Genus_Name;", "$Codex_Ent_Fonticulus_01_Name;",
+            18314900, species_localised=None,
+        )]
+        self.assertTrue(learned_species_from_sales(events)[0]["name"])
+
+    def test_the_same_species_sold_twice_is_learned_only_once(self):
+        events = [
+            self._sale("$Genus;", "$Species;", 1000000, "Same One"),
+            self._sale("$Genus;", "$Species;", 1000000, "Same One"),
+        ]
+        self.assertEqual(len(learned_species_from_sales(events)), 1)
+
+    def test_different_species_are_learned_separately(self):
+        events = [
+            self._sale("$Genus;", "$SpeciesA;", 1000000, "A"),
+            self._sale("$Genus;", "$SpeciesB;", 2000000, "B"),
+        ]
+        self.assertEqual(len(learned_species_from_sales(events)), 2)
+
+
+class AugmentedSpeciesCatalogTests(unittest.TestCase):
+    def test_a_species_the_catalog_already_knows_is_not_duplicated(self):
+        catalog = [{"genusCodexKey": "$G;", "speciesCodexKey": "$S;", "rulesets": [{}]}]
+        events = [{
+            "event": "SellOrganicData",
+            "BioData": [{"Genus": "$G;", "Species": "$S;", "Value": 1, "Species_Localised": "X"}],
+        }]
+        augmented = augmented_species_catalog(catalog, events)
+        self.assertEqual(len(augmented), 1)
+        self.assertEqual(augmented[0]["rulesets"], [{}])
+
+    def test_a_species_the_catalog_does_not_know_is_added(self):
+        catalog = [{"genusCodexKey": "$G;", "speciesCodexKey": "$Known;", "rulesets": [{}]}]
+        events = [{
+            "event": "SellOrganicData",
+            "BioData": [{"Genus": "$G;", "Species": "$Unknown;", "Value": 5, "Species_Localised": "New One"}],
+        }]
+        augmented = augmented_species_catalog(catalog, events)
+        self.assertEqual(len(augmented), 2)
+        names = {row.get("speciesCodexKey") for row in augmented}
+        self.assertEqual(names, {"$Known;", "$Unknown;"})
+
+    def test_with_no_sales_the_catalog_is_returned_unchanged(self):
+        catalog = [{"genusCodexKey": "$G;", "speciesCodexKey": "$S;", "rulesets": [{}]}]
+        self.assertEqual(augmented_species_catalog(catalog, []), catalog)
+
+
+class GenusCompletionTests(unittest.TestCase):
+    def _catalog(self, *pairs):
+        return [
+            {"genusCodexKey": key, "genus": name, "speciesCodexKey": f"{key}_sp"}
+            for key, name in pairs
+        ]
+
+    def test_no_findings_means_every_catalog_genus_is_missing(self):
+        catalog = self._catalog(("$G1;", "genus_one"), ("$G2;", "genus_two"))
+        result = genus_completion([], catalog)
+        self.assertEqual(result["totalGenera"], 2)
+        self.assertEqual(result["foundGenera"], 0)
+        self.assertEqual(result["missingGenusNames"], ["Genus One", "Genus Two"])
+
+    def test_a_found_genus_is_excluded_from_the_missing_list(self):
+        catalog = self._catalog(("$G1;", "genus_one"), ("$G2;", "genus_two"))
+        findings = [{"genus": "$G1;"}]
+        result = genus_completion(findings, catalog)
+        self.assertEqual(result["foundGenera"], 1)
+        self.assertEqual(result["missingGenusNames"], ["Genus Two"])
+
+    def test_missing_names_are_sorted(self):
+        catalog = self._catalog(("$Gz;", "genus_z"), ("$Ga;", "genus_a"))
+        result = genus_completion([], catalog)
+        self.assertEqual(result["missingGenusNames"], ["Genus A", "Genus Z"])
+
+    def test_every_genus_found_leaves_nothing_missing(self):
+        catalog = self._catalog(("$G1;", "genus_one"))
+        findings = [{"genus": "$G1;"}]
+        result = genus_completion(findings, catalog)
+        self.assertEqual(result["totalGenera"], 1)
+        self.assertEqual(result["foundGenera"], 1)
+        self.assertEqual(result["missingGenusNames"], [])
+
+    def test_an_empty_catalog_yields_nothing_missing_and_no_totals(self):
+        result = genus_completion([], [])
+        self.assertEqual(result["totalGenera"], 0)
+        self.assertEqual(result["missingGenusNames"], [])
 
 
 class GreatCircleDistanceTests(unittest.TestCase):

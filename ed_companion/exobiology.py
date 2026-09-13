@@ -156,6 +156,101 @@ def exobiology_summary(findings: list[dict[str, Any]] | None) -> dict[str, Any]:
     }
 
 
+def learned_species_from_sales(
+    events: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Species facts learned directly from the Commander's own sales.
+
+    Every ``SellOrganicData`` event already reports the exact base
+    ``Value`` Frontier paid for a (Genus, Species) pair, plus its
+    localised name - this fills a gap in the bundled catalog (itself
+    derived from a community reference that does not cover every known
+    species) using nothing but the Commander's own Journal: no external
+    dependency, and always exactly correct since it is what was actually
+    paid. It carries no spawn-condition rules - a sale event has none to
+    give - so a learned entry is never predicted onto an unscanned body,
+    only recognized once actually found again.
+    """
+    learned: dict[tuple[str, str], dict[str, Any]] = {}
+    for event in events or []:
+        if not isinstance(event, dict) or event.get("event") != "SellOrganicData":
+            continue
+        for row in event.get("BioData") or []:
+            if not isinstance(row, dict):
+                continue
+            genus, species = row.get("Genus"), row.get("Species")
+            if not genus or not species or (genus, species) in learned:
+                continue
+            learned[(genus, species)] = {
+                "genusCodexKey": genus,
+                "speciesCodexKey": species,
+                "genus": "",
+                "name": str(
+                    row.get("Species_Localised") or _humanize_codex_key(species)
+                ),
+                "value": int(row.get("Value") or 0),
+                "rulesets": [],
+            }
+    return list(learned.values())
+
+
+def augmented_species_catalog(
+    species_catalog: list[dict[str, Any]] | None,
+    events: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """The bundled catalog, filled out with anything learned from the
+    Commander's own sales for a (genus, species) pair the catalog does
+    not already know. The bundled entry always wins when both exist - it
+    additionally carries spawn-condition rules a sale event cannot.
+    """
+    catalog = [row for row in species_catalog or [] if isinstance(row, dict)]
+    known_keys = {
+        (row.get("genusCodexKey"), row.get("speciesCodexKey")) for row in catalog
+    }
+    return catalog + [
+        row for row in learned_species_from_sales(events)
+        if (row["genusCodexKey"], row["speciesCodexKey"]) not in known_keys
+    ]
+
+
+def genus_completion(
+    findings: list[dict[str, Any]] | None,
+    species_catalog: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    """Which of the catalog's known genera the Commander has found at
+    least one species of, and which are still entirely missing - by
+    name.
+
+    Scoped to EDEC's own bundled-plus-learned catalog, not every genus
+    known to exist in the game - see the module docstring and
+    ``augmented_species_catalog()`` for why that catalog is not (and
+    cannot fully be) complete.
+    """
+    genus_names: dict[str, str] = {}
+    for row in species_catalog or []:
+        if not isinstance(row, dict):
+            continue
+        key = row.get("genusCodexKey")
+        if not key or key in genus_names:
+            continue
+        genus_names[key] = (
+            str(row.get("genus") or "").replace("_", " ").title()
+            or _humanize_codex_key(key)
+        )
+    found_keys = {
+        row.get("genus") for row in findings or []
+        if isinstance(row, dict) and row.get("genus") in genus_names
+    }
+    missing = sorted(
+        name for key, name in genus_names.items() if key not in found_keys
+    )
+    return {
+        "totalGenera": len(genus_names),
+        "foundGenera": len(genus_names) - len(missing),
+        "missingGenusNames": missing,
+    }
+
+
 def _latest_event_timestamp(events: list[dict[str, Any]], event_name: str) -> str:
     """Return the timestamp of the most recent event of this type, or ""."""
     timestamp = ""
@@ -314,10 +409,14 @@ def _ruleset_matches(ruleset: dict[str, Any], body: dict[str, Any]) -> bool:
 def _species_candidates(
     body: dict[str, Any], species_catalog: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
+    # A species with no ruleset data at all (e.g. one only known from a
+    # sale - see learned_species_from_sales()) is skipped here, not
+    # matched everywhere: "no known spawn conditions" is not the same
+    # claim as "spawns under any conditions".
     return [
         row for row in species_catalog
-        if isinstance(row, dict)
-        and any(_ruleset_matches(rs, body) for rs in row.get("rulesets") or [{}])
+        if isinstance(row, dict) and row.get("rulesets")
+        and any(_ruleset_matches(rs, body) for rs in row["rulesets"])
     ]
 
 

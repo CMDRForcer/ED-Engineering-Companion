@@ -3926,18 +3926,10 @@
     ]
   },
   {
-    "genusCodexKey": "$Codex_Ent_Stratum_04_Name;",
-    "speciesCodexKey": "$Codex_Ent_Stratum_04_Name;",
-    "genus": "stratum",
-    "name": "Stratum Aranaemus",
-    "value": 2448900,
-    "rulesets": []
-  },
-  {
     "genusCodexKey": "$Codex_Ent_Stratum_Genus_Name;",
     "speciesCodexKey": "$Codex_Ent_Stratum_04_Name;",
     "genus": "stratum",
-    "name": "Stratum Araneamus",
+    "name": "Stratum Aranaemus",
     "value": 2448900,
     "rulesets": [
       {
@@ -5028,6 +5020,67 @@
           "Izanami",
           "Ryker A"
         ]
+      }
+    ]
+  },
+  {
+    "genusCodexKey": "$Codex_Ent_Cone_Name;",
+    "speciesCodexKey": "$Codex_Ent_Cone_Name;",
+    "genus": "bark_mound",
+    "name": "Bark Mound",
+    "value": 1471900,
+    "rulesets": [
+      {
+        "volcanism": "Any",
+        "nebula": "large",
+        "regions": [
+          "!center"
+        ]
+      }
+    ]
+  },
+  {
+    "genusCodexKey": "$Codex_Ent_Vents_Name;",
+    "speciesCodexKey": "$Codex_Ent_Vents_Name;",
+    "genus": "amphora_plant",
+    "name": "Amphora Plant",
+    "value": 1628800,
+    "rulesets": [
+      {
+        "body_type": [
+          "Metal rich body"
+        ],
+        "atmosphere": [
+          "None"
+        ],
+        "star": "A",
+        "min_temperature": 1000.0,
+        "max_temperature": 1750.0,
+        "volcanism": [
+          "metallic",
+          "rocky",
+          "silicate"
+        ],
+        "bodies": [
+          "Earthlike body",
+          "Gas giant with water based life",
+          "Water giant"
+        ],
+        "regions": [
+          "amphora"
+        ]
+      }
+    ]
+  },
+  {
+    "genusCodexKey": "$Codex_Ent_Ingensradices_Genus_Name;",
+    "speciesCodexKey": "$Codex_Ent_Ingensradices_Unicus_Name;",
+    "genus": "radicoida",
+    "name": "Radicoida Unicus",
+    "value": 119037,
+    "rulesets": [
+      {
+        "system": "HIP 87621"
       }
     ]
   }

@@ -1004,7 +1004,7 @@ class CockpitController(QObject):
                 "exobiologyFindings", "exobiologyLandingTargets",
                 "exobiologySessionSummary", "exobiologyCarriedSummary",
                 "exobiologyLifetimeEarned", "exobiologyBestFind",
-                "exobiologyRemainingOnBody",
+                "exobiologyRemainingOnBody", "exobiologyGenusCompletion",
             )
         ):
             self.exobiologyChanged.emit()
@@ -3761,6 +3761,10 @@ class CockpitController(QObject):
     )
     exobiologyRemainingOnBody = Property(
         "QVariantMap", lambda self: self._get("exobiologyRemainingOnBody", {}) or {},
+        notify=exobiologyChanged,
+    )
+    exobiologyGenusCompletion = Property(
+        "QVariantMap", lambda self: self._get("exobiologyGenusCompletion", {}) or {},
         notify=exobiologyChanged,
     )
     exobiologyDistanceCheck = Property(

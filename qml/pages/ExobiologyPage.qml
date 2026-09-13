@@ -19,12 +19,15 @@ ColumnLayout {
     readonly property color borderTone: appWindow.borderTone
 
     property bool showAllSystems: false
+    property bool showMissingGenera: false
 
     readonly property var summary: cockpit.exobiologySummary || ({})
     readonly property var sessionSummary: cockpit.exobiologySessionSummary || ({})
     readonly property var carriedSummary: cockpit.exobiologyCarriedSummary || ({})
     readonly property var bestFind: cockpit.exobiologyBestFind || ({})
     readonly property var remainingOnBody: cockpit.exobiologyRemainingOnBody || ({})
+    readonly property var genusCompletion: cockpit.exobiologyGenusCompletion || ({})
+    readonly property var missingGenusNames: exobiologyPage.genusCompletion.missingGenusNames || []
     readonly property var landingTargets: cockpit.exobiologyLandingTargets || []
     readonly property var currentSystemTargets: exobiologyPage.landingTargets.filter(function(target) {
         return target.inCurrentSystem
@@ -153,6 +156,62 @@ ColumnLayout {
                         Layout.fillWidth: true
                     }
                 }
+            }
+        }
+    }
+
+    ShadowCard {
+        Layout.fillWidth: true
+        Layout.preferredHeight: genusCompletionContent.implicitHeight + 28
+        accent: cyan
+        visible: (exobiologyPage.genusCompletion.totalGenera || 0) > 0
+        ColumnLayout {
+            id: genusCompletionContent
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: 14
+            spacing: 6
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Label {
+                    text: appWindow.t("exobiology.genus_progress", "GENUS PROGRESS")
+                    color: cyan; font.pixelSize: 11; font.bold: true
+                }
+                Item { Layout.fillWidth: true }
+                Label {
+                    text: appWindow.tf(
+                        "exobiology.genus_progress_count", "%1 / %2 FOUND",
+                        [exobiologyPage.genusCompletion.foundGenera || 0, exobiologyPage.genusCompletion.totalGenera || 0])
+                    color: exobiologyPage.missingGenusNames.length === 0 ? green : textPrimary
+                    font.pixelSize: 13; font.bold: true
+                }
+                Label {
+                    visible: exobiologyPage.missingGenusNames.length > 0
+                    text: exobiologyPage.showMissingGenera
+                          ? appWindow.t("exobiology.hide_missing_genera", "HIDE")
+                          : appWindow.t("exobiology.show_missing_genera", "SHOW MISSING")
+                    color: cyan; font.pixelSize: 11; font.bold: true
+                    MouseArea {
+                        anchors.fill: parent
+                        anchors.margins: -4
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: exobiologyPage.showMissingGenera = !exobiologyPage.showMissingGenera
+                    }
+                }
+            }
+            Label {
+                visible: exobiologyPage.showMissingGenera && exobiologyPage.missingGenusNames.length > 0
+                Layout.fillWidth: true
+                text: exobiologyPage.missingGenusNames.join(" · ")
+                color: muted; font.pixelSize: 12
+                wrapMode: Text.WordWrap
+            }
+            Label {
+                visible: exobiologyPage.showMissingGenera && exobiologyPage.missingGenusNames.length === 0
+                text: appWindow.t("exobiology.genus_all_found", "ALL KNOWN GENERA FOUND")
+                color: green; font.pixelSize: 12; font.bold: true
             }
         }
     }

@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.5.0 — 2026-09-13
+
+### Added
+
+- A GENUS PROGRESS panel on the Exobiology page shows how many of the
+  known biological genera the Commander has found at least one species
+  of, with a "SHOW MISSING" toggle listing the missing genera by name -
+  answering "what have I found, and what's still missing?" directly.
+- The species catalog now learns from the Commander's own
+  `SellOrganicData` sales: any species the bundled catalog doesn't
+  already carry is added automatically, using the exact base value
+  Frontier actually paid, so the catalog only grows more complete the
+  more the Commander plays. A learned entry carries no spawn-condition
+  rules of its own, so it is only ever recognized once found again -
+  never predicted onto an unscanned body.
+- Acquired 3 species missing from the bundled catalog (Bark Mound,
+  Amphora Plant, Radicoida Unicus) from the same community reference
+  data already used elsewhere in the catalog, bringing it to 118
+  species across 22 genera.
+
+### Fixed
+
+- A duplicate, dead catalog row for Stratum Aranaemus (keyed under its
+  own standalone, self-referential codex key with no spawn-condition
+  data instead of the shared Stratum genus key its correctly-keyed
+  sibling row already used) inflated the genus count everywhere by one
+  phantom "genus" that could never be found, and - before a related fix
+  to species-candidate matching - would have falsely predicted onto
+  every single landing target since an empty ruleset list matched any
+  body. Removed the dead duplicate and kept the correctly keyed row.
+
 ## 1.4.3 — 2026-09-13
 
 ### Fixed
