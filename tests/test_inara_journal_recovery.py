@@ -103,7 +103,7 @@ class InaraJournalRecoveryTests(unittest.TestCase):
             controller = self._controller(root)
 
             with mock.patch(
-                "ed_companion.phase14.controller.journal_paths_for_profile",
+                "ed_companion.phase14.controller_inara.journal_paths_for_profile",
                 return_value=paths,
             ):
                 self.assertTrue(controller._scan_inara_journal())
@@ -130,7 +130,7 @@ class InaraJournalRecoveryTests(unittest.TestCase):
             })
 
             with mock.patch(
-                "ed_companion.phase14.controller.journal_paths_for_profile",
+                "ed_companion.phase14.controller_inara.journal_paths_for_profile",
                 return_value=paths,
             ):
                 self.assertTrue(controller._scan_inara_journal())
@@ -167,11 +167,11 @@ class InaraJournalRecoveryTests(unittest.TestCase):
 
             with (
                 mock.patch(
-                    "ed_companion.phase14.controller.journal_paths_for_profile",
+                    "ed_companion.phase14.controller_inara.journal_paths_for_profile",
                     return_value=paths,
                 ),
                 mock.patch(
-                    "ed_companion.phase14.controller.profiled_journal_events",
+                    "ed_companion.phase14.controller_inara.profiled_journal_events",
                     return_value=events,
                 ),
             ):
@@ -213,11 +213,11 @@ class InaraJournalRecoveryTests(unittest.TestCase):
 
             with (
                 mock.patch(
-                    "ed_companion.phase14.controller.journal_paths_for_profile",
+                    "ed_companion.phase14.controller_inara.journal_paths_for_profile",
                     return_value=paths,
                 ),
                 mock.patch(
-                    "ed_companion.phase14.controller.profiled_journal_events",
+                    "ed_companion.phase14.controller_inara.profiled_journal_events",
                     return_value=latest_events,
                 ) as cached_events,
             ):
