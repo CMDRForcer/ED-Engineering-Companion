@@ -29,7 +29,7 @@ class RecordExobiologyStepPositionsTests(unittest.TestCase):
     def test_a_new_step_records_the_current_status_position(self):
         controller = _controller()
         with mock.patch(
-            "ed_companion.phase14.controller.read_json",
+            "ed_companion.phase14.controller_exobiology.read_json",
             return_value={
                 "Latitude": 1.5, "Longitude": 2.5, "PlanetRadius": 1000.0,
                 "BodyName": "Some Body",
@@ -47,7 +47,7 @@ class RecordExobiologyStepPositionsTests(unittest.TestCase):
     def test_no_position_data_in_status_records_nothing(self):
         controller = _controller()
         with mock.patch(
-            "ed_companion.phase14.controller.read_json", return_value={},
+            "ed_companion.phase14.controller_exobiology.read_json", return_value={},
         ):
             controller._record_exobiology_step_positions(
                 [self._finding(1)], [self._finding(2)],
@@ -61,7 +61,7 @@ class RecordExobiologyStepPositionsTests(unittest.TestCase):
             "lat": 9, "lon": 9, "radius": 9, "bodyName": "Old",
         }
         with mock.patch(
-            "ed_companion.phase14.controller.read_json",
+            "ed_companion.phase14.controller_exobiology.read_json",
             return_value={
                 "Latitude": 1, "Longitude": 1, "PlanetRadius": 1, "BodyName": "New",
             },
@@ -74,7 +74,7 @@ class RecordExobiologyStepPositionsTests(unittest.TestCase):
     def test_a_completed_find_does_not_get_a_baseline(self):
         controller = _controller()
         with mock.patch(
-            "ed_companion.phase14.controller.read_json",
+            "ed_companion.phase14.controller_exobiology.read_json",
             return_value={
                 "Latitude": 1, "Longitude": 1, "PlanetRadius": 1, "BodyName": "X",
             },
@@ -169,9 +169,9 @@ class PollExobiologyDistanceCheckTests(unittest.TestCase):
         status = {"BodyName": "Body A", "Latitude": 0.0, "Longitude": 0.0001}
 
         with mock.patch(
-            "ed_companion.phase14.controller.read_json", return_value=status,
+            "ed_companion.phase14.controller_exobiology.read_json", return_value=status,
         ), mock.patch(
-            "ed_companion.phase14.controller.latest_profile_location",
+            "ed_companion.phase14.controller_exobiology.latest_profile_location",
             return_value={"currentSystemAddress": 1},
         ):
             controller._poll_exobiology_distance_check()
@@ -190,9 +190,9 @@ class PollExobiologyDistanceCheckTests(unittest.TestCase):
         status = {"BodyName": "Body A", "Latitude": 0.0, "Longitude": 0.0001}
 
         with mock.patch(
-            "ed_companion.phase14.controller.read_json", return_value=status,
+            "ed_companion.phase14.controller_exobiology.read_json", return_value=status,
         ), mock.patch(
-            "ed_companion.phase14.controller.latest_profile_location",
+            "ed_companion.phase14.controller_exobiology.latest_profile_location",
             return_value={"currentSystemAddress": 2},
         ):
             controller._poll_exobiology_distance_check()
