@@ -249,6 +249,7 @@ from .dashboard_views import (
 
 from .controller_commander import CommanderMixin
 from .controller_eddn import EddnMixin
+from .controller_ui_settings import UiSettingsMixin
 from .controller_navigation import NavigationMixin
 from .controller_fleet_materials import FleetMaterialsMixin
 from .controller_engineering import EngineeringMixin
@@ -383,19 +384,15 @@ def _eddn_relay_relevant(payload: Any) -> bool:
 class CockpitController(
     CommanderMixin, EddnMixin, EngineeringMixin, ExobiologyMixin,
     FleetMaterialsMixin, FrontierCapiMixin, InaraMixin, LogbookMixin,
-    NavigationMixin, CoreControllerMixin, QObject,
+    NavigationMixin, UiSettingsMixin, CoreControllerMixin, QObject,
 ):
     journalHealthChanged = Signal()
     diagnosticsChanged = Signal()
-    rendererChanged = Signal()
     activityChanged = Signal()
     historyExportFinished = Signal(object)
-    startupStateReady = Signal(object)
-    startupStateFailed = Signal(object)
     refreshStateReady = Signal(object)
     refreshStateFailed = Signal(object)
     exitRequested = Signal()
-    restartRequested = Signal()
 
     def _bind_profile_paths(self, context: ProfileContext) -> None:
         """Bind every Commander-local controller file to one context."""
@@ -754,95 +751,7 @@ class CockpitController(
             target=worker, name="initial-journal-state", daemon=True
         ).start()
 
-    @Slot(object)
-    def _finish_startup_state(self, payload):
-        revision, profile_generation, state, startup_rows = payload[:4]
-        startup_profile_key = payload[4] if len(payload) > 4 else ""
-        startup_eddn_context = payload[5] if len(payload) > 5 else None
-        startup_state_find_rows = payload[6] if len(payload) > 6 else None
-        startup_hge_revision = payload[7] if len(payload) > 7 else self._hge_revision
-        startup_eddn_revision = payload[8] if len(payload) > 8 else self._eddn_revision
-        if (
-            revision != self._refresh_revision
-            or profile_generation != self._profile_generation
-        ):
-            LOGGER.info(
-                "Discarded stale startup state revision %s for profile generation %s",
-                revision, profile_generation,
-            )
-            return
-        if not isinstance(state, dict):
-            self._fail_startup_state((
-                revision, profile_generation,
-                "Initial Journal state was not a mapping.",
-            ))
-            return
-        profile_context = state.pop("_profileContext", None)
-        if (
-            isinstance(profile_context, ProfileContext)
-            and not self._switch_profile_context(profile_context)
-        ):
-            self._fail_startup_state((
-                revision, profile_generation,
-                "Profile switch is waiting for EDDN upload.",
-            ))
-            return
-        self._logbook_entries = list(state.pop("_logbookEntries", []))
-        state.pop("_craftBatch", None)
-        self._logbook_revision += 1
-        state = self._state_with_frontier_profile(
-            state, getattr(self, "_frontier_profile", {})
-        )
-        self._state = state
-        overview = state.get("commanderOverview", {})
-        if isinstance(overview, dict):
-            self._record_commander_credit_snapshot(overview.get("credits", {}))
-        if startup_hge_revision == self._hge_revision:
-            self._hge_candidate_cache_key = (
-                id(self._hge_sightings), len(self._hge_sightings), id(self._state)
-            )
-            self._hge_candidate_cache_rows = startup_rows
-        else:
-            self._hge_candidate_cache_key = None
-            self._hge_candidate_cache_rows = []
-        self._hge_material_filter_cache = None
-        if (
-            startup_profile_key == self.profile_context.key
-            and isinstance(startup_eddn_context, dict)
-        ):
-            self._eddn_context = startup_eddn_context
-        self._journal_state_ready = True
-        self._selected_ship = str(state.get("ship") or "")
-        self._activity = "Journal synchronized · live inventory loaded"
-        self._log_consistency_issues(state)
-        self._publish_full_state()
-        if (
-            isinstance(startup_state_find_rows, list)
-            and startup_hge_revision == self._hge_revision
-            and startup_eddn_revision == self._eddn_revision
-        ):
-            self._derived_cache["state_find_rows"] = ((
-                self._state_revision, self._hge_revision, self._eddn_revision,
-            ), startup_state_find_rows)
-        self.activityChanged.emit()
-        self.connectionChanged.emit()
-        if getattr(self, "_journal_auto", False):
-            self._queue_inara_journal_scan()
 
-    @Slot(object)
-    def _fail_startup_state(self, payload):
-        revision, profile_generation, message = payload
-        if (
-            revision != self._refresh_revision
-            or profile_generation != self._profile_generation
-        ):
-            LOGGER.info(
-                "Discarded stale startup failure revision %s for profile generation %s",
-                revision, profile_generation,
-            )
-            return
-        self._activity = f"Journal startup sync failed · {message}"
-        self.activityChanged.emit()
 
     def _log_consistency_issues(self, state):
         issues = tuple(str(item) for item in state.get("consistencyIssues", []))
@@ -901,8 +810,6 @@ class CockpitController(
         self.journalHealthChanged.emit()
         self.logbookChanged.emit()
 
-    def _load_ui_config(self):
-        return load_json_file(self.config_file, {}, encoding="utf-8")
 
 
 
@@ -919,33 +826,6 @@ class CockpitController(
             LOGGER.error("%s could not be persisted to %s", label, path)
         return saved
 
-    def _save_ui_config(self):
-        saved = self._persist_json(self.config_file, {
-            "renderer_mode": self._renderer_mode,
-            "ui_scale": self._ui_scale,
-            "theme": self._theme,
-            "interface_language": self._interface_language,
-            "reduced_motion": self._reduced_motion,
-            "commander_update_popups": self._commander_update_popups,
-            "enhanced_visuals": self._enhanced_visuals,
-            "onboarding_complete": self._onboarding_complete,
-            "last_page": self._last_page,
-            "debug_mode": self._debug_mode,
-            "journal_auto": self._journal_auto,
-            "background_mode": self._background_mode,
-            "autostart_enabled": self._autostart_enabled,
-            "trader_preference": self._trader_preference,
-            "commander_card_order": self._commander_card_order,
-            "navigation_order": self._navigation_order,
-        }, "UI configuration")
-        if not saved:
-            self._activity = (
-                "Settings changed in memory but could not be saved to disk."
-            )
-            signal = getattr(self, "activityChanged", None)
-            if signal is not None:
-                signal.emit()
-        return saved
 
 
     @staticmethod
@@ -1056,10 +936,6 @@ class CockpitController(
         thread.start()
         return True
 
-    @staticmethod
-    def _detect_renderer():
-        api = QQuickWindow.graphicsApi()
-        return str(api).split(".")[-1]
 
     def _get(self, key, default=None):
         return self._state.get(key, default)
@@ -1756,50 +1632,12 @@ class CockpitController(
         notify=CoreControllerMixin.operationsChanged,
     )
     activity = Property(str, lambda self: self._activity, notify=activityChanged)
-    rendererMode = Property(str, lambda self: self._renderer_mode, notify=rendererChanged)
-    rendererActive = Property(str, lambda self: self._renderer_active, notify=rendererChanged)
-    restartRequired = Property(bool, lambda self: self._restart_required, notify=rendererChanged)
-    uiScale = Property(float, lambda self: self._ui_scale, notify=CoreControllerMixin.uiChanged)
-    theme = Property(str, lambda self: self._theme, notify=CoreControllerMixin.uiChanged)
-    interfaceLanguage = Property(
-        str, lambda self: self._interface_language, notify=CoreControllerMixin.uiChanged,
-    )
-    interfaceLanguages = Property(
-        "QVariantList",
-        lambda self: [
-            {
-                "id": language,
-                "label": self._translations.translate(
-                    language, "language.name", language.upper()
-                ),
-            }
-            for language in SUPPORTED_LANGUAGES
-        ],
-        constant=True,
-    )
-    reducedMotion = Property(bool, lambda self: self._reduced_motion, notify=CoreControllerMixin.uiChanged)
-    enhancedVisuals = Property(
-        bool, lambda self: self._enhanced_visuals, notify=CoreControllerMixin.uiChanged,
-    )
-    onboardingComplete = Property(
-        bool, lambda self: self._onboarding_complete, notify=CoreControllerMixin.uiChanged
-    )
     lastPage = Property(int, lambda self: self._last_page, notify=CoreControllerMixin.uiChanged)
-    debugMode = Property(bool, lambda self: self._debug_mode, notify=CoreControllerMixin.uiChanged)
     journalAuto = Property(
         bool, lambda self: self._journal_auto, notify=CoreControllerMixin.uiChanged,
     )
-    backgroundMode = Property(
-        bool, lambda self: self._background_mode, notify=CoreControllerMixin.uiChanged,
-    )
-    autostartEnabled = Property(
-        bool, lambda self: self._autostart_enabled, notify=CoreControllerMixin.uiChanged,
-    )
     systemTrayAvailable = Property(
         bool, lambda self: self._system_tray_available, notify=CoreControllerMixin.uiChanged,
-    )
-    backgroundRuntimeStatus = Property(
-        str, lambda self: self._background_runtime_status, notify=CoreControllerMixin.uiChanged,
     )
     historyExportBusy = Property(
         bool, lambda self: self._history_export_busy,
@@ -1839,13 +1677,6 @@ class CockpitController(
     )
     serviceStatus = Property(
         "QVariantList", lambda self: self._service_status(),
-        notify=CoreControllerMixin.connectionChanged,
-    )
-    interfaceActivity = Property(
-        "QVariantList",
-        lambda self: build_interface_activity_feed(
-            self._inara_receipts, self._eddn_queue, self._frontier_last_sync,
-        ),
         notify=CoreControllerMixin.connectionChanged,
     )
     journalHealth = Property(
@@ -2777,9 +2608,6 @@ class CockpitController(
     def requestExit(self):
         self.exitRequested.emit()
 
-    @Slot()
-    def requestRestart(self):
-        self.restartRequested.emit()
 
 
     @Slot(bool)
@@ -2798,82 +2626,14 @@ class CockpitController(
         self.activityChanged.emit()
         self.journalHealthChanged.emit()
 
-    @Slot(bool)
-    def setBackgroundMode(self, enabled):
-        enabled = bool(enabled)
-        if enabled and not self._system_tray_available:
-            self._activity = "System tray is unavailable; background mode remains disabled."
-            self.activityChanged.emit()
-            return
-        self._background_mode = enabled
-        if not enabled and self._autostart_enabled:
-            self.setAutostartEnabled(False)
-        if not self._save_ui_config():
-            self.uiChanged.emit()
-            return
-        self._activity = (
-            "Tray background mode enabled."
-            if self._background_mode else "Tray background mode disabled."
-        )
-        self.uiChanged.emit()
-        self.activityChanged.emit()
 
     @Slot(bool)
     def setSystemTrayAvailable(self, available):
         self._system_tray_available = bool(available)
         self.uiChanged.emit()
 
-    @Slot(str)
-    def setBackgroundRuntimeStatus(self, status):
-        status = str(status or "").strip().upper()
-        if status not in {
-            "WINDOW OPEN", "RUNNING IN BACKGROUND", "TRAY UNAVAILABLE",
-        }:
-            return
-        if status == self._background_runtime_status:
-            return
-        self._background_runtime_status = status
-        self.uiChanged.emit()
 
-    def _autostart_command(self):
-        if getattr(sys, "frozen", False):
-            parts = [sys.executable, "--background"]
-        else:
-            python = Path(sys.executable)
-            pythonw = python.with_name("pythonw.exe")
-            executable = pythonw if pythonw.exists() else python
-            parts = [str(executable), str(self.package_root / "phase14_main.py"), "--background"]
-        return subprocess.list2cmdline(parts)
 
-    @Slot(bool)
-    def setAutostartEnabled(self, enabled):
-        enabled = bool(enabled)
-        try:
-            import winreg
-            path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-            with winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER, path, 0, winreg.KEY_SET_VALUE
-            ) as key:
-                if enabled:
-                    winreg.SetValueEx(
-                        key, "EDOPS", 0, winreg.REG_SZ, self._autostart_command()
-                    )
-                else:
-                    try:
-                        winreg.DeleteValue(key, "EDOPS")
-                    except FileNotFoundError:
-                        pass
-        except (ImportError, OSError) as exc:
-            self._activity = f"Windows autostart could not be changed: {type(exc).__name__}."
-            self.activityChanged.emit()
-            return
-        self._autostart_enabled = enabled
-        if not self._save_ui_config():
-            self.uiChanged.emit()
-            return
-        self._activity = "Windows autostart enabled." if enabled else "Windows autostart disabled."
-        self.uiChanged.emit()
-        self.activityChanged.emit()
 
     @Slot()
     def reloadJournalNow(self):
@@ -2940,29 +2700,8 @@ class CockpitController(
 
 
 
-    @Slot(float)
-    def setUiScale(self, value):
-        self._ui_scale = max(1.00, min(1.50, round(float(value), 2)))
-        self._save_ui_config()
-        self.uiChanged.emit()
 
-    @Slot(str)
-    def setTheme(self, value):
-        value = str(value or "").lower()
-        if value not in THEME_IDS:
-            return
-        self._theme = value
-        self._save_ui_config()
-        self.uiChanged.emit()
 
-    @Slot(str)
-    def setInterfaceLanguage(self, value):
-        value = str(value or "").casefold()
-        if value not in SUPPORTED_LANGUAGES or value == self._interface_language:
-            return
-        self._interface_language = value
-        self._save_ui_config()
-        self.uiChanged.emit()
 
     @Slot(str, str, result=str)
     def translate(self, key, fallback=""):
@@ -2970,18 +2709,8 @@ class CockpitController(
             self._interface_language, key, fallback
         )
 
-    @Slot(bool)
-    def setReducedMotion(self, enabled):
-        self._reduced_motion = bool(enabled)
-        self._save_ui_config()
-        self.uiChanged.emit()
 
 
-    @Slot(bool)
-    def setEnhancedVisuals(self, enabled):
-        self._enhanced_visuals = bool(enabled)
-        self._save_ui_config()
-        self.uiChanged.emit()
 
 
     @Slot(int)
@@ -3022,28 +2751,8 @@ class CockpitController(
                 self._navigation_order = previous
             self.uiChanged.emit()
 
-    @Slot()
-    def completeOnboarding(self):
-        self._onboarding_complete = True
-        self._save_ui_config()
-        self.uiChanged.emit()
 
-    @Slot()
-    def reopenOnboarding(self):
-        self._onboarding_complete = False
-        self._save_ui_config()
-        self.uiChanged.emit()
 
-    @Slot(bool)
-    def setDebugMode(self, enabled):
-        self._debug_mode = bool(enabled)
-        self._save_ui_config()
-        self._write_log(
-            "Advanced diagnostics enabled"
-            if self._debug_mode else "Advanced diagnostics disabled"
-        )
-        self.uiChanged.emit()
-        self.diagnosticsChanged.emit()
 
     @Slot()
     def refreshDiagnostics(self):
@@ -3114,12 +2823,3 @@ class CockpitController(
                 })
         return results[:30]
 
-    @Slot(str)
-    def setRendererMode(self, mode):
-        mode = str(mode or "").lower()
-        if mode not in {"auto", "gpu", "software"}:
-            return
-        self._renderer_mode = mode
-        self._save_ui_config()
-        self._restart_required = True
-        self.rendererChanged.emit()
