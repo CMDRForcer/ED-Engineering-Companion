@@ -37,7 +37,7 @@ class CommanderCreditLiveTests(unittest.TestCase):
                 "timestamp": "2026-01-01T10:01:00Z", "Balance": 100,
             }), encoding="utf-8")
             with patch(
-                "ed_companion.phase14.controller.journal_dir",
+                "ed_companion.phase14.controller_commander.journal_dir",
                 return_value=Path(directory),
             ):
                 controller._poll_commander_status_credits()
@@ -69,7 +69,7 @@ class CommanderCreditLiveTests(unittest.TestCase):
                 "timestamp": "2026-01-01T10:01:00Z", "Balance": 145,
             }), encoding="utf-8")
             with patch(
-                "ed_companion.phase14.controller.journal_dir",
+                "ed_companion.phase14.controller_commander.journal_dir",
                 return_value=Path(directory),
             ):
                 controller._poll_commander_status_credits()

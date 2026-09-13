@@ -247,6 +247,7 @@ from .dashboard_views import (
     decorate_logbook_entry,
 )
 
+from .controller_commander import CommanderMixin
 from .controller_eddn import EddnMixin
 from .controller_exobiology import ExobiologyMixin
 from .controller_frontier_capi import FrontierCapiMixin
@@ -376,11 +377,10 @@ def _eddn_relay_relevant(payload: Any) -> bool:
 
 
 class CockpitController(
-    EddnMixin, ExobiologyMixin, FrontierCapiMixin, InaraMixin,
+    CommanderMixin, EddnMixin, ExobiologyMixin, FrontierCapiMixin, InaraMixin,
     CoreControllerMixin, QObject,
 ):
     materialsChanged = Signal()
-    fleetChanged = Signal()
     wishlistChanged = Signal()
     operationsChanged = Signal()
     hgeChanged = Signal()
@@ -395,7 +395,6 @@ class CockpitController(
     activityChanged = Signal()
     materialSelectionChanged = Signal()
     engineeringChanged = Signal()
-    commanderCardsChanged = Signal()
     traderSyncFinished = Signal(bool, str)
     techBrokerSyncFinished = Signal(bool, str)
     historyExportFinished = Signal(object)
@@ -1236,95 +1235,13 @@ class CockpitController(
     def _get(self, key, default=None):
         return self._state.get(key, default)
 
-    def _commander_cards(self):
-        """Build display-only CMDR cards from local Journal/cache state."""
-        cache_key = self._state_revision
-        cached = self._derived_cache.get("commander_cards")
-        if cached and cached[0] == cache_key:
-            return cached[1]
-        cards = build_commander_cards(
-            self._state.get("commanderOverview", {}) or {},
-            profiled_journal_events()
-            if getattr(self, "_journal_state_ready", False) else [],
-        )
-        self._derived_cache["commander_cards"] = (cache_key, cards)
-        return cards
 
-    def _commander_finance_history(self):
-        cache_key = (self._state_revision, self._commander_finance_period)
-        cached = self._derived_cache.get("commander_finance_history")
-        if cached and cached[0] == cache_key:
-            return cached[1]
-        events = (
-            profiled_journal_events()
-            if getattr(self, "_journal_state_ready", False) else []
-        )
-        rows = filter_finance_history(build_finance_history(
-            events,
-            current_credits=(
-                self._state.get("commanderOverview", {}).get("credits", {})
-                if isinstance(self._state.get("commanderOverview"), dict) else {}
-            ),
-            credit_snapshots=getattr(self, "_commander_credit_snapshots", []),
-        ), self._commander_finance_period, events)
-        self._derived_cache["commander_finance_history"] = (cache_key, rows)
-        return rows
 
-    def _commander_finance_summary(self):
-        cache_key = (self._state_revision, self._commander_finance_period)
-        cached = self._derived_cache.get("commander_finance_summary")
-        if cached and cached[0] == cache_key:
-            return cached[1]
-        summary = build_finance_summary(self._commander_finance_history())
-        self._derived_cache["commander_finance_summary"] = (cache_key, summary)
-        return summary
 
     @staticmethod
     def _ship_asset_key(value):
         return re.sub(r"[^a-z0-9]+", "", str(value or "").casefold())
 
-    def _commander_fleet(self):
-        asset_symbols = {}
-        asset_names = {}
-        for record in self._ship_catalog if isinstance(self._ship_catalog, list) else []:
-            if not isinstance(record, dict):
-                continue
-            symbol = str(record.get("symbol") or "").strip()
-            if not symbol:
-                continue
-            for value in (symbol, record.get("name")):
-                key = self._ship_asset_key(value)
-                if key:
-                    asset_symbols[key] = symbol
-                    asset_names[key] = str(record.get("name") or "").strip()
-        rows = []
-        for source in self._state.get("fleet", []) or []:
-            if not isinstance(source, dict):
-                continue
-            row = dict(source)
-            ship_id = str(row.get("id") or "")
-            filename = self._fleet_images.get(ship_id, "")
-            image_path = self.fleet_images_dir / filename if filename else None
-            row["customImageSource"] = (
-                QUrl.fromLocalFile(str(image_path.resolve())).toString()
-                if image_path and image_path.is_file() else ""
-            )
-            type_key = self._ship_asset_key(row.get("type"))
-            symbol = asset_symbols.get(type_key, "")
-            if asset_names.get(type_key):
-                row["type"] = asset_names[type_key]
-            row["schematicSource"] = (
-                f"assets/ships/{symbol}.svg" if symbol else ""
-            )
-            row["valueKnown"] = isinstance(row.get("value"), int)
-            row["rebuyKnown"] = isinstance(row.get("rebuy"), int)
-            rows.append(row)
-        rows.sort(key=lambda row: (
-            not bool(row.get("isCurrent")),
-            str(row.get("type") or "").casefold(),
-            str(row.get("name") or "").casefold(),
-        ))
-        return rows
 
     @Slot(str, str, result=bool)
     def setFleetShipImage(self, ship_id, source):
@@ -2978,44 +2895,6 @@ class CockpitController(
 
     ship = Property(str, lambda self: self._get("ship", "No ship"), notify=CoreControllerMixin.stateChanged)
     ships = Property("QStringList", lambda self: self._get("ships", []), notify=CoreControllerMixin.stateChanged)
-    commanderKnown = Property(
-        bool, lambda self: bool(self._get("commanderKnown", False)), notify=CoreControllerMixin.stateChanged
-    )
-    commander = Property(
-        str, lambda self: str(self._get("commander", "")), notify=CoreControllerMixin.stateChanged
-    )
-    commanderOverview = Property(
-        "QVariantMap", lambda self: self._get("commanderOverview", {}),
-        notify=CoreControllerMixin.stateChanged,
-    )
-    powerplayOverview = Property(
-        "QVariantMap", lambda self: self._get("powerplayOverview", {}),
-        notify=CoreControllerMixin.stateChanged,
-    )
-    commanderCards = Property(
-        "QVariantMap", lambda self: self._commander_cards(),
-        notify=commanderCardsChanged,
-    )
-    commanderFinanceHistory = Property(
-        "QVariantList", lambda self: self._commander_finance_history(),
-        notify=commanderCardsChanged,
-    )
-    commanderFinanceSummary = Property(
-        "QVariantMap", lambda self: self._commander_finance_summary(),
-        notify=commanderCardsChanged,
-    )
-    commanderFinancePeriod = Property(
-        str, lambda self: self._commander_finance_period,
-        notify=commanderCardsChanged,
-    )
-    commanderFleet = Property(
-        "QVariantList", lambda self: self._commander_fleet(),
-        notify=fleetChanged,
-    )
-    commanderCardOrder = Property(
-        "QVariantList", lambda self: list(self._commander_card_order),
-        notify=CoreControllerMixin.uiChanged,
-    )
     navigationOrder = Property(
         "QVariantList", lambda self: list(self._navigation_order),
         notify=CoreControllerMixin.uiChanged,
@@ -3179,9 +3058,6 @@ class CockpitController(
         constant=True,
     )
     reducedMotion = Property(bool, lambda self: self._reduced_motion, notify=CoreControllerMixin.uiChanged)
-    commanderUpdatePopups = Property(
-        bool, lambda self: self._commander_update_popups, notify=CoreControllerMixin.uiChanged,
-    )
     enhancedVisuals = Property(
         bool, lambda self: self._enhanced_visuals, notify=CoreControllerMixin.uiChanged,
     )
@@ -5795,79 +5671,7 @@ class CockpitController(
         self._scan_eddn_journal()
         self._process_eddn_queue()
 
-    def _record_commander_credit_snapshot(self, credits):
-        credits = credits if isinstance(credits, dict) else {}
-        value = credits.get("value")
-        timestamp = str(credits.get("timestamp") or "")
-        source = {
-            "LIVE STATUS": "live_balance",
-            "FRONTIER CAPI": "frontier_capi",
-        }.get(str(credits.get("basis") or ""))
-        if not source or not credits.get("known") or not timestamp \
-                or not isinstance(value, (int, float)) or isinstance(value, bool):
-            return False
-        snapshot = {
-            "observedAt": timestamp,
-            "timestamp": timestamp,
-            "credits": max(0, int(value)),
-            "source": source,
-        }
-        snapshots = list(getattr(self, "_commander_credit_snapshots", []))
-        if snapshots and all(
-            snapshots[-1].get(field) == snapshot[field]
-            for field in ("timestamp", "credits")
-        ):
-            return False
-        snapshots.append(snapshot)
-        self._commander_credit_snapshots = snapshots
-        self._archive_history("commander_credit_snapshots", [snapshot])
-        return True
 
-    def _poll_commander_status_credits(self):
-        """Apply Balance changes without rebuilding the complete Journal state."""
-        path = journal_dir() / "Status.json"
-        try:
-            stat = path.stat()
-            stamp = (int(stat.st_size), int(stat.st_mtime_ns))
-        except OSError:
-            return
-        if stamp == getattr(self, "_last_commander_status_stamp", None):
-            return
-        first_status_poll = getattr(
-            self, "_last_commander_status_stamp", None
-        ) is None
-        live = commander_status_credits(read_json(path, {}))
-        if not live.get("known"):
-            return
-        self._last_commander_status_stamp = stamp
-        overview = self._state.get("commanderOverview", {})
-        overview = dict(overview) if isinstance(overview, dict) else {}
-        previous = overview.get("credits", {})
-        previous = previous if isinstance(previous, dict) else {}
-        # Status.json is rewritten for many cockpit changes.  Only a real
-        # balance change should invalidate CMDR cards and the chart.
-        unchanged = (
-            previous.get("known")
-            and previous.get("value") == live.get("value")
-        )
-        previous_time = normalize_timestamp(previous.get("timestamp"))
-        live_time = normalize_timestamp(live.get("timestamp"))
-        if previous_time is not None and live_time is not None \
-                and live_time < previous_time:
-            return
-        if first_status_poll or not unchanged:
-            self._record_commander_credit_snapshot(live)
-        if unchanged:
-            return
-        overview["credits"] = live
-        if live.get("timestamp"):
-            overview["lastUpdated"] = max(
-                str(overview.get("lastUpdated") or ""), live["timestamp"]
-            )
-        self._state = {**self._state, "commanderOverview": overview}
-        self._state_revision += 1
-        self._derived_cache.clear()
-        self.stateChanged.emit()
 
 
 
@@ -5908,11 +5712,6 @@ class CockpitController(
         self._save_ui_config()
         self.uiChanged.emit()
 
-    @Slot(bool)
-    def setCommanderUpdatePopups(self, enabled):
-        self._commander_update_popups = bool(enabled)
-        self._save_ui_config()
-        self.uiChanged.emit()
 
     @Slot(bool)
     def setEnhancedVisuals(self, enabled):
@@ -5954,28 +5753,7 @@ class CockpitController(
             self._last_page = page
             self._save_ui_config()
 
-    @Slot("QVariantList")
-    def setCommanderCardOrder(self, order):
-        order = list(dict.fromkeys(
-            str(card) for card in list(order or [])
-            if str(card) in COMMANDER_CARD_IDS
-        ))
-        order.extend(card for card in COMMANDER_CARD_IDS if card not in order)
-        if order != self._commander_card_order:
-            previous = self._commander_card_order
-            self._commander_card_order = order
-            if not self._save_ui_config():
-                self._commander_card_order = previous
-            self.uiChanged.emit()
 
-    @Slot(str)
-    def setCommanderFinancePeriod(self, period):
-        period = str(period or "").casefold()
-        if period not in {"session", "1h", "6h", "24h", "7d", "30d", "all"}:
-            return
-        if period != self._commander_finance_period:
-            self._commander_finance_period = period
-            self.commanderCardsChanged.emit()
 
     @Slot("QVariantList")
     def setNavigationOrder(self, order):
