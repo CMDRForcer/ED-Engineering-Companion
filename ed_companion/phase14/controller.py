@@ -139,14 +139,6 @@ MINING_TRANSIENT_FIELDS = frozenset({
     "recheckRecommended", "stale",
 })
 HGE_CLASSIFIER_VERSION = 2
-THEME_IDS = frozenset({
-    "arctic_alloy", "navy", "neon_vector", "orbital_dawn",
-    "crimson_dark", "crimson_light",
-})
-LEGACY_THEME_IDS = frozenset({
-    "imperial_gold", "thargoid_amber", "midnight", "black",
-    "teal_void", "federal_steel", "cupcake_nebula",
-})
 COMMANDER_CARD_IDS = (
     "ranks", "major-reputation", "finances", "current-ship",
     "minor-reputation", "squadron",
@@ -203,7 +195,7 @@ from ed_companion.services import (
 from ed_companion.diagnostics import filtered_log_lines
 from ed_companion.exobiology import exobiology_distance_check
 
-from .controller_core import CoreControllerMixin
+from .controller_core import CoreControllerMixin, LEGACY_THEME_IDS, THEME_IDS
 
 from .dashboard_views import (
     build_commander_cards,
@@ -279,22 +271,6 @@ from .state import (
     write_logbook_note,
     write_ship_tasks,
 )
-
-ENGINEER_SYSTEMS = {
-    "Felicity Farseer": "Deciat", "Elvira Martuuk": "Khun",
-    "The Dweller": "Wyrd", "Tod McQuinn": "Wolf 397",
-    "Liz Ryder": "Eurybia", "Hera Tani": "Kuwemaki",
-    "Broo Tarquin": "Muang", "Selene Jean": "Kuk",
-    "Didi Vatermann": "Leesti", "Lei Cheung": "Laksak",
-    "Marco Qwent": "Sirius", "Ram Tah": "Meene",
-    "The Sarge": "Beta-3 Tucani", "Tiana Fortune": "Achenar",
-    "Bill Turner": "Alioth", "Juri Ishmaak": "Giryak",
-    "Zacariah Nemo": "Yoru", "Lori Jameson": "Shinrarta Dezhra",
-    "Professor Palin": "Arque", "Chloe Sedesi": "Shenve",
-    "Colonel Bris Dekker": "Sol", "Mel Brandon": "Luchtaine",
-    "Etienne Dorn": "Los", "Marsha Hicks": "Tir",
-    "Petra Olmanova": "Asura",
-}
 
 LOGGER = logging.getLogger(__name__)
 

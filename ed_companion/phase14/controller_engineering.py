@@ -224,6 +224,21 @@ COMMANDER_CARD_IDS = (
     "ranks", "major-reputation", "finances", "current-ship",
     "minor-reputation", "squadron",
 )
+ENGINEER_SYSTEMS = {
+    "Felicity Farseer": "Deciat", "Elvira Martuuk": "Khun",
+    "The Dweller": "Wyrd", "Tod McQuinn": "Wolf 397",
+    "Liz Ryder": "Eurybia", "Hera Tani": "Kuwemaki",
+    "Broo Tarquin": "Muang", "Selene Jean": "Kuk",
+    "Didi Vatermann": "Leesti", "Lei Cheung": "Laksak",
+    "Marco Qwent": "Sirius", "Ram Tah": "Meene",
+    "The Sarge": "Beta-3 Tucani", "Tiana Fortune": "Achenar",
+    "Bill Turner": "Alioth", "Juri Ishmaak": "Giryak",
+    "Zacariah Nemo": "Yoru", "Lori Jameson": "Shinrarta Dezhra",
+    "Professor Palin": "Arque", "Chloe Sedesi": "Shenve",
+    "Colonel Bris Dekker": "Sol", "Mel Brandon": "Luchtaine",
+    "Etienne Dorn": "Los", "Marsha Hicks": "Tir",
+    "Petra Olmanova": "Asura",
+}
 
 
 class EngineeringMixin:

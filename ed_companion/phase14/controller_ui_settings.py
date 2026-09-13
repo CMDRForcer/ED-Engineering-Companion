@@ -217,7 +217,7 @@ from .state import (
 LOGGER = logging.getLogger(__name__)
 
 INARA_ACTIVE_RECEIPT_LIMIT = 100
-from .controller_core import CoreControllerMixin
+from .controller_core import CoreControllerMixin, THEME_IDS
 EDDN_ACTIVE_RECEIPT_LIMIT = 100
 FRONTIER_REQUEST_WATCHDOG_MS = 120_000
 COMMANDER_CARD_IDS = (

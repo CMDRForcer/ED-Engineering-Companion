@@ -15,6 +15,16 @@ domain (35 and 31 Properties respectively at the time of this refactor)
 from PySide6.QtCore import Signal
 
 
+THEME_IDS = frozenset({
+    "arctic_alloy", "navy", "neon_vector", "orbital_dawn",
+    "crimson_dark", "crimson_light",
+})
+LEGACY_THEME_IDS = frozenset({
+    "imperial_gold", "thargoid_amber", "midnight", "black",
+    "teal_void", "federal_steel", "cupcake_nebula",
+})
+
+
 class CoreControllerMixin:
     connectionChanged = Signal()
     stateChanged = Signal()
