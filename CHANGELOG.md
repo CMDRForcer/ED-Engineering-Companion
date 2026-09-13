@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.1 — 2026-09-13
+
+### Fixed
+
+- Survey Target cards could spill text and badges past the card's own
+  edge into the next card - a body name, the CONFIRMED/PREDICTED badge,
+  or the new FOOTFALL BONUS POSSIBLE badge. Qt Quick Layouts do not
+  shrink a text item below its own unelided width unless
+  `Layout.minimumWidth` is capped explicitly, so `elide` never actually
+  triggered for a long body name. The FOOTFALL BONUS POSSIBLE badge also
+  no longer shares a row with the signal count - the two together did
+  not fit a card's width for a body with more than one signal.
+
 ## 1.4.0 — 2026-09-13
 
 ### Added

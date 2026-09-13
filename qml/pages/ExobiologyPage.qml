@@ -209,6 +209,13 @@ ColumnLayout {
                     color: panelRaised
                     border.width: modelData.inCurrentSystem ? 2 : 1
                     border.color: modelData.inCurrentSystem ? orange : borderTone
+                    // Layouts do not shrink a Text-based item below its own
+                    // unelided width unless Layout.minimumWidth is capped
+                    // explicitly - without it, elide never actually
+                    // triggers and long text spills past this card's edge
+                    // into the next one. clip guards the same edge as a
+                    // last resort for anything that still overflows.
+                    clip: true
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 16
@@ -218,7 +225,8 @@ ColumnLayout {
                             Label {
                                 text: modelData.bodyName
                                 color: textPrimary; font.pixelSize: 16; font.bold: true
-                                Layout.fillWidth: true; elide: Text.ElideRight
+                                Layout.fillWidth: true; Layout.minimumWidth: 0
+                                elide: Text.ElideRight
                             }
                             StatusBadge {
                                 statusText: modelData.confidence === "confirmed_genus"
@@ -235,31 +243,29 @@ ColumnLayout {
                                   : modelData.starSystem
                             color: modelData.inCurrentSystem ? orange : muted
                             font.pixelSize: 13; font.bold: modelData.inCurrentSystem
-                            Layout.fillWidth: true; elide: Text.ElideRight
+                            Layout.fillWidth: true; Layout.minimumWidth: 0
+                            elide: Text.ElideRight
                         }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-                            Label {
-                                text: appWindow.tf(
-                                    "exobiology.signal_count", "%1 BIOLOGICAL SIGNAL(S)",
-                                    [modelData.signalCount])
-                                color: cyan; font.pixelSize: 13; font.bold: true
-                            }
-                            Item { Layout.fillWidth: true }
-                            StatusBadge {
-                                visible: modelData.firstFootfallPossible
-                                statusText: appWindow.t("exobiology.footfall_possible", "FOOTFALL BONUS POSSIBLE")
-                                tone: accentColor
-                                compact: true
-                            }
+                        Label {
+                            text: appWindow.tf(
+                                "exobiology.signal_count", "%1 BIOLOGICAL SIGNAL(S)",
+                                [modelData.signalCount])
+                            color: cyan; font.pixelSize: 13; font.bold: true
+                            Layout.fillWidth: true; Layout.minimumWidth: 0
+                            elide: Text.ElideRight
+                        }
+                        StatusBadge {
+                            visible: modelData.firstFootfallPossible
+                            statusText: appWindow.t("exobiology.footfall_possible", "FOOTFALL BONUS POSSIBLE")
+                            tone: accentColor
+                            compact: true
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
                         Repeater {
                             model: modelData.candidates.slice(0, 3)
                             delegate: Label {
                                 required property var modelData
-                                Layout.fillWidth: true
+                                Layout.fillWidth: true; Layout.minimumWidth: 0
                                 text: modelData.name + " · " + exobiologyPage.formatCr(modelData.value)
                                 color: textSecondary; font.pixelSize: 13
                                 elide: Text.ElideRight
