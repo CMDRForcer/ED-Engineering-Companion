@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.5.3 — 2026-09-13
+
+### Changed
+
+- Internal maintainability refactor, no behavior change: `controller.py`
+  had grown to ~8 520 lines - a single `CockpitController(QObject)`
+  class with 169 Properties, 123 Slots, 36 Signals and 135 other
+  methods. Split into eleven domain mixins (`controller_core.py`,
+  `controller_inara.py`, `controller_eddn.py`,
+  `controller_frontier_capi.py`, `controller_exobiology.py`,
+  `controller_commander.py`, `controller_engineering.py`,
+  `controller_fleet_materials.py`, `controller_navigation.py`,
+  `controller_logbook.py`, `controller_ui_settings.py`,
+  `controller_journal_health.py`), combined into the final
+  `CockpitController` via multiple inheritance; `controller.py` itself
+  is now ~2 600 lines. Unlike the equivalent `state.py` split
+  (1.5.2), this is a single stateful Qt class rather than independent
+  functions, so `__init__` setup for each domain stays in
+  `CockpitController.__init__` wherever it was genuinely interleaved
+  with another domain's setup - only the Property/Signal/Slot/method
+  definitions move in those cases.
+- Along the way, a systematic sweep for the "helper function still
+  defined in the old file but only called from a newly-split-out
+  module" bug class caught and fixed four real latent `NameError`s
+  that the existing test suite had not exercised
+  (`_last_complete_json_record`, `_eddn_relay_relevant`,
+  `ENGINEER_SYSTEMS`, `THEME_IDS`/`LEGACY_THEME_IDS`).
+
 ## 1.5.2 — 2026-09-13
 
 ### Changed
