@@ -248,6 +248,7 @@ from .dashboard_views import (
 )
 
 from .controller_eddn import EddnMixin
+from .controller_frontier_capi import FrontierCapiMixin
 from .controller_inara import InaraMixin
 
 from .state import (
@@ -373,7 +374,9 @@ def _eddn_relay_relevant(payload: Any) -> bool:
     )
 
 
-class CockpitController(EddnMixin, InaraMixin, CoreControllerMixin, QObject):
+class CockpitController(
+    EddnMixin, FrontierCapiMixin, InaraMixin, CoreControllerMixin, QObject,
+):
     materialsChanged = Signal()
     fleetChanged = Signal()
     wishlistChanged = Signal()
@@ -394,7 +397,6 @@ class CockpitController(EddnMixin, InaraMixin, CoreControllerMixin, QObject):
     engineeringChanged = Signal()
     uiChanged = Signal()
     commanderCardsChanged = Signal()
-    frontierFinished = Signal(object)
     traderSyncFinished = Signal(bool, str)
     techBrokerSyncFinished = Signal(bool, str)
     historyExportFinished = Signal(object)
@@ -565,39 +567,7 @@ class CockpitController(EddnMixin, InaraMixin, CoreControllerMixin, QObject):
         self._logbook_revision = 0
         self._logbook_notes = load_logbook_notes(self.config_dir)
         self._init_inara()
-        self._frontier_credential_store = FrontierCredentialStore(
-            self.frontier_credentials_file
-        )
-        self._frontier_tokens = None
-        self._frontier_authorization = None
-        self._frontier_busy = False
-        self._frontier_request_token = 0
-        self._frontier_last_sync = ""
-        self._frontier_profile = {}
-        self._frontier_config = self._load_frontier_config()
-        self._frontier_watchdog = QTimer(self)
-        self._frontier_watchdog.setSingleShot(True)
-        self._frontier_watchdog.setInterval(FRONTIER_REQUEST_WATCHDOG_MS)
-        self._frontier_watchdog.timeout.connect(self._frontier_request_timed_out)
-        try:
-            self._frontier_tokens = self._frontier_credential_store.load()
-            self._frontier_status = (
-                "CONNECTED LOCALLY · Refresh to verify the Frontier session."
-                if self._frontier_tokens else
-                "NOT CONNECTED · Frontier approval is required before first login."
-            )
-        except FrontierCredentialError:
-            self._frontier_status = (
-                "CREDENTIAL STORAGE ERROR · Reconnect after removing the local token file."
-            )
-        self._frontier_client = (
-            FrontierCapiClient(
-                self._frontier_tokens.access_token,
-                token_type=self._frontier_tokens.token_type,
-            )
-            if self._frontier_tokens else None
-        )
-        self.frontierFinished.connect(self._finish_frontier)
+        self._init_frontier_capi()
         self._eddn_profile_identity = self.profile_context.identity
         self._eddn_profile_key = self.profile_context.key
         self._eddn_journal_root = self.profile_context.journal_root
@@ -1148,18 +1118,7 @@ class CockpitController(EddnMixin, InaraMixin, CoreControllerMixin, QObject):
         )
 
 
-    def _load_frontier_config(self):
-        defaults = {"consent": False}
-        loaded = self._read_local_json(self.frontier_config_file, {})
-        if isinstance(loaded, dict):
-            defaults["consent"] = bool(loaded.get("consent", False))
-        return defaults
 
-    def _save_frontier_config(self):
-        return self._persist_json(
-            self.frontier_config_file, self._frontier_config,
-            "Frontier configuration",
-        )
 
 
 
@@ -3303,26 +3262,6 @@ class CockpitController(EddnMixin, InaraMixin, CoreControllerMixin, QObject):
         bool, lambda self: self._history_export_busy,
         notify=CoreControllerMixin.connectionChanged,
     )
-    frontierConnected = Property(
-        bool, lambda self: self._frontier_tokens is not None,
-        notify=CoreControllerMixin.connectionChanged,
-    )
-    frontierBusy = Property(
-        bool, lambda self: self._frontier_busy,
-        notify=CoreControllerMixin.connectionChanged,
-    )
-    frontierStatus = Property(
-        str, lambda self: self._frontier_status,
-        notify=CoreControllerMixin.connectionChanged,
-    )
-    frontierLastSync = Property(
-        str, lambda self: self._frontier_last_sync,
-        notify=CoreControllerMixin.connectionChanged,
-    )
-    frontierConsent = Property(
-        bool, lambda self: bool(self._frontier_config.get("consent")),
-        notify=CoreControllerMixin.connectionChanged,
-    )
     stateFindRefreshStatus = Property(
         str, lambda self: self._state_find_refresh_status,
         notify=hgeChanged,
@@ -4850,254 +4789,15 @@ class CockpitController(EddnMixin, InaraMixin, CoreControllerMixin, QObject):
             self.refresh()
             self.engineeringChanged.emit()
 
-    @Slot(bool)
-    def setFrontierConsent(self, consent):
-        consent = bool(consent)
-        if bool(self._frontier_config.get("consent")) == consent:
-            return
-        self._frontier_config["consent"] = consent
-        self._save_frontier_config()
-        if not consent:
-            self._frontier_authorization = None
-            if not self._frontier_busy:
-                self._frontier_status = (
-                    "CONSENT WITHDRAWN · Existing local tokens are unaffected."
-                )
-        self.connectionChanged.emit()
 
-    @Slot()
-    def connectFrontier(self):
-        if self._frontier_busy:
-            return
-        if not self._frontier_config.get("consent"):
-            self._frontier_status = (
-                "CONSENT REQUIRED · Tick the Companion API consent box first."
-            )
-            self.connectionChanged.emit()
-            return
-        try:
-            authorization = build_pkce_authorization(
-                FRONTIER_CLIENT_ID, FRONTIER_REDIRECT_URI
-            )
-        except ValueError:
-            self._frontier_status = "AUTHORIZATION SETUP FAILED"
-            self.connectionChanged.emit()
-            return
-        self._frontier_authorization = authorization
-        if QDesktopServices.openUrl(QUrl(authorization.authorize_url)):
-            self._frontier_status = (
-                "BROWSER OPENED · Complete the Frontier login there."
-            )
-        else:
-            self._frontier_authorization = None
-            self._frontier_status = "BROWSER COULD NOT BE OPENED"
-        self.connectionChanged.emit()
 
-    @Slot(str)
-    def acceptFrontierOAuthCallback(self, callback_url):
-        authorization = self._frontier_authorization
-        if authorization is None:
-            self._frontier_status = (
-                "NO LOGIN WAITING · Start a new Frontier connection."
-            )
-            self.connectionChanged.emit()
-            return
-        try:
-            code = parse_authorization_callback(
-                callback_url, authorization.state
-            )
-        except FrontierAuthError as exc:
-            self._frontier_authorization = None
-            self._frontier_status = f"AUTHORIZATION FAILED · {exc}"
-            self.connectionChanged.emit()
-            return
-        self._frontier_authorization = None
-        self._start_frontier_profile_request(
-            authorization=authorization, authorization_code=code
-        )
 
-    @Slot()
-    def refreshFrontierProfile(self):
-        if self._frontier_busy:
-            return
-        if self._frontier_tokens is None:
-            self._frontier_status = "NOT CONNECTED · Connect Frontier first."
-            self.connectionChanged.emit()
-            return
-        self._start_frontier_profile_request(tokens=self._frontier_tokens)
 
-    @Slot()
-    def disconnectFrontier(self):
-        if self._frontier_busy:
-            return
-        try:
-            self._frontier_credential_store.clear()
-        except FrontierCredentialError as exc:
-            self._frontier_status = f"DISCONNECT FAILED · {exc}"
-            self.connectionChanged.emit()
-            return
-        self._frontier_tokens = None
-        self._frontier_client = None
-        self._frontier_authorization = None
-        self._frontier_last_sync = ""
-        self._frontier_status = "NOT CONNECTED · Local Frontier tokens removed."
-        self.connectionChanged.emit()
 
-    def _start_frontier_profile_request(
-        self, *, tokens=None, authorization=None, authorization_code=""
-    ):
-        if self._frontier_busy:
-            return
-        self._frontier_busy = True
-        self._frontier_request_token += 1
-        request_token = self._frontier_request_token
-        profile_generation = self._profile_generation
-        existing_client = self._frontier_client
-        self._frontier_status = "CONTACTING FRONTIER…"
-        self.connectionChanged.emit()
 
-        def worker():
-            active_tokens = tokens
-            client = existing_client
-            try:
-                if authorization is not None:
-                    active_tokens = exchange_authorization_code(
-                        FRONTIER_CLIENT_ID, authorization,
-                        authorization_code,
-                    )
-                    client = None
-                elif active_tokens.expires_within(60):
-                    active_tokens = refresh_frontier_tokens(
-                        FRONTIER_CLIENT_ID, active_tokens.refresh_token
-                    )
-                    client = None
-                if client is None:
-                    client = FrontierCapiClient(
-                        active_tokens.access_token,
-                        token_type=active_tokens.token_type,
-                    )
-                snapshot = client.query("/profile")
-                self.frontierFinished.emit({
-                    "requestToken": request_token,
-                    "profileGeneration": profile_generation,
-                    "tokens": active_tokens,
-                    "client": client,
-                    "profile": project_profile_snapshot(snapshot),
-                    "error": "",
-                })
-            except FrontierCapiError as exc:
-                self.frontierFinished.emit({
-                    "requestToken": request_token,
-                    "profileGeneration": profile_generation,
-                    "tokens": active_tokens,
-                    "client": client,
-                    "profile": {},
-                    "error": str(exc),
-                })
-            except Exception as exc:
-                # Any unexpected failure must still report back, or the tab
-                # stays pinned in its busy state until the app restarts.
-                LOGGER.exception("Frontier CAPI worker failed")
-                self.frontierFinished.emit({
-                    "requestToken": request_token,
-                    "profileGeneration": profile_generation,
-                    "tokens": active_tokens,
-                    "client": client,
-                    "profile": {},
-                    "error": (
-                        "Unexpected local Frontier connector error: "
-                        f"{type(exc).__name__}"
-                    ),
-                })
 
-        if self._start_network_worker(worker, "frontier-capi-profile"):
-            self._frontier_watchdog.start()
-        else:
-            self._frontier_busy = False
-            self._frontier_status = "FRONTIER REQUEST COULD NOT START"
-            self.connectionChanged.emit()
 
-    @Slot(object)
-    def _finish_frontier(self, result):
-        if not isinstance(result, dict):
-            return
-        if (
-            int(result.get("requestToken", -1)) != self._frontier_request_token
-            or int(result.get("profileGeneration", -1))
-            != self._profile_generation
-        ):
-            return
-        self._frontier_watchdog.stop()
-        self._frontier_busy = False
-        tokens = result.get("tokens")
-        storage_error = ""
-        if tokens is not None:
-            self._frontier_tokens = tokens
-            self._frontier_client = result.get("client")
-            try:
-                self._frontier_credential_store.save(tokens)
-            except FrontierCredentialError as exc:
-                storage_error = str(exc)
-        error = str(result.get("error") or "")
-        profile = result.get("profile")
-        if isinstance(profile, dict) and profile:
-            self._apply_frontier_profile(profile)
-            self._frontier_last_sync = str(profile.get("observedAt") or "")
-        if storage_error:
-            self._frontier_status = (
-                "CONNECTED FOR THIS RUN · Secure token storage failed."
-            )
-        elif error and self._frontier_tokens is not None:
-            self._frontier_status = f"CONNECTED · PROFILE SYNC FAILED · {error}"
-        elif error:
-            self._frontier_status = (
-                "AUTHORIZATION FAILED · Frontier approval may still be pending."
-            )
-        else:
-            self._frontier_status = "CONNECTED · COMMANDER PROFILE UPDATED"
-        self.connectionChanged.emit()
 
-    @Slot()
-    def _frontier_request_timed_out(self):
-        """Release the CAPI tab if a worker never reported a result."""
-        if not self._frontier_busy:
-            return
-        LOGGER.warning("Frontier CAPI request exceeded the watchdog interval")
-        self._frontier_busy = False
-        self._frontier_authorization = None
-        self._frontier_status = (
-            "FRONTIER REQUEST TIMED OUT · Check your connection and try again."
-        )
-        self.connectionChanged.emit()
-
-    def _apply_frontier_profile(self, profile):
-        self._frontier_profile = dict(profile)
-        updated = self._state_with_frontier_profile(self._state, profile)
-        overview = updated.get("commanderOverview", {})
-        self._record_commander_credit_snapshot(overview.get("credits", {}))
-        self._state = updated
-        self._publish_full_state()
-
-    @staticmethod
-    def _state_with_frontier_profile(state, profile):
-        state = dict(state) if isinstance(state, dict) else {}
-        if not isinstance(profile, dict) or not profile:
-            return state
-        overview = merge_capi_commander_overview(
-            state.get("commanderOverview", {}), profile
-        )
-        fleet_state = merge_capi_fleet({
-            "active_id": state.get("activeShipId", ""),
-            "ships": state.get("fleet", []),
-        }, profile)
-        merged = {
-            **state,
-            "commanderOverview": overview,
-            "fleet": fleet_state.get("ships", []),
-            "fleetKnown": bool(fleet_state.get("ships")),
-            "activeShipId": str(fleet_state.get("active_id") or ""),
-        }
-        return merge_capi_loadout(merged, profile)
 
 
 
