@@ -482,6 +482,16 @@ def _all_body_targets(
         ]
         best_value = max((int(row.get("value") or 0) for row in candidates), default=0)
         total_value = sum(int(row.get("value") or 0) for row in candidates)
+        # candidateCount is species-catalog matches, not distinct organisms
+        # - one genus alone can list several species in the catalog, and a
+        # permissive prediction can match a dozen genera at once, so it is
+        # not a sane "how many signals are left" figure. A body only ever
+        # holds as many distinct organisms as it has detected signals, so
+        # the count of distinct genera among the candidates, capped at
+        # signalCount, is the honest one for that question.
+        remaining_genus_count = min(
+            len({row.get("genusCodexKey") for row in candidates}), signal_count,
+        )
         targets[key] = {
             "systemAddress": body["systemAddress"],
             "bodyId": body["bodyId"],
@@ -493,6 +503,7 @@ def _all_body_targets(
             "signalCount": signal_count,
             "confidence": confidence,
             "candidateCount": len(candidates),
+            "remainingGenusCount": remaining_genus_count,
             "candidates": sorted(
                 [{
                     "genus": row.get("genusCodexKey"),
@@ -580,7 +591,7 @@ def remaining_signals_at_body(
         if target["bodyName"] == body_name:
             return {
                 "totalSignals": target["signalCount"],
-                "remaining": target["candidateCount"],
+                "remaining": target["remainingGenusCount"],
             }
     return None
 

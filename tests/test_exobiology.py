@@ -500,6 +500,29 @@ class RemainingSignalsAtBodyTests(unittest.TestCase):
         self.assertEqual(result["totalSignals"], 2)
         self.assertGreater(result["remaining"], 0)
 
+    def test_remaining_is_never_inflated_past_the_actual_signal_count(self):
+        # Regression: two confirmed genera can list dozens of species
+        # between them in the catalog (Tussocks alone has 15) - "remaining"
+        # must never report more distinct organisms than the body's own
+        # FSS-detected signal count, no matter how many catalog species
+        # match those genera.
+        events = [
+            _signals_event(1, 3, 2), _planet_scan_event(1, 3),
+            {
+                "event": "SAASignalsFound", "SystemAddress": 1, "BodyID": 3,
+                "Signals": [{"Type": "$SAA_SignalType_Biological;", "Count": 2}],
+                "Genuses": [
+                    {"Genus": "$Codex_Ent_Tussocks_Genus_Name;"},
+                    {"Genus": "$Codex_Ent_Bacterial_Genus_Name;"},
+                ],
+            },
+        ]
+        result = remaining_signals_at_body(
+            events, SPECIES_CATALOG, {"BodyName": "Test Body"},
+        )
+        self.assertEqual(result["totalSignals"], 2)
+        self.assertEqual(result["remaining"], 2)
+
     def test_a_fully_claimed_body_reports_zero_remaining_not_none(self):
         # Every genus this body could hold has already been completed -
         # genuinely "0 left here", which must read differently from

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.2 — 2026-09-13
+
+### Fixed
+
+- REMAINING ON THIS PLANET could report an implausibly high count (e.g.
+  32) at a body with only a handful of real signals. It was counting
+  every catalog *species* matching the body's confirmed or predicted
+  genera - one genus alone can list over a dozen species - rather than
+  distinct organisms. It now counts distinct genera, capped at the
+  body's own FSS-detected signal count, since a body can never hold more
+  organisms than it has detected signals.
+
 ## 1.4.1 — 2026-09-13
 
 ### Fixed
