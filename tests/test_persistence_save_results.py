@@ -61,7 +61,8 @@ class PersistenceSaveResultTests(unittest.TestCase):
                 controller.activityChanged = _Signal()
 
                 with mock.patch(
-                    "ed_companion.phase14.state.atomic_write", return_value=False
+                    "ed_companion.phase14.state_core.atomic_write",
+                    return_value=False,
                 ):
                     controller.setJournalPath(str(new_journal))
 
