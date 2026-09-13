@@ -315,7 +315,7 @@ class ProfileContextTests(unittest.TestCase):
                 "ed_companion.phase14.controller.fetch_trader_catalog_updates",
                 return_value=trader,
             ), mock.patch(
-                "ed_companion.phase14.controller.fetch_tech_broker_catalog_updates",
+                "ed_companion.phase14.controller_engineering.fetch_tech_broker_catalog_updates",
                 return_value=broker,
             ), mock.patch(
                 "ed_companion.phase14.controller.TraderTypeCache"
@@ -361,7 +361,7 @@ class ProfileContextTests(unittest.TestCase):
                 "ed_companion.phase14.controller.fetch_trader_catalog_updates",
                 return_value=trader,
             ), mock.patch(
-                "ed_companion.phase14.controller.fetch_tech_broker_catalog_updates",
+                "ed_companion.phase14.controller_engineering.fetch_tech_broker_catalog_updates",
                 return_value=broker,
             ), mock.patch(
                 "ed_companion.phase14.controller.TraderTypeCache"
