@@ -46,6 +46,24 @@ ColumnLayout {
                ? appWindow.t("exobiology.step_analyse", "ANALYSE")
                : appWindow.t("exobiology.step_sample", "SAMPLE")
     }
+    // The Survey Target card has a fixed height. A body only ever holds as
+    // many organisms as it has detected biological signals - 8 covers every
+    // body seen in practice (matches the cap already used on the plain
+    // "candidates" list) with room to spare below the checklist, so this
+    // cap is a safety net for a rare, unusually crowded body rather than
+    // something normally reached. genusSignals is already sorted open-first,
+    // so a straight cap keeps every still-missing organism visible and only
+    // trims the already-found tail.
+    function cardChecklist(target) {
+        var signals = target.genusSignals || []
+        if (signals.length > 0) {
+            var shownSignals = signals.slice(0, 8)
+            return { items: shownSignals, extra: signals.length - shownSignals.length }
+        }
+        var candidates = target.candidates || []
+        var shownCandidates = candidates.slice(0, 3)
+        return { items: shownCandidates, extra: 0 }
+    }
 
     objectName: "qa-page-exobiology"
     anchors.fill: parent
@@ -262,6 +280,7 @@ ColumnLayout {
                 ScrollBar.horizontal: CockpitScrollBar {}
                 delegate: Rectangle {
                     required property var modelData
+                    readonly property var checklist: exobiologyPage.cardChecklist(modelData)
                     width: 300
                     height: targetList.height
                     radius: 13
@@ -326,14 +345,40 @@ ColumnLayout {
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
                         Repeater {
-                            model: modelData.candidates.slice(0, 3)
-                            delegate: Label {
+                            // Once a DSS has confirmed the genus list, show
+                            // every detected organism as a checklist - found
+                            // ones ticked off and dimmed, so progress on this
+                            // body is visible at a glance, not just what is
+                            // still missing. Capped by cardChecklist() to the
+                            // same row budget the old plain candidate list
+                            // used, so a body with many confirmed genera
+                            // can't blow out this card's fixed height.
+                            model: checklist.items
+                            delegate: RowLayout {
                                 required property var modelData
-                                Layout.fillWidth: true; Layout.minimumWidth: 0
-                                text: modelData.name + " · " + exobiologyPage.formatCr(modelData.value)
-                                color: textSecondary; font.pixelSize: 13
-                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Label {
+                                    visible: typeof modelData.found !== "undefined"
+                                    text: modelData.found ? "✓" : "○"
+                                    color: modelData.found ? green : muted
+                                    font.pixelSize: 13; font.bold: true
+                                }
+                                Label {
+                                    Layout.fillWidth: true; Layout.minimumWidth: 0
+                                    text: modelData.name + (modelData.found ? "" : " · " + exobiologyPage.formatCr(modelData.value))
+                                    color: modelData.found ? muted : textSecondary
+                                    font.pixelSize: 13
+                                    font.strikeout: !!modelData.found
+                                    elide: Text.ElideRight
+                                }
                             }
+                        }
+                        Label {
+                            visible: checklist.extra > 0
+                            Layout.fillWidth: true
+                            text: appWindow.tf("exobiology.checklist_more", "+%1 MORE", [checklist.extra])
+                            color: muted; font.pixelSize: 11
                         }
                         Item { Layout.fillHeight: true }
                         Label {

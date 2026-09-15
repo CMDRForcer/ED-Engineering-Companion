@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.4 — 2026-09-15
+
+### Added
+
+- Exobiology's Survey Target cards now show a found/open checklist for
+  every organism on a body once a Detailed Surface Scan has confirmed
+  its genus list - already-scanned species show ticked off and dimmed,
+  still-missing ones show their name and credit value, so progress on
+  a partly-worked body is visible at a glance instead of only the
+  still-open leads.
+
 ## 1.5.3 — 2026-09-13
 
 ### Changed

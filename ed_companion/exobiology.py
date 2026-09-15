@@ -575,6 +575,33 @@ def _all_body_targets(
             candidates = _species_candidates(body, species_catalog)
             confidence = "predicted"
         body_id_str = str(body["bodyId"])
+        # A per-genus checklist for the card UI - only meaningful once a DSS
+        # has confirmed the actual genus list, since "predicted" mode can't
+        # attribute a guessed species to any one real signal. Built from the
+        # unfiltered candidate set (before already-found genera are dropped
+        # below) so a genus the Commander has already scanned still shows up
+        # here, ticked off, instead of just vanishing.
+        genus_signals: list[dict[str, Any]] = []
+        if confirmed:
+            best_by_genus: dict[str, dict[str, Any]] = {}
+            for row in candidates:
+                genus = row.get("genusCodexKey")
+                value = int(row.get("value") or 0)
+                current = best_by_genus.get(genus)
+                if current is None or value > current["value"]:
+                    best_by_genus[genus] = {
+                        "genus": genus, "name": row.get("name"), "value": value,
+                    }
+            genus_signals = sorted(
+                [
+                    {
+                        **info,
+                        "found": (body["systemAddress"], body_id_str, genus) in already_found,
+                    }
+                    for genus, info in best_by_genus.items()
+                ],
+                key=lambda row: (row["found"], -row["value"]),
+            )
         candidates = [
             row for row in candidates
             if (body["systemAddress"], body_id_str, row.get("genusCodexKey")) not in already_found
@@ -611,6 +638,7 @@ def _all_body_targets(
                 } for row in candidates],
                 key=lambda row: -row["value"],
             )[:8],
+            "genusSignals": genus_signals,
             "bestValue": best_value,
             "totalPotentialValue": total_value,
             # Never a promise, only a pre-filter: this Commander has not

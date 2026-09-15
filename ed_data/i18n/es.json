@@ -696,5 +696,6 @@
   "exobiology.genus_progress_count": "%1 / %2 ENCONTRADOS",
   "exobiology.show_missing_genera": "MOSTRAR FALTANTES",
   "exobiology.hide_missing_genera": "OCULTAR",
-  "exobiology.genus_all_found": "TODOS LOS GÉNEROS CONOCIDOS ENCONTRADOS"
+  "exobiology.genus_all_found": "TODOS LOS GÉNEROS CONOCIDOS ENCONTRADOS",
+  "exobiology.checklist_more": "+%1 MÁS"
 }
