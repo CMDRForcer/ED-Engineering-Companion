@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.6 — 2026-09-19
+
+### Fixed
+
+- The published 1.5.5 release asset was built from the tag alone and
+  never picked up the two follow-up commits merged onto `main`
+  afterward (the new manuals, and the GitHub links updated after the
+  repo rename) - the `release.yml` workflow only runs on a tag push,
+  not on every push to `main`. Anyone downloading "latest release"
+  got a correctly rebranded `ED-Frame.exe` but the old, un-rebranded
+  PDF manuals bundled inside, and a `README.txt` still pointing at the
+  old repo name. This release re-tags the current `main` so the
+  published ZIP matches what the repository actually contains.
+
 ## 1.5.5 — 2026-09-18
 
 ### Changed
