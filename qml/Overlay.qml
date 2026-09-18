@@ -14,7 +14,7 @@ Window {
     opacity: overlaySettings.opacity
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
            | (overlaySettings.clickThrough ? Qt.WindowTransparentForInput : 0)
-    title: t("overlay.title", "EDEC Engineering Overlay")
+    title: t("overlay.title", "ED-Frame Engineering Overlay")
 
     property var action: cockpit.operationAction || ({})
     property string materialStatus: action.materialStatus || cockpit.materialStatus

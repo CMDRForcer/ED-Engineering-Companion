@@ -32,13 +32,13 @@ version_info = VSVersionInfo(
     kids=[
         StringFileInfo([
             StringTable("040904B0", [
-                StringStruct("CompanyName", "ED Engineering Companion"),
-                StringStruct("FileDescription", "ED Engineering Companion"),
+                StringStruct("CompanyName", "ED-Frame"),
+                StringStruct("FileDescription", "ED-Frame"),
                 StringStruct("FileVersion", APP_VERSION),
-                StringStruct("InternalName", "EDEC"),
+                StringStruct("InternalName", "ED-Frame"),
                 StringStruct("LegalCopyright", "GPL-3.0-or-later"),
-                StringStruct("OriginalFilename", "EDEC.exe"),
-                StringStruct("ProductName", "ED Engineering Companion"),
+                StringStruct("OriginalFilename", "ED-Frame.exe"),
+                StringStruct("ProductName", "ED-Frame"),
                 StringStruct("ProductVersion", APP_VERSION),
             ]),
         ]),
@@ -80,7 +80,7 @@ exe = EXE(
     analysis.scripts,
     [],
     exclude_binaries=True,
-    name="EDEC",
+    name="ED-Frame",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -101,5 +101,5 @@ collection = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="EDEC",
+    name="ED-Frame",
 )

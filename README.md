@@ -1,4 +1,4 @@
-# ED Engineering Companion
+# ED-Frame
 
 **Turn the Elite Dangerous Journal into a live operations, engineering and Commander workspace.**
 
@@ -8,15 +8,15 @@
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
 ![Languages: EN · DE · ES · FR](https://img.shields.io/badge/languages-EN%20%C2%B7%20DE%20%C2%B7%20ES%20%C2%B7%20FR-informational)
 
-ED Engineering Companion (EDEC) is a free, open-source Windows companion for [Elite Dangerous](https://www.elitedangerous.com/). It reads your local Journal and turns it into one coherent cockpit for engineering, unlocks, materials, mining, state hunting, Powerplay, Commander finances, fleet management, exploration and exobiology.
+ED-Frame is a free, open-source Windows companion for [Elite Dangerous](https://www.elitedangerous.com/) — Fleet, Routes, Analytics, Materials and Engineering in one place. It reads your local Journal and turns it into one coherent cockpit for engineering, unlocks, materials, mining, state hunting, Powerplay, Commander finances, fleet management, exploration and exobiology.
 
-[**Download the latest release**](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support EDEC on Ko-fi](https://ko-fi.com/cmdrforcer)
+[**Download the latest release**](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support ED-Frame on Ko-fi](https://ko-fi.com/cmdrforcer)
 
-![EDEC Commander Operations in the Orbital Dawn theme](docs/images/edec-operations.png)
+![ED-Frame Commander Operations in the Orbital Dawn theme](docs/images/edec-operations.png)
 
 ## Highlights
 
-- **One next action** — EDEC turns every tracked build, missing material, route and unlock into a clear answer to “what now?”
+- **One next action** — ED-Frame turns every tracked build, missing material, route and unlock into a clear answer to “what now?”
 - **Your ships, your slots** — engineer the exact physical Core Internal, Optional Internal, Hardpoint and Utility slots of every known hull.
 - **Journal-confirmed progress** — installed modules, grades, experimental effects, credits, fleet movements, scans and unlock evidence update automatically.
 - **Engineer and Tech Broker guides** — searchable capabilities, prerequisite chains and one-time Human and Guardian unlock tracking.
@@ -24,14 +24,14 @@ ED Engineering Companion (EDEC) is a free, open-source Windows companion for [El
 - **Commander intelligence** — live credit ticker, assets, average CR/h, ranks, reputation, fleet and a searchable flight record.
 - **Offline-first and private** — the core works from local files; Frontier CAPI, INARA, EDDN and Spansh remain explicit, controlled additions.
 
-## Why EDEC
+## Why ED-Frame
 
-Most build tools model a *type* of ship. EDEC models *your* ship — the specific hull with its ShipID, physical module slots and current `Loadout`. Then it connects that ship to the rest of your Commander state: materials, Engineer access, routes, credits, fleet, signals and scans.
+Most build tools model a *type* of ship. ED-Frame models *your* ship — the specific hull with its ShipID, physical module slots and current `Loadout`. Then it connects that ship to the rest of your Commander state: materials, Engineer access, routes, credits, fleet, signals and scans.
 
 That precision is the whole point:
 
 - A plan stays attached to the **slot**, so two identical Multi-cannons never get confused.
-- EDEC separates **observed facts**, **planned work** and **predictions** instead of presenting guesses as certainty.
+- ED-Frame separates **observed facts**, **planned work** and **predictions** instead of presenting guesses as certainty.
 - The Operations page joins the individual tools into a route: collect, trade, travel, unlock, install and craft.
 - You can plan for a ship parked across the bubble **without switching to it in-game**.
 
@@ -49,9 +49,9 @@ Engineer and trader routes sit beside the active work. Copy a system name, open 
 
 ### 2. Engineering — real modules in real slots
 
-Pick any ship EDEC has seen and work on its actual Core Internal, Optional Internal, Hardpoint and Utility slots. The ship panel shows speed, boost, jump range, mass, cargo capacity and how many modules can be engineered. Each slot distinguishes the installed module, current engineering and planned target.
+Pick any ship ED-Frame has seen and work on its actual Core Internal, Optional Internal, Hardpoint and Utility slots. The ship panel shows speed, boost, jump range, mass, cargo capacity and how many modules can be engineered. Each slot distinguishes the installed module, current engineering and planned target.
 
-Search the blueprint catalog, choose grade-only, experimental-only or combined planning, and compare the benefits and trade-offs of experimental effects. The install guard stops an empty or wrong slot from looking craft-ready. Import EDEC, EDSY/SLEF and Coriolis builds through exact hull-slot validation, or export the selected ship's outfitting with its slot identities intact.
+Search the blueprint catalog, choose grade-only, experimental-only or combined planning, and compare the benefits and trade-offs of experimental effects. The install guard stops an empty or wrong slot from looking craft-ready. Import ED-Frame, EDSY/SLEF and Coriolis builds through exact hull-slot validation, or export the selected ship's outfitting with its slot identities intact.
 
 ![Ship engineering bound to the physical slots of a fleet ship](docs/images/edec-engineering.png)
 
@@ -79,7 +79,7 @@ The Tech Brokers tab covers one-time Human and Guardian technology unlocks for m
 
 ### 5. Materials — know what is available and what is reserved
 
-Raw, Manufactured and Encoded inventory comes directly from the Journal, with grade caps, stock bars and surplus flags. Filter to all, missing, ready, surplus or tradeable materials. EDEC protects stock reserved by tracked builds, so a suggested trade never spends something the plan still needs.
+Raw, Manufactured and Encoded inventory comes directly from the Journal, with grade caps, stock bars and surplus flags. Filter to all, missing, ready, surplus or tradeable materials. ED-Frame protects stock reserved by tracked builds, so a suggested trade never spends something the plan still needs.
 
 Missing-material guidance lists acquisition routes, source systems and coordinates where available. Trader selection can prefer the nearest known location or one your own Journal has confirmed.
 
@@ -87,7 +87,7 @@ Missing-material guidance lists acquisition routes, source systems and coordinat
 
 ### 6. Mining Finder — choose a target with evidence
 
-Find rings and planetary deposits by commodity, mining method, distance, reserve quality and evidence level. EDEC checks the active ship for the required mining equipment, ranks results by evidence and distance, and separates confirmed hotspot or surface signals from older observations that should be rechecked.
+Find rings and planetary deposits by commodity, mining method, distance, reserve quality and evidence level. ED-Frame checks the active ship for the required mining equipment, ranks results by evidence and distance, and separates confirmed hotspot or surface signals from older observations that should be rechecked.
 
 Each result shows the body, ring type, hotspot or signal evidence, last confirmation, arrival distance and a copyable system. Live Journal observations combine with optional Spansh catalog data and bundled offline fallbacks.
 
@@ -97,13 +97,13 @@ Each result shows the body, ring type, hotspot or signal evidence, last confirma
 
 Search for High Grade Emissions, Conflict Zones and Seeking Meds or Foods within a chosen range. Filter live reports and predictions by signal type, state or allegiance, then compare freshness, distance, remaining lifetime, faction and intensity.
 
-HGE rows include the materials expected from the observed system state. EDEC labels local Journal evidence, EDDN sightings and BGS predictions distinctly, and puts the best-supported nearby candidates first.
+HGE rows include the materials expected from the observed system state. ED-Frame labels local Journal evidence, EDDN sightings and BGS predictions distinctly, and puts the best-supported nearby candidates first.
 
 ![State Finds with live and predicted signal intelligence](docs/images/edec-state-finds.png)
 
 ### 8. Powerplay — observed data, clearly bounded
 
-EDEC identifies your pledged leader and presents an offline profile and portrait alongside the values Elite has actually reported: rank, merits, pledge duration, salary and recent Powerplay cargo. In the current system it tracks controlling power, control progress and the undermining-versus-reinforcement tug of war without inventing unavailable rewards or numbers.
+ED-Frame identifies your pledged leader and presents an offline profile and portrait alongside the values Elite has actually reported: rank, merits, pledge duration, salary and recent Powerplay cargo. In the current system it tracks controlling power, control progress and the undermining-versus-reinforcement tug of war without inventing unavailable rewards or numbers.
 
 ![Journal-driven Powerplay 2.0 overview](docs/images/edec-powerplay.png)
 
@@ -119,13 +119,13 @@ Ranks and progress, major- and minor-faction reputation, financial snapshots, cu
 
 #### Credits
 
-The balance behaves like a ticker: earnings turn green, spending turns red and total assets remain visible as a separate line. Choose the current session, 1 hour, 6 hours, 24 hours, 7 days, 30 days or all recorded history. EDEC shows net change, average credits per hour and exact timestamped values on hover; it never fabricates points inside an unobserved gap.
+The balance behaves like a ticker: earnings turn green, spending turns red and total assets remain visible as a separate line. Choose the current session, 1 hour, 6 hours, 24 hours, 7 days, 30 days or all recorded history. ED-Frame shows net change, average credits per hour and exact timestamped values on hover; it never fabricates points inside an unobserved gap.
 
 ![Live Credits ticker with period selection and hover detail](docs/images/edec-credits.png)
 
 #### Fleet
 
-Every known ship shows its value, rebuy and location — current, transferring, stored or remote. Add your own screenshot to a ship card or keep EDEC's silhouette. This is the same fleet used by Engineering, so a parked hull can be planned without switching to it in-game.
+Every known ship shows its value, rebuy and location — current, transferring, stored or remote. Add your own screenshot to a ship card or keep ED-Frame's silhouette. This is the same fleet used by Engineering, so a parked hull can be planned without switching to it in-game.
 
 ![Fleet overview with per-ship value, rebuy and location](docs/images/edec-fleet.png)
 
@@ -166,9 +166,9 @@ Advanced Diagnostics exposes Journal watcher health, renderer and service pipeli
 ### Portable (recommended)
 
 1. Open the [latest release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest).
-2. Under **Assets**, download `EDEC-<version>-Windows.zip`.
+2. Under **Assets**, download `ED-Frame-<version>-Windows.zip`.
 3. Extract the whole ZIP to a writable folder.
-4. Run `EDEC.exe`, keeping the `_internal` folder beside it.
+4. Run `ED-Frame.exe`, keeping the `_internal` folder beside it.
 
 The Windows package bundles its runtime and is Explorer-compatible. A full project archive and `SHA256SUMS.txt` are published alongside it. Windows SmartScreen may warn because the executable is not code-signed.
 
@@ -180,7 +180,7 @@ Personal settings, Journal cursors, caches, plans and service credentials live o
 
 ## Data and privacy
 
-EDEC works locally from Elite Dangerous Journal files. Every network integration is optional and opt-in:
+ED-Frame works locally from Elite Dangerous Journal files. Every network integration is optional and opt-in:
 
 - **INARA** — supported Commander events are batched, deduplicated, rate-limited, and written to local receipts before any upload.
 - **EDDN** — supported public market, station, exploration and exobiology messages are validated and stripped of private or unsupported fields before transmission.
@@ -194,7 +194,7 @@ The bundled Frontier OAuth client covers the default GitHub Pages redirect. If y
 ## Reliability
 
 - A headless load of the real `Main.qml` in CI whose QML runtime errors fail the build, plus state-based QML interaction tests.
-- Contract tests for physical slot binding, EDEC/EDSY/Coriolis interchange, Powerplay observation boundaries, and external-service safety limits.
+- Contract tests for physical slot binding, ED-Frame/EDSY/Coriolis interchange, Powerplay observation boundaries, and external-service safety limits.
 - Atomic local persistence with corruption quarantine, bounded history, multi-process protection, retry backoff, and durable queues.
 - Journal processing that follows recently active files without replaying known lines.
 - Translation contracts that keep the EN/DE/ES/FR catalogs and their placeholders in sync.
@@ -208,12 +208,12 @@ INSTALL_REQUIREMENTS.bat
 START_APP.bat
 ```
 
-See [`requirements.txt`](requirements.txt) for runtime dependencies. EDEC is under active development; bug reports, translations and feature suggestions are welcome through [GitHub Issues](https://github.com/CMDRForcer/ED-Engineering-Companion/issues).
+See [`requirements.txt`](requirements.txt) for runtime dependencies. ED-Frame is under active development; bug reports, translations and feature suggestions are welcome through [GitHub Issues](https://github.com/CMDRForcer/ED-Engineering-Companion/issues).
 
 ## License and attribution
 
-EDEC is licensed under the [GNU General Public License v3.0](LICENSE) and is free to use.
+ED-Frame is licensed under the [GNU General Public License v3.0](LICENSE) and is free to use.
 
-ED Engineering Companion is an independent third-party project and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc.
+ED-Frame is an independent third-party project and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc.
 
-Exobiology reference data (`ed_data/exobiology_species.json`, `ed_data/exobiology_colony_ranges.json`) is EDEC's own re-expression of public game facts — spawn conditions, credit values and colony-range distances — not copied code. The colony-range distances are sourced from the [Elite Dangerous Fandom wiki](https://elite-dangerous.fandom.com/wiki/Exobiology_Sample_Values_and_Details) (CC BY-SA).
+Exobiology reference data (`ed_data/exobiology_species.json`, `ed_data/exobiology_colony_ranges.json`) is ED-Frame's own re-expression of public game facts — spawn conditions, credit values and colony-range distances — not copied code. The colony-range distances are sourced from the [Elite Dangerous Fandom wiki](https://elite-dangerous.fandom.com/wiki/Exobiology_Sample_Values_and_Details) (CC BY-SA).

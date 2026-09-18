@@ -143,7 +143,7 @@ def mining_candidate_freshness(
     candidate: dict[str, Any], now: datetime | None = None,
     policy: dict[str, int] | None = None,
 ) -> dict[str, Any]:
-    """Apply an explicit EDEC age policy without asserting game persistence."""
+    """Apply an explicit ED-Frame age policy without asserting game persistence."""
     now = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     source_evidence = _text(candidate.get("sourceEvidence")) or _text(
         candidate.get("evidence")

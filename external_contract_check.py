@@ -15,7 +15,7 @@ EDDN_SCHEMA_ROOT = "https://eddn.edcd.io/schemas/"
 
 def _read_url(url, opener=urlopen):
     request = Request(
-        url, headers={"User-Agent": f"EDOPS-contract-check/{APP_VERSION}"}
+        url, headers={"User-Agent": f"ED-Frame-contract-check/{APP_VERSION}"}
     )
     try:
         with opener(request, timeout=15) as response:

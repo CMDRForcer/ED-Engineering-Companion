@@ -7,6 +7,7 @@ import unittest
 from unittest import mock
 
 from ed_companion.phase14.state import (
+    APP_DATA_DIR_NAME,
     build_state,
     clear_journal_event_cache,
     load_user_trader_catalog,
@@ -21,8 +22,8 @@ class TraderCatalogStorageTests(unittest.TestCase):
         journal.mkdir(exist_ok=True)
         return {
             "LOCALAPPDATA": str(root),
-            "EDOPS_JOURNAL_DIR": str(journal),
-            "EDOPS_PROFILE_FID": identity,
+            "ED_FRAME_JOURNAL_DIR": str(journal),
+            "ED_FRAME_PROFILE_FID": identity,
         }, journal
 
     @staticmethod
@@ -90,7 +91,7 @@ class TraderCatalogStorageTests(unittest.TestCase):
     def test_legacy_global_catalog_is_claimed_once_by_the_active_profile(self):
         with TemporaryDirectory() as directory:
             environment, _journal = self._environment(directory, "F-ALPHA")
-            root = Path(directory) / "EDEngineeringCompanion"
+            root = Path(directory) / APP_DATA_DIR_NAME
             root.mkdir()
             legacy = root / "material_trader_catalog_user.json"
             legacy.write_text(
@@ -104,7 +105,7 @@ class TraderCatalogStorageTests(unittest.TestCase):
                 self.assertEqual(migrated["stations"][0]["station"], "Legacy Trader")
                 self.assertTrue(user_trader_catalog_path(alpha).is_file())
 
-                os.environ["EDOPS_PROFILE_FID"] = "F-BRAVO"
+                os.environ["ED_FRAME_PROFILE_FID"] = "F-BRAVO"
                 bravo = resolve_profile_context()
                 self.assertEqual(load_user_trader_catalog(bravo), {})
                 self.assertFalse(user_trader_catalog_path(bravo).exists())
@@ -119,7 +120,7 @@ class TraderCatalogStorageTests(unittest.TestCase):
                     json.dumps(self._catalog("Alpha Trader", 990003)),
                     encoding="utf-8",
                 )
-                os.environ["EDOPS_PROFILE_FID"] = "F-BRAVO"
+                os.environ["ED_FRAME_PROFILE_FID"] = "F-BRAVO"
                 bravo = resolve_profile_context()
                 user_trader_catalog_path(bravo).write_text(
                     json.dumps(self._catalog("Bravo Trader", 990004)),

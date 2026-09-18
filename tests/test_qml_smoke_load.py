@@ -25,7 +25,7 @@ def _run_smoke(extra_env=None, timeout=240):
             **os.environ,
             "QT_QPA_PLATFORM": "offscreen",
             "LOCALAPPDATA": scratch,
-            "EDEC_SINGLE_INSTANCE_NAME": f"EDEC-qml-smoke-{os.getpid()}",
+            "ED_FRAME_SINGLE_INSTANCE_NAME": f"ED-Frame-qml-smoke-{os.getpid()}",
             "PHASE14_SMOKE_TEST": "1",
         }
         env.update(extra_env or {})

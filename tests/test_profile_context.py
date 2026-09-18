@@ -8,6 +8,7 @@ from unittest import mock
 
 from ed_companion.phase14.controller import CockpitController
 from ed_companion.phase14.state import (
+    APP_DATA_DIR_NAME,
     ProfileContext,
     clear_journal_event_cache,
     profiled_journal_events,
@@ -28,7 +29,7 @@ class _Signal:
 class ProfileContextTests(unittest.TestCase):
     def _context(self, root, identity):
         key = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:16]
-        directory = Path(root) / "EDEngineeringCompanion" / f"profile-{key}"
+        directory = Path(root) / APP_DATA_DIR_NAME / f"profile-{key}"
         directory.mkdir(parents=True, exist_ok=True)
         return ProfileContext(identity, key, directory, str(Path(root) / "journal"))
 
@@ -142,8 +143,8 @@ class ProfileContextTests(unittest.TestCase):
             }) + "\n", encoding="utf-8")
             environment = {
                 "LOCALAPPDATA": str(root),
-                "EDOPS_JOURNAL_DIR": str(journal),
-                "EDOPS_PROFILE_FID": "F-ALPHA",
+                "ED_FRAME_JOURNAL_DIR": str(journal),
+                "ED_FRAME_PROFILE_FID": "F-ALPHA",
             }
             with mock.patch.dict(os.environ, environment, clear=False):
                 clear_journal_event_cache()
@@ -152,7 +153,7 @@ class ProfileContextTests(unittest.TestCase):
                 self.assertEqual(runtime_data_dir(present), present.directory)
                 self.assertTrue(profiled_journal_events())
 
-                os.environ["EDOPS_PROFILE_FID"] = "F-NOT-IN-JOURNAL"
+                os.environ["ED_FRAME_PROFILE_FID"] = "F-NOT-IN-JOURNAL"
                 missing = resolve_profile_context()
                 self.assertEqual(missing.identity, "F-NOT-IN-JOURNAL")
                 self.assertEqual(

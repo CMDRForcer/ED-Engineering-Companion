@@ -8,9 +8,9 @@ remain the property of Frontier Developments plc and are used for this
 non-commercial fan project under Frontier's media-usage terms.
 
 The Almanac credits the ship schematics to the Elite Dangerous community and
-ships its full third-party notices in `ATTRIBUTIONS.md`. EDEC must retain this
-notice when redistributing these assets.
+ships its full third-party notices in `ATTRIBUTIONS.md`. ED-Frame must retain
+this notice when redistributing these assets.
 
 Elite Dangerous and all associated ship designs are trademarks or copyrights
-of Frontier Developments plc. EDEC is unofficial, fan-made, and is neither
-affiliated with nor endorsed by Frontier Developments plc.
+of Frontier Developments plc. ED-Frame is unofficial, fan-made, and is
+neither affiliated with nor endorsed by Frontier Developments plc.

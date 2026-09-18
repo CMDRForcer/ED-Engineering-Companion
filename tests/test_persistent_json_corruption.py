@@ -11,7 +11,7 @@ from ed_companion.persistence import (
     persistence_issues,
 )
 from ed_companion.phase14.controller import CockpitController
-from ed_companion.phase14.state import read_json, write_ship_tasks
+from ed_companion.phase14.state import APP_DATA_DIR_NAME, read_json, write_ship_tasks
 
 
 class PersistentJsonCorruptionTests(unittest.TestCase):
@@ -22,7 +22,7 @@ class PersistentJsonCorruptionTests(unittest.TestCase):
         clear_persistence_errors()
 
     def _profile(self, root):
-        profile = Path(root) / "EDEngineeringCompanion" / "profile-test"
+        profile = Path(root) / APP_DATA_DIR_NAME / "profile-test"
         profile.mkdir(parents=True)
         return profile
 

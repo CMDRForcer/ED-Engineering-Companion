@@ -22,8 +22,9 @@ env/
 *.pfx
 *.p12
 
-# EDEC runtime profiles and personal state
+# ED-Frame runtime profiles and personal state
 profile-*/
+ED-Frame/
 EDEngineeringCompanion/
 phase14_graphics.json
 phase14.log

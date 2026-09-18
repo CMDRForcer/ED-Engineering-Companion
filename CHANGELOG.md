@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.5.5 — 2026-09-18
+
+### Changed
+
+- Renamed the project from **ED Engineering Companion (EDEC)** to
+  **ED-Frame** — the app, its window title, tray, About dialog, settings
+  folder, packaged executable and release assets now use the new name.
+  The Inara `appName`, the EDDN `softwareName`, and the Frontier CAPI
+  client id/redirect URI/registered app name are deliberately left
+  unchanged, since those are tied to external registrations. Existing
+  installs migrate their settings folder automatically on first launch
+  (copy, not move - the old folder is kept as a safety net); a stored
+  Frontier OAuth token and Wishlist/Materials data carry over without a
+  forced re-login. See the project README for the current name.
+- The window title now shows just the version number - Windows already
+  appends the application name to the taskbar tooltip on its own, so
+  including it in the title too just showed it twice.
+
 ## 1.5.4 — 2026-09-15
 
 ### Added

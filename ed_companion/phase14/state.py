@@ -109,6 +109,8 @@ from .state_core import (
     _write_json_if_changed,
     active_profile_identity,
     active_profile_key,
+    APP_DATA_DIR_NAME,
+    LEGACY_APP_DATA_DIR_NAME,
     app_data_dir,
     blueprint_id_evidence,
     blueprint_module_family,

@@ -221,7 +221,7 @@ def genus_completion(
     least one species of, and which are still entirely missing - by
     name.
 
-    Scoped to EDEC's own bundled-plus-learned catalog, not every genus
+    Scoped to ED-Frame's own bundled-plus-learned catalog, not every genus
     known to exist in the game - see the module docstring and
     ``augmented_species_catalog()`` for why that catalog is not (and
     cannot fully be) complete.

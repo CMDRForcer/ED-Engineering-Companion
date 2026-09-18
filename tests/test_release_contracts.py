@@ -27,6 +27,7 @@ from ed_companion.integrations.inara import (
     prepare_journal_batch,
 )
 from ed_companion.phase14.state import (
+    APP_DATA_DIR_NAME,
     assign_plans_to_nearest_engineers,
     annotate_installed_target_conflicts,
     blueprint_rows,
@@ -918,7 +919,7 @@ class ReleaseContractTests(unittest.TestCase):
 
     def test_build_import_resolves_raw_ship_symbol_via_catalog(self):
         """A build tool may export the internal Frontier/Coriolis ship
-        symbol (e.g. ``Explorer_NX``) instead of the display name EDEC
+        symbol (e.g. ``Explorer_NX``) instead of the display name ED-Frame
         shows for the current fleet ship (``Caspian Explorer``). The full
         ships.json catalog resolves this for every hull, not only the ones
         hand-curated into the small SHIP_ALIASES table."""
@@ -1444,15 +1445,13 @@ class ReleaseContractTests(unittest.TestCase):
         entrypoint = (root / "phase14_main.py").read_text(encoding="utf-8")
 
         self.assertIn(
-            'app.setApplicationName("EDEngineeringCompanion")', entrypoint
+            f'app.setApplicationName("{APP_DATA_DIR_NAME}")', entrypoint
         )
         self.assertIn(
-            'app.setApplicationDisplayName("ED Engineering Companion")',
+            'app.setApplicationDisplayName("ED-Frame")',
             entrypoint,
         )
-        self.assertNotIn(
-            'app.setApplicationName("ED Engineering Companion")', entrypoint
-        )
+        self.assertIn(f'/ "{APP_DATA_DIR_NAME}"', entrypoint)
 
     def test_trader_preference_switches_confidence_and_distance_priority(self):
         stations = [

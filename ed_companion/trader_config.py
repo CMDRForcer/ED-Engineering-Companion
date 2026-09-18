@@ -24,4 +24,4 @@ HEURISTIC_TRADER_WARNING_KEY = "materials.trader_heuristic_warning"
 def trader_type_cache_path() -> Path:
     local_app_data = os.environ.get("LOCALAPPDATA")
     root = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
-    return root / "EDEngineeringCompanion" / "trader_type_cache.json"
+    return root / "ED-Frame" / "trader_type_cache.json"

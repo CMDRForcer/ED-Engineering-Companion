@@ -15,8 +15,7 @@ class TranslationCatalogTests(unittest.TestCase):
             r'\b(?:text|placeholderText|title|detail|helpText|Accessible\.name):\s*"'
         )
         allowed = {
-            'title: "ED Engineering Companion (EDEC) · " + cockpit.appVersion',
-            'text: "ED Engineering Companion"',
+            'text: "ED-Frame"',
             'text: "⠿"; color: navTile.selectedNav ? cyan : muted',
             'text: "⌄"',
             'property string helpText: ""',

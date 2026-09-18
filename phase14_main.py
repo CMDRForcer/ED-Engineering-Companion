@@ -10,9 +10,19 @@ from pathlib import Path
 from ed_companion.persistence import atomic_write, cleanup_stale_atomic_temps
 
 
+# Kept as a literal string, not imported from ed_companion.phase14.state_core
+# (the canonical owner - see APP_DATA_DIR_NAME and its one-time migration
+# from the pre-rebrand folder there): this module reads CONFIG_FILE below
+# before Qt or any heavier ed_companion submodule is imported, so pulling in
+# state_core's own import chain here would slow down that early,
+# renderer-selection-only startup path. On a fresh install after an upgrade,
+# this can read as unmigrated for the one launch before state_core's own
+# app_data_dir() call performs and logs the actual migration - harmless,
+# since the only thing gated on it here is the renderer-mode preference,
+# which simply falls back to "auto" for that one launch.
 CONFIG_DIR = Path(
     os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
-) / "EDEngineeringCompanion"
+) / "ED-Frame"
 CONFIG_FILE = CONFIG_DIR / "phase14_graphics.json"
 
 
@@ -59,15 +69,15 @@ from ed_companion.diagnostics import (
 
 
 SINGLE_INSTANCE_NAME = os.environ.get(
-    "EDEC_SINGLE_INSTANCE_NAME", "EDEC-single-instance"
+    "ED_FRAME_SINGLE_INSTANCE_NAME", "ED-Frame-single-instance"
 )
-EDEC_OAUTH_SCHEME = "edec"
-EDEC_OAUTH_HOST = "oauth"
-EDEC_OAUTH_PATH = "/callback"
+OAUTH_SCHEME = "edec"
+OAUTH_HOST = "oauth"
+OAUTH_PATH = "/callback"
 
 
 def frontier_oauth_callback_argument(arguments=None):
-    """Return only the exact callback URL shape registered for EDEC."""
+    """Return only the exact callback URL shape registered for ED-Frame."""
     for value in arguments if arguments is not None else sys.argv[1:]:
         text = str(value or "").strip()
         if not text or len(text) > 8192:
@@ -75,9 +85,9 @@ def frontier_oauth_callback_argument(arguments=None):
         parsed = QUrl(text)
         if (
             parsed.isValid()
-            and parsed.scheme().casefold() == EDEC_OAUTH_SCHEME
-            and parsed.host().casefold() == EDEC_OAUTH_HOST
-            and parsed.path() == EDEC_OAUTH_PATH
+            and parsed.scheme().casefold() == OAUTH_SCHEME
+            and parsed.host().casefold() == OAUTH_HOST
+            and parsed.path() == OAUTH_PATH
         ):
             return text
     return ""
@@ -116,14 +126,14 @@ def register_windows_url_protocol(
         import winreg as winreg_module
     executable = str(Path(executable or sys.executable).resolve())
     values = {
-        rf"Software\Classes\{EDEC_OAUTH_SCHEME}": {
-            "": "URL:ED Engineering Companion OAuth Callback",
+        rf"Software\Classes\{OAUTH_SCHEME}": {
+            "": "URL:ED-Frame OAuth Callback",
             "URL Protocol": "",
         },
-        rf"Software\Classes\{EDEC_OAUTH_SCHEME}\DefaultIcon": {
+        rf"Software\Classes\{OAUTH_SCHEME}\DefaultIcon": {
             "": f'"{executable}",0',
         },
-        rf"Software\Classes\{EDEC_OAUTH_SCHEME}\shell\open\command": {
+        rf"Software\Classes\{OAUTH_SCHEME}\shell\open\command": {
             "": f'"{executable}" "%1"',
         },
     }
@@ -175,7 +185,7 @@ class FrontierOAuthCallbackRuntime(QObject):
 
 
 class SingleInstanceRuntime(QObject):
-    """Keep one EDEC process and ask the existing window to foreground."""
+    """Keep one ED-Frame process and ask the existing window to foreground."""
 
     activationRequested = Signal()
     oauthCallbackReceived = Signal(str)
@@ -218,9 +228,7 @@ class SingleInstanceRuntime(QObject):
 
 
 def diagnostics_dir():
-    return Path(
-        os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
-    ) / "EDEngineeringCompanion"
+    return CONFIG_DIR
 
 
 def install_diagnostics(smoke_messages=None):
@@ -583,10 +591,10 @@ class TrayRuntime(QObject):
         self.available = QSystemTrayIcon.isSystemTrayAvailable()
         self.controller.setSystemTrayAvailable(self.available)
         self.tray = QSystemTrayIcon(self)
-        self.tray.setToolTip("EDEC · Journal and EDDN monitor")
+        self.tray.setToolTip("ED-Frame · Journal and EDDN monitor")
         self.tray.setIcon(app.style().standardIcon(QStyle.SP_ComputerIcon))
         self.menu = QMenu()
-        self.open_action = QAction("Open EDEC", self.menu)
+        self.open_action = QAction("Open ED-Frame", self.menu)
         self.refresh_action = QAction("Refresh Journal now", self.menu)
         self.overlay_action = QAction("Show Engineering Overlay", self.menu)
         self.overlay_action.setCheckable(True)
@@ -596,8 +604,8 @@ class TrayRuntime(QObject):
         self.overlay_click_action.setCheckable(True)
         self.status_action = QAction("Status", self.menu)
         self.status_action.setEnabled(False)
-        self.exit_action = QAction("Exit EDEC", self.menu)
-        self.restart_action = QAction("Restart EDEC", self.menu)
+        self.exit_action = QAction("Exit ED-Frame", self.menu)
+        self.restart_action = QAction("Restart ED-Frame", self.menu)
         self.menu.addAction(self.open_action)
         self.menu.addAction(self.refresh_action)
         self.menu.addSeparator()
@@ -679,7 +687,7 @@ class TrayRuntime(QObject):
             event.ignore()
             self.window.hide()
             self.tray.showMessage(
-                "EDEC is still running",
+                "ED-Frame is still running",
                 "Journal, inventory and EDDN monitoring continue in the tray.",
                 QSystemTrayIcon.MessageIcon.Information,
                 3500,
@@ -696,10 +704,11 @@ def run():
     flush_pending_qt_diagnostics = install_diagnostics(smoke_messages)
     app = QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 12))
-    # Keep Qt's writable cache location aligned with EDEC's existing runtime
-    # data directory. The display name remains human-readable in Windows.
-    app.setApplicationName("EDEngineeringCompanion")
-    app.setApplicationDisplayName("ED Engineering Companion")
+    # Keep Qt's writable cache location aligned with ED-Frame's runtime data
+    # directory (see APP_DATA_DIR_NAME in state_core.py). The display name
+    # remains human-readable in Windows.
+    app.setApplicationName("ED-Frame")
+    app.setApplicationDisplayName("ED-Frame")
     app.setApplicationVersion(APP_VERSION)
     register_windows_url_protocol()
 

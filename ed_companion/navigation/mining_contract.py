@@ -9,14 +9,14 @@ MINING_EVIDENCE_LEVELS = (
     "CATALOG_CANDIDATE",
 )
 
-# EDEC display policy only; these values are not Frontier yield guarantees.
+# ED-Frame display policy only; these values are not Frontier yield guarantees.
 MINING_FRESHNESS_SECONDS = MappingProxyType({
     "LOCAL_CONFIRMED": 30 * 86400,
     "LIVE_REPORTED": 24 * 3600,
     "CATALOG_CANDIDATE": 30 * 86400,
 })
 
-# Only fields documented by Frontier and already used or accepted by EDEC are
+# Only fields documented by Frontier and already used or accepted by ED-Frame are
 # listed. Localised and identity-bearing fields are deliberately absent.
 LOCAL_MINING_EVENT_FIELDS = MappingProxyType({
     "Scan": frozenset({

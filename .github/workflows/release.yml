@@ -73,9 +73,9 @@ jobs:
           Copy-Item -LiteralPath "tests/fixtures/smoke_journal.ndjson" `
             -Destination (Join-Path $journal "Journal.2026-08-23T190000.01.log")
           "LOCALAPPDATA=$profile" >> $env:GITHUB_ENV
-          "EDOPS_JOURNAL_DIR=$journal" >> $env:GITHUB_ENV
-          "EDOPS_PROFILE_FID=F0000000" >> $env:GITHUB_ENV
-          "EDEC_SINGLE_INSTANCE_NAME=EDEC-release-source-${{ github.run_id }}-${{ github.run_attempt }}" >> $env:GITHUB_ENV
+          "ED_FRAME_JOURNAL_DIR=$journal" >> $env:GITHUB_ENV
+          "ED_FRAME_PROFILE_FID=F0000000" >> $env:GITHUB_ENV
+          "ED_FRAME_SINGLE_INSTANCE_NAME=ED-Frame-release-source-${{ github.run_id }}-${{ github.run_attempt }}" >> $env:GITHUB_ENV
           "PHASE14_PREVIEW_SKIP_ONBOARDING=1" >> $env:GITHUB_ENV
           "PHASE14_SMOKE_TEST=1" >> $env:GITHUB_ENV
           "QT_QPA_PLATFORM=offscreen" >> $env:GITHUB_ENV
@@ -91,14 +91,14 @@ jobs:
           }
 
       - name: Build Windows portable application
-        run: python -m PyInstaller --noconfirm --clean EDEC.spec
+        run: python -m PyInstaller --noconfirm --clean ED-Frame.spec
 
       - name: Reject foreign runtime DLLs
         shell: pwsh
         run: |
           $forbidden = @(
-            "dist/EDEC/_internal/icuuc.dll",
-            "dist/EDEC/_internal/icudt78.dll"
+            "dist/ED-Frame/_internal/icuuc.dll",
+            "dist/ED-Frame/_internal/icudt78.dll"
           ) | Where-Object { Test-Path -LiteralPath $_ }
           if ($forbidden) {
             Write-Error "Foreign ICU runtime detected: $($forbidden -join ', ')"
@@ -108,10 +108,13 @@ jobs:
       - name: Add portable documentation
         shell: pwsh
         run: |
-          Copy-Item -LiteralPath "PORTABLE_README.txt" -Destination "dist/EDEC/README.txt"
-          Copy-Item -LiteralPath "LICENSE" -Destination "dist/EDEC/LICENSE"
-          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_EN_21.164.pdf" -Destination "dist/EDEC/EDEC_User_Manual_Privacy_EN_${env:EDEC_VERSION}.pdf"
-          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_DE_21.164.pdf" -Destination "dist/EDEC/EDEC_User_Manual_Privacy_DE_${env:EDEC_VERSION}.pdf"
+          Copy-Item -LiteralPath "PORTABLE_README.txt" -Destination "dist/ED-Frame/README.txt"
+          Copy-Item -LiteralPath "LICENSE" -Destination "dist/ED-Frame/LICENSE"
+          # TODO(rebrand): these two source PDFs still carry the pre-rebrand
+          # name and cover page - copied as-is until the manuals themselves
+          # are re-authored under the ED-Frame name (out of scope for a text rename).
+          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_EN_21.164.pdf" -Destination "dist/ED-Frame/EDEC_User_Manual_Privacy_EN_${env:EDEC_VERSION}.pdf"
+          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_DE_21.164.pdf" -Destination "dist/ED-Frame/EDEC_User_Manual_Privacy_DE_${env:EDEC_VERSION}.pdf"
 
       - name: Run honest packaged smoke test
         shell: pwsh
@@ -122,13 +125,13 @@ jobs:
           Copy-Item -LiteralPath "tests/fixtures/smoke_journal.ndjson" `
             -Destination (Join-Path $journal "Journal.2026-08-23T190000.01.log")
           $env:LOCALAPPDATA = $profile
-          $env:EDOPS_JOURNAL_DIR = $journal
-          $env:EDOPS_PROFILE_FID = "F0000000"
-          $env:EDEC_SINGLE_INSTANCE_NAME = "EDEC-release-package-${{ github.run_id }}-${{ github.run_attempt }}"
+          $env:ED_FRAME_JOURNAL_DIR = $journal
+          $env:ED_FRAME_PROFILE_FID = "F0000000"
+          $env:ED_FRAME_SINGLE_INSTANCE_NAME = "ED-Frame-release-package-${{ github.run_id }}-${{ github.run_attempt }}"
           $env:PHASE14_PREVIEW_SKIP_ONBOARDING = "1"
           $env:PHASE14_SMOKE_TEST = "1"
           $env:QT_QPA_PLATFORM = "offscreen"
-          $process = Start-Process -FilePath "dist/EDEC/EDEC.exe" -WindowStyle Hidden -PassThru -Wait
+          $process = Start-Process -FilePath "dist/ED-Frame/ED-Frame.exe" -WindowStyle Hidden -PassThru -Wait
           if ($process.ExitCode -ne 0) {
             Write-Error "Packaged smoke test failed with exit code $($process.ExitCode)."
             exit $process.ExitCode
@@ -139,9 +142,9 @@ jobs:
         run: |
           $release = Join-Path $env:RUNNER_TEMP "edec-release"
           New-Item -ItemType Directory -Force -Path $release | Out-Null
-          $windowsZip = Join-Path $release "EDEC-$env:EDEC_VERSION-Windows.zip"
-          $projectZip = Join-Path $release "EDEC-$env:EDEC_VERSION-Full-Project.zip"
-          Compress-Archive -Path "dist/EDEC/*" -DestinationPath $windowsZip `
+          $windowsZip = Join-Path $release "ED-Frame-$env:EDEC_VERSION-Windows.zip"
+          $projectZip = Join-Path $release "ED-Frame-$env:EDEC_VERSION-Full-Project.zip"
+          Compress-Archive -Path "dist/ED-Frame/*" -DestinationPath $windowsZip `
             -CompressionLevel Optimal -Force
           git archive --format=zip --output=$projectZip HEAD -- . ':(exclude)tests'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -171,7 +174,7 @@ jobs:
                 exit 1
               }
               $forbidden = @($entries | Where-Object {
-                $_.FullName -match '(^|/)(__pycache__|tests|profile-[^/]*|EDEngineeringCompanion|\.git)(/|$)' -or
+                $_.FullName -match '(^|/)(__pycache__|tests|profile-[^/]*|EDEngineeringCompanion|ED-Frame|\.git)(/|$)' -or
                 $_.Name -match '^(phase14\.log|inara_config\.json|inara_receipts\.json|inara_journal_cache\.json|eddn_config\.json|Journal.*\.log)$'
               })
               if ($forbidden.Count) {
@@ -182,13 +185,13 @@ jobs:
               $archive.Dispose()
             }
           }
-          $windowsZip = Join-Path $release "EDEC-$env:EDEC_VERSION-Windows.zip"
-          $projectZip = Join-Path $release "EDEC-$env:EDEC_VERSION-Full-Project.zip"
+          $windowsZip = Join-Path $release "ED-Frame-$env:EDEC_VERSION-Windows.zip"
+          $projectZip = Join-Path $release "ED-Frame-$env:EDEC_VERSION-Full-Project.zip"
           $windows = [System.IO.Compression.ZipFile]::OpenRead($windowsZip)
           try {
             $names = @($windows.Entries.FullName)
-            if (-not ($names -match '(^|/)EDEC\.exe$')) {
-              Write-Error "Portable archive does not contain EDEC.exe."
+            if (-not ($names -match '(^|/)ED-Frame\.exe$')) {
+              Write-Error "Portable archive does not contain ED-Frame.exe."
               exit 1
             }
             if (-not ($names -match 'qml/pages/PowerplayPage\.qml$')) {
@@ -212,7 +215,7 @@ jobs:
       - name: Upload verified workflow artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: EDEC-release-assets-${{ github.run_id }}
+          name: ED-Frame-release-assets-${{ github.run_id }}
           path: ${{ runner.temp }}/edec-release/*
           if-no-files-found: error
           retention-days: 14
@@ -226,8 +229,8 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $release = Join-Path $env:RUNNER_TEMP "edec-release"
           $assets = @(
-            (Join-Path $release "EDEC-$env:EDEC_VERSION-Windows.zip"),
-            (Join-Path $release "EDEC-$env:EDEC_VERSION-Full-Project.zip"),
+            (Join-Path $release "ED-Frame-$env:EDEC_VERSION-Windows.zip"),
+            (Join-Path $release "ED-Frame-$env:EDEC_VERSION-Full-Project.zip"),
             (Join-Path $release "SHA256SUMS.txt")
           )
           gh release view $tag --repo "${{ github.repository }}" *> $null
@@ -236,5 +239,5 @@ jobs:
           } else {
             gh release create $tag @assets `
               --repo "${{ github.repository }}" `
-              --title "EDEC v$tag" --generate-notes --latest
+              --title "ED-Frame v$tag" --generate-notes --latest
           }

@@ -71,7 +71,7 @@ def _normalize_symbol(value: object) -> str:
 def catalog_symbol_names(ship_catalog: object) -> dict[str, str]:
     """Map every catalog ship's normalized internal symbol to its display name.
 
-    ``ed_data/ships.json`` already carries both for every hull EDEC knows.
+    ``ed_data/ships.json`` already carries both for every hull ED-Frame knows.
     It is authoritative over guessing a name from the internal symbol, and
     covers every past exception (``FerDeLance`` -> ``Fer-de-Lance``,
     ``Krait_MkII`` -> ``Krait Mk II``) plus any newer or odder hull

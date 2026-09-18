@@ -4,7 +4,7 @@ from typing import Any, Iterable
 
 
 # Only identifiers observed in Frontier Journal data belong here.  Prefer the
-# event's localized label because Frontier can add vehicles without an EDEC
+# event's localized label because Frontier can add vehicles without an ED-Frame
 # release; unknown identifiers deliberately remain visible instead of being
 # guessed or discarded.
 VEHICLE_NAMES = {

@@ -50,7 +50,7 @@ class PersistenceSaveResultTests(unittest.TestCase):
             new_journal = root / "new-journal"
             old_journal.mkdir()
             new_journal.mkdir()
-            environment = {"LOCALAPPDATA": str(root), "EDOPS_JOURNAL_DIR": ""}
+            environment = {"LOCALAPPDATA": str(root), "ED_FRAME_JOURNAL_DIR": ""}
             with mock.patch.dict(os.environ, environment, clear=False):
                 self.assertTrue(set_journal_dir(old_journal))
                 controller = CockpitController.__new__(CockpitController)

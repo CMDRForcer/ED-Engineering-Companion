@@ -933,7 +933,7 @@ def send(prepared, context, uploader_id, opener=urlopen, timeout=20):
         EDDN_UPLOAD_URL, data=raw, method="POST",
         headers={
             "Content-Encoding": "gzip", "Content-Type": "application/json",
-            "User-Agent": f"ED-Engineering-Companion/{APP_VERSION}",
+            "User-Agent": f"ED-Frame/{APP_VERSION}",
         },
     )
     started = time.monotonic()
@@ -948,7 +948,7 @@ def send(prepared, context, uploader_id, opener=urlopen, timeout=20):
         except (OSError, AttributeError):
             detail = ""
         schema_note = (
-            " Schema/message rejected; refresh EDEC schema support before retrying."
+            " Schema/message rejected; refresh ED-Frame schema support before retrying."
             if status in {400, 413, 426} else ""
         )
         raise EddnError(

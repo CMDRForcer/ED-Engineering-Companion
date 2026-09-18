@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title ED Engineering Companion - Dependencies
+title ED-Frame - Dependencies
 cd /d "%~dp0"
 set "PYTHON_EXE="
 set "PYTHON_ARGS="
@@ -12,7 +12,7 @@ if not defined PYTHON_EXE (
     pause
     exit /b 1
 )
-set "APP_DEPS=%LOCALAPPDATA%\EDEngineeringCompanion\python-deps"
+set "APP_DEPS=%LOCALAPPDATA%\ED-Frame\python-deps"
 echo Installing required Python packages...
 "%PYTHON_EXE%" %PYTHON_ARGS% -m pip install -r requirements.txt --target "%APP_DEPS%" --upgrade
 if errorlevel 1 (

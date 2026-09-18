@@ -12,7 +12,9 @@ ApplicationWindow {
     minimumWidth: 1120
     minimumHeight: 700
     visible: true
-    title: "ED Engineering Companion (EDEC) · " + cockpit.appVersion
+    // Windows appends applicationDisplayName ("ED-Frame") to the taskbar
+    // tooltip on its own - putting it in the title too just doubles it up.
+    title: cockpit.appVersion
     font.family: "Segoe UI Variable Text"
     property int previewEngineersMode: 0
 
@@ -1028,7 +1030,7 @@ ApplicationWindow {
             anchors.margins: 18
             spacing: 8
             Label {
-                text: window.compactSidebar ? "EC" : "EDEC"
+                text: window.compactSidebar ? "F" : "FRAME"
                 color: accent
                 font.pixelSize: 25
                 font.bold: true
@@ -1175,7 +1177,7 @@ ApplicationWindow {
                 text: window.compactSidebar ? "ⓘ" : window.t("common.about", "ABOUT")
                 Layout.fillWidth: true
                 ToolTip.visible: hovered
-                ToolTip.text: window.t("dialog.about.title", "About ED Engineering Companion")
+                ToolTip.text: window.t("dialog.about.title", "About ED-Frame")
                 onClicked: aboutDialog.open()
             }
         }
@@ -6874,23 +6876,23 @@ ApplicationWindow {
                     Rectangle { Layout.fillWidth: true; height: 1; color: borderTone }
                         Label { text: window.t("settings.windows_behavior", "WINDOWS BEHAVIOR"); color: green; font.pixelSize: 11; font.bold: true }
                     CheckBox {
-                        text: window.t("settings.tray_keep", "Keep EDEC running in the system tray when the window closes")
+                        text: window.t("settings.tray_keep", "Keep ED-Frame running in the system tray when the window closes")
                         checked: cockpit.backgroundMode
                         enabled: cockpit.systemTrayAvailable
                         onToggled: cockpit.setBackgroundMode(checked)
                     }
                     CheckBox {
-                        text: window.t("settings.autostart", "Start EDEC with Windows in background mode")
+                        text: window.t("settings.autostart", "Start ED-Frame with Windows in background mode")
                         checked: cockpit.autostartEnabled
                         enabled: cockpit.backgroundMode
                         onToggled: cockpit.setAutostartEnabled(checked)
                     }
                     Label {
                         text: !cockpit.systemTrayAvailable
-                              ? "SYSTEM TRAY UNAVAILABLE · Closing the window exits EDEC."
+                              ? "SYSTEM TRAY UNAVAILABLE · Closing the window exits ED-Frame."
                               : cockpit.backgroundMode
-                              ? "TRAY MODE ENABLED · Journal, inventory and EDDN continue after closing the window. Use EXIT EDEC in the tray to stop."
-                              : "DISABLED BY DEFAULT · Closing the window exits EDEC."
+                              ? "TRAY MODE ENABLED · Journal, inventory and EDDN continue after closing the window. Use EXIT ED-FRAME in the tray to stop."
+                              : "DISABLED BY DEFAULT · Closing the window exits ED-Frame."
                         color: cockpit.backgroundMode ? green : muted
                         font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true
                     }
@@ -6915,13 +6917,13 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         text: cockpit.restartRequired
                               ? window.t("settings.restart_apply", "RESTART · APPLY CHANGES")
-                              : window.t("settings.restart", "RESTART EDEC")
+                              : window.t("settings.restart", "RESTART ED-FRAME")
                             selected: cockpit.restartRequired
                             onClicked: cockpit.requestRestart()
                         }
                         CockpitButton {
                             Layout.fillWidth: true
-                            text: window.t("settings.exit", "EXIT EDEC")
+                            text: window.t("settings.exit", "EXIT ED-FRAME")
                             onClicked: cockpit.requestExit()
                         }
                     }
@@ -7332,7 +7334,7 @@ ApplicationWindow {
                     }
                     CheckBox {
                         id: frontierConsentBox
-                        text: window.t("connections.frontier_consent", "I consent to EDEC using Frontier's Companion API to read my Commander credits and active ship for this account.")
+                        text: window.t("connections.frontier_consent", "I consent to ED-Frame using Frontier's Companion API to read my Commander credits and active ship for this account.")
                         checked: cockpit.frontierConsent
                         Layout.fillWidth: true
                         onToggled: cockpit.setFrontierConsent(checked)
@@ -8445,7 +8447,7 @@ ApplicationWindow {
     CockpitDialog {
         id: aboutDialog
         objectName: "qa-dialog-about"
-        title: window.t("dialog.about.title", "About ED Engineering Companion")
+        title: window.t("dialog.about.title", "About ED-Frame")
         modal: true
         anchors.centerIn: parent
         width: Math.min(620, window.width - 80)
@@ -8453,14 +8455,14 @@ ApplicationWindow {
         contentItem: ColumnLayout {
             spacing: 14
             Label {
-                text: "ED Engineering Companion"
+                text: "ED-Frame"
                 color: cyan
                 font.pixelSize: 26
                 font.bold: true
             }
             Label {
                 Layout.fillWidth: true
-                text: window.t("dialog.about.subtitle", "Engineering Companion tool for Elite Dangerous")
+                text: window.t("dialog.about.subtitle", "Fleet, Routes, Analytics, Materials & Engineering companion for Elite Dangerous")
                 color: textPrimary
                 font.pixelSize: 14
                 wrapMode: Text.WordWrap
@@ -8497,7 +8499,7 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
-                text: window.t("about.thanks_text", "Special thanks to everyone who helped shape EDEC — contributors, testers, bug reporters, translators, and the Elite Dangerous community. Thanks also to EDCD/EDDN, INARA, and Spansh for their documentation, services, and community resources.")
+                text: window.t("about.thanks_text", "Special thanks to everyone who helped shape ED-Frame — contributors, testers, bug reporters, translators, and the Elite Dangerous community. Thanks also to EDCD/EDDN, INARA, and Spansh for their documentation, services, and community resources.")
                 color: textSecondary
                 font.pixelSize: 11
                 wrapMode: Text.WordWrap
@@ -8512,7 +8514,7 @@ ApplicationWindow {
             }
             Label {
                 Layout.fillWidth: true
-                text: window.t("about.disclaimer", "ED Engineering Companion (EDEC) is a third-party tool and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc.")
+                text: window.t("about.disclaimer", "ED-Frame is a third-party tool and is not affiliated with Frontier Developments. Elite Dangerous is a trademark of Frontier Developments plc.")
                 color: muted
                 font.pixelSize: 10
                 wrapMode: Text.WordWrap

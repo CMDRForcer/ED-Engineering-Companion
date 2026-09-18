@@ -30,7 +30,7 @@ def _spansh_json(post, payload, timeout):
                 SPANSH_STATION_SEARCH_URL,
                 json=payload,
                 timeout=timeout,
-                headers={"User-Agent": f"EDEngineeringCompanion/{APP_VERSION}"},
+                headers={"User-Agent": f"ED-Frame/{APP_VERSION}"},
             )
             break
         except (requests.ConnectionError, requests.Timeout) as exc:

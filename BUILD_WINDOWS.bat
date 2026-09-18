@@ -12,7 +12,7 @@ if not defined EDEC_VERSION goto :failed
 rem Keep PyInstaller from collecting unrelated DLLs injected by shells and developer tools.
 set "PATH=%EDEC_PYTHON_DIR%;%EDEC_PYTHON_DIR%Scripts;%SystemRoot%\System32;%SystemRoot%;%SystemRoot%\System32\Wbem;%SystemRoot%\System32\WindowsPowerShell\v1.0"
 
-set "EDOPS_DEPS=%LOCALAPPDATA%\EDEngineeringCompanion\python-deps"
+set "EDOPS_DEPS=%LOCALAPPDATA%\ED-Frame\python-deps"
 set "PYTHONPATH="
 if exist "%EDOPS_DEPS%" set "PYTHONPATH=%EDOPS_DEPS%"
 
@@ -23,33 +23,36 @@ if errorlevel 1 (
     if errorlevel 1 goto :failed
 )
 
-"%EDEC_PYTHON%" -m PyInstaller --noconfirm --clean EDEC.spec
+"%EDEC_PYTHON%" -m PyInstaller --noconfirm --clean ED-Frame.spec
 if errorlevel 1 goto :failed
 
-if exist "dist\EDEC\_internal\icuuc.dll" goto :contaminated
-if exist "dist\EDEC\_internal\icudt78.dll" goto :contaminated
+if exist "dist\ED-Frame\_internal\icuuc.dll" goto :contaminated
+if exist "dist\ED-Frame\_internal\icudt78.dll" goto :contaminated
 
-copy /y "PORTABLE_README.txt" "dist\EDEC\README.txt" >nul
-copy /y "LICENSE" "dist\EDEC\LICENSE" >nul
-copy /y "docs\EDEC_User_Manual_Privacy_EN_21.164.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_EN_%EDEC_VERSION%.pdf" >nul
-copy /y "docs\EDEC_User_Manual_Privacy_DE_21.164.pdf" "dist\EDEC\EDEC_User_Manual_Privacy_DE_%EDEC_VERSION%.pdf" >nul
+copy /y "PORTABLE_README.txt" "dist\ED-Frame\README.txt" >nul
+copy /y "LICENSE" "dist\ED-Frame\LICENSE" >nul
+rem TODO(rebrand): these two source PDFs still carry the pre-rebrand name
+rem and cover page - copied as-is until the manuals themselves are
+rem re-authored under the ED-Frame name (out of scope for a text rename).
+copy /y "docs\EDEC_User_Manual_Privacy_EN_21.164.pdf" "dist\ED-Frame\EDEC_User_Manual_Privacy_EN_%EDEC_VERSION%.pdf" >nul
+copy /y "docs\EDEC_User_Manual_Privacy_DE_21.164.pdf" "dist\ED-Frame\EDEC_User_Manual_Privacy_DE_%EDEC_VERSION%.pdf" >nul
 
 if not exist "output" mkdir "output"
-powershell -NoProfile -Command "Compress-Archive -Path 'dist\EDEC\*' -DestinationPath 'output\EDEC-%EDEC_VERSION%-Windows.zip' -CompressionLevel Optimal -Force"
+powershell -NoProfile -Command "Compress-Archive -Path 'dist\ED-Frame\*' -DestinationPath 'output\ED-Frame-%EDEC_VERSION%-Windows.zip' -CompressionLevel Optimal -Force"
 if errorlevel 1 goto :failed
 
 echo.
-echo Portable build created in dist\EDEC
-echo Windows Explorer compatible ZIP created in output\EDEC-%EDEC_VERSION%-Windows.zip
+echo Portable build created in dist\ED-Frame
+echo Windows Explorer compatible ZIP created in output\ED-Frame-%EDEC_VERSION%-Windows.zip
 exit /b 0
 
 :contaminated
 echo.
-echo EDEC Windows build contains foreign ICU DLLs from the host PATH.
+echo ED-Frame Windows build contains foreign ICU DLLs from the host PATH.
 echo Refusing to create a broken release archive.
 exit /b 1
 
 :failed
 echo.
-echo EDEC Windows build failed.
+echo ED-Frame Windows build failed.
 exit /b 1

@@ -509,7 +509,7 @@ def _ship_key(value, aliases=None):
 def _ship_catalog_aliases(ship_catalog):
     """Map every catalog ship's normalized internal symbol to its display name.
 
-    ``ed_data/ships.json`` already carries both for every hull EDEC knows,
+    ``ed_data/ships.json`` already carries both for every hull ED-Frame knows,
     including ships added after SHIP_ALIASES was last hand-curated. An
     export whose ``Ship`` field is the raw Frontier/Coriolis symbol (e.g.
     ``Explorer_NX``) instead of the display name (``Caspian Explorer``)

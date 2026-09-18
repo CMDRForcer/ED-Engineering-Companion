@@ -1496,7 +1496,7 @@ def _singular_effect_key(value: object) -> str:
 def _experimental_craft_matches(
     planner: dict[str, Any], event: dict[str, Any]
 ) -> bool:
-    """Match Frontier machine IDs, EDEC IDs and localized effect names."""
+    """Match Frontier machine IDs, ED-Frame IDs and localized effect names."""
     journal_value = str(
         event.get("ApplyExperimentalEffect")
         or event.get("ExperimentalEffect") or ""

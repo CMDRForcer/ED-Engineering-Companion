@@ -1,7 +1,7 @@
 # Mining Finder implementation plan
 
 Basis: the contract and pure projections in `mining_contract.py` and
-`mining_finder.py`. The existing EDEC navigation shell and left menu styling
+`mining_finder.py`. The existing ED-Frame navigation shell and left menu styling
 must remain unchanged.
 
 ## Phase 1 — freshness and merge policy
@@ -19,7 +19,7 @@ Exit: deterministic ranking/merge tests cover conflicting and stale sources.
 ## Phase 2 — profile cache and Spansh query boundary
 
 Status: complete for current-system refresh. Spansh exposes no documented
-global mining search endpoint, so EDEC does not simulate one.
+global mining search endpoint, so ED-Frame does not simulate one.
 
 - Add a profile-bound mining catalog cache using existing atomic JSON handling.
 - Pin the minimal `/dump/{id64}` response fields already documented in the
@@ -47,7 +47,7 @@ Exit: controller tests prove identical underlying state and no mutations.
 
 Status: complete for the evidence-backed MVP in the existing navigation shell.
 
-- Add one content page using existing EDEC components and unchanged sidebar.
+- Add one content page using existing ED-Frame components and unchanged sidebar.
 - Implement target commodity, method, range, evidence and reserve filters.
 - Show the durable source evidence plus `LAST CONFIRMED`; recommend a recheck
   when the observation age exceeds the UI policy without hiding the location.

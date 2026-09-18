@@ -520,13 +520,20 @@ class UiSettingsMixin:
             with winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER, path, 0, winreg.KEY_SET_VALUE
             ) as key:
+                # Clean up the pre-rebrand value name on whichever toggle a
+                # Commander touches first after upgrading, so autostart never
+                # ends up registered twice under two different names.
+                try:
+                    winreg.DeleteValue(key, "EDOPS")
+                except FileNotFoundError:
+                    pass
                 if enabled:
                     winreg.SetValueEx(
-                        key, "EDOPS", 0, winreg.REG_SZ, self._autostart_command()
+                        key, "ED-Frame", 0, winreg.REG_SZ, self._autostart_command()
                     )
                 else:
                     try:
-                        winreg.DeleteValue(key, "EDOPS")
+                        winreg.DeleteValue(key, "ED-Frame")
                     except FileNotFoundError:
                         pass
         except (ImportError, OSError) as exc:

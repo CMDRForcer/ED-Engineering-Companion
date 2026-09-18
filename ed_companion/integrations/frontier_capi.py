@@ -40,7 +40,7 @@ def _configured(env_name, default, *, environ=None):
 
 # The bundled OAuth client covers the public GitHub Pages redirect below.
 # Operators who run their own instance and accepted the Frontier developer
-# terms can register a separate client and point EDEC at it without a code
+# terms can register a separate client and point ED-Frame at it without a code
 # change; a client secret is never used or accepted.
 _DEFAULT_FRONTIER_CLIENT_ID = "b17a6919-d902-430d-bb28-7fbb7cbbe5a9"
 _DEFAULT_FRONTIER_REDIRECT_URI = "https://cmdrforcer.github.io/oauth/callback.html"
@@ -332,7 +332,7 @@ class FrontierCapiClient:
                     FRONTIER_CAPI_BASE + endpoint,
                     headers={
                         "Authorization": self._authorization,
-                        "User-Agent": f"ED-Engineering-Companion/{APP_VERSION}",
+                        "User-Agent": f"ED-Frame/{APP_VERSION}",
                         "Accept": "application/json",
                     },
                     timeout=timeout,
@@ -395,7 +395,7 @@ def _value_parts(container):
     return (_clean_int(value), None, None)
 
 
-# Frontier's ``/profile`` commander.rank keys that EDEC surfaces. Reputation
+# Frontier's ``/profile`` commander.rank keys that ED-Frame surfaces. Reputation
 # and rank progress are intentionally not present in the profile document.
 FRONTIER_RANK_KEYS = (
     "combat", "trade", "explore", "cqc",

@@ -44,7 +44,7 @@ def _dpapi_transform(value, function_name):
     function = getattr(ctypes.windll.crypt32, function_name)
     if function_name == "CryptProtectData":
         success = function(
-            ctypes.byref(source), "EDEC Frontier CAPI", None, None, None,
+            ctypes.byref(source), "ED-Frame Frontier CAPI", None, None, None,
             0x01, ctypes.byref(destination),
         )
     else:

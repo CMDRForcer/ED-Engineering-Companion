@@ -62,7 +62,9 @@ from ed_companion.module_identity import (
     module_identity_key,
     same_module_identity,
 )
-from ed_companion.persistence import atomic_write, load_json_file, persistence_issues
+from ed_companion.persistence import (
+    atomic_write, load_json_file, migrate_app_dir_if_needed, persistence_issues,
+)
 from ed_companion.build_import import (
     JOURNAL_BLUEPRINT_NAMES,
     JOURNAL_EXPERIMENTAL_NAMES,
@@ -372,11 +374,24 @@ def normalize(name: object) -> str:
 
 
 
+APP_DATA_DIR_NAME = "ED-Frame"
+LEGACY_APP_DATA_DIR_NAME = "EDEngineeringCompanion"
+
+
 def app_data_dir() -> Path:
     """Return the writable application root, never the installation tree."""
-    root = Path(
+    local_app_data = Path(
         os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
-    ) / "EDEngineeringCompanion"
+    )
+    root = local_app_data / APP_DATA_DIR_NAME
+    # migrate_app_dir_if_needed() short-circuits on a single Path.exists()
+    # check once the new root is present, so calling it unconditionally
+    # here - rather than gating it behind a do-once flag - costs nothing
+    # on the hot path while staying correct if LOCALAPPDATA ever changes
+    # within one process (as tests do between cases).
+    migrate_app_dir_if_needed(
+        local_app_data / LEGACY_APP_DATA_DIR_NAME, root, log=LOGGER.info,
+    )
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -660,7 +675,7 @@ def _fast_journal_profile_identity(requested: str = "") -> tuple[str, str]:
 
 def _journal_profile_identity() -> tuple[str, str]:
     """Return the selected Frontier identity and display name from LoadGame."""
-    requested = str(os.environ.get("EDOPS_PROFILE_FID") or "").strip()
+    requested = str(os.environ.get("ED_FRAME_PROFILE_FID") or "").strip()
     root = str(journal_dir().resolve())
     with _JOURNAL_EVENT_CACHE_LOCK:
         snapshot_ready = (
@@ -800,7 +815,7 @@ def reference_data_dir(package_root: Path) -> Path:
 
 
 def journal_dir() -> Path:
-    configured = str(os.environ.get("EDOPS_JOURNAL_DIR") or "").strip()
+    configured = str(os.environ.get("ED_FRAME_JOURNAL_DIR") or "").strip()
     config_file = app_data_dir() / "journal_path.txt"
     if not configured:
         try:

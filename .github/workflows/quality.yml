@@ -45,9 +45,9 @@ jobs:
           Copy-Item -LiteralPath "tests/fixtures/smoke_journal.ndjson" `
             -Destination (Join-Path $journal "Journal.2026-08-23T190000.01.log")
           "LOCALAPPDATA=$profile" >> $env:GITHUB_ENV
-          "EDOPS_JOURNAL_DIR=$journal" >> $env:GITHUB_ENV
-          "EDOPS_PROFILE_FID=F0000000" >> $env:GITHUB_ENV
-          "EDEC_SINGLE_INSTANCE_NAME=EDEC-ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" >> $env:GITHUB_ENV
+          "ED_FRAME_JOURNAL_DIR=$journal" >> $env:GITHUB_ENV
+          "ED_FRAME_PROFILE_FID=F0000000" >> $env:GITHUB_ENV
+          "ED_FRAME_SINGLE_INSTANCE_NAME=ED-Frame-ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT" >> $env:GITHUB_ENV
           "PHASE14_PREVIEW_SKIP_ONBOARDING=1" >> $env:GITHUB_ENV
           "PHASE14_SMOKE_TEST=1" >> $env:GITHUB_ENV
           "QT_QPA_PLATFORM=offscreen" >> $env:GITHUB_ENV

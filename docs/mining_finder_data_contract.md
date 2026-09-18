@@ -11,7 +11,7 @@ profile-bound runtime catalog. It never initiates uploads.
 - `CATALOG_CANDIDATE`: searchable Spansh body/ring data with its source update
   time. It is suitable for finding destinations, not confirming current yield.
 
-Location evidence does not expire. When its last confirmation exceeds EDEC's
+Location evidence does not expire. When its last confirmation exceeds ED-Frame's
 display policy (24 hours for live reports and 30 days for local/catalog
 observations), it remains searchable with its original evidence and receives
 `RECHECK_RECOMMENDED`. A missing timestamp becomes
@@ -35,7 +35,7 @@ not prove a particular yield.
 
 ### EDDN
 
-Only EDEC's already-supported `journal/1` `Scan` and `SAASignalsFound` events
+Only ED-Frame's already-supported `journal/1` `Scan` and `SAASignalsFound` events
 are candidates. Existing allowlists, private-field stripping and schema
 validation remain mandatory before queueing and sending. `ProspectedAsteroid`,
 `MiningRefined`, cargo and sales remain local and are not added to EDDN.
@@ -44,7 +44,7 @@ validation remain mandatory before queueing and sending. `ProspectedAsteroid`,
 
 The documented `/dump/{id64}` response is the catalog contract because its
 `system.bodies[].rings[]` records contain ring type and optional signal data;
-the smaller `/system/{id64}` response does not carry this ring detail. EDEC
+the smaller `/system/{id64}` response does not carry this ring detail. ED-Frame
 projects only system identity/coordinates, body name/arrival distance/reserve,
 ring name/type and the ring signal map/update time. Missing properties stay
 unknown rather than receiving inferred defaults.
@@ -56,7 +56,7 @@ as a bulk galaxy/mining search service and is outside the finder data path.
 
 ## Rhino boundary
 
-EDEC has observed Rhino session boundaries plus refined cargo and engineering
+ED-Frame has observed Rhino session boundaries plus refined cargo and engineering
 material events. No Rhino-specific deposit taxonomy, range, yield, vehicle
 capacity or new Frontier identifier is inferred here. New fields must first be
 observed in a redacted Journal sample and covered by a fixture.

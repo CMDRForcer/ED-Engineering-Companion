@@ -45,7 +45,7 @@ ColumnLayout {
         visible: !overview.pledged
         symbol: "⚑"
         title: appWindow.t("powerplay.none", "NO POWER AFFILIATION")
-        detail: appWindow.t("powerplay.none_help", "EDEC will show Powerplay data after the Journal confirms a Commander pledge. No external account or CAPI query is used.")
+        detail: appWindow.t("powerplay.none_help", "ED-Frame will show Powerplay data after the Journal confirms a Commander pledge. No external account or CAPI query is used.")
         tone: cyan
     }
 

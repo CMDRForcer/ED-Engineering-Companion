@@ -46,7 +46,7 @@ class OverlaySettings(QObject):
         self.path = Path(path) if path else (
             Path(os.environ.get("LOCALAPPDATA")
                  or (Path.home() / "AppData" / "Local"))
-            / "EDEngineeringCompanion" / "overlay_settings.json"
+            / "ED-Frame" / "overlay_settings.json"
         )
         loaded = load_json_file(self.path, {})
         self._data = dict(DEFAULT_OVERLAY)

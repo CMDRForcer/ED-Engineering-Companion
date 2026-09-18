@@ -2320,7 +2320,7 @@ class CockpitController(
         if self._history_export_busy:
             return
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        destination = self.config_dir / "exports" / f"EDOPS_history_{timestamp}.json"
+        destination = self.config_dir / "exports" / f"ED-Frame_history_{timestamp}.json"
         candidates = self._mining_catalog.get("candidates", [])
         archive = self._history_archive
         generation = self._profile_generation

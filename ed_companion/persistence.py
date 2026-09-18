@@ -1,4 +1,4 @@
-"""Collision-safe atomic writes for local EDEC persistence files."""
+"""Collision-safe atomic writes for local ED-Frame persistence files."""
 
 import os
 import json
@@ -120,6 +120,38 @@ def _protect_corrupt_json(path, default, reason):
             "reason": str(reason),
         }
     return deepcopy(default)
+
+
+def migrate_app_dir_if_needed(old_dir, new_dir, *, log=None):
+    """One-time, copy-not-move migration of a renamed app's data directory.
+
+    Only fires when the new directory does not exist yet and the old one
+    does - a new directory that already exists always wins, with no
+    re-copy, so this is safe to call on every startup without its own
+    do-once guard. The old directory is left in place untouched (never
+    removed) as a rollback safety net; every file underneath - including
+    an encrypted Frontier OAuth token, which decrypts the same regardless
+    of its path since DPAPI keys off the Windows account, not the file
+    location - travels byte-for-byte via a plain tree copy, so nothing
+    inside it (API app names, client ids, cached credentials) is rewritten
+    or normalized along the way.
+
+    Returns True when a migration copy just happened.
+    """
+    old_dir = Path(old_dir)
+    new_dir = Path(new_dir)
+    if new_dir.exists() or not old_dir.is_dir():
+        return False
+    with _WRITE_LOCK:
+        if new_dir.exists():
+            return False
+        shutil.copytree(old_dir, new_dir)
+    if log is not None:
+        try:
+            log(f"Migrated settings from {old_dir} to {new_dir}")
+        except Exception:
+            pass
+    return True
 
 
 def persistence_issues(directory=None):

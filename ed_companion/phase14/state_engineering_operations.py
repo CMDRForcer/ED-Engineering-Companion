@@ -740,7 +740,7 @@ def select_operation_action(
                 "module slot."
             ),
             "reason": (
-                "EDEC cannot tell whether this remote slot is empty or already "
+                "ED-Frame cannot tell whether this remote slot is empty or already "
                 "contains the planned module."
             ),
             "after": (

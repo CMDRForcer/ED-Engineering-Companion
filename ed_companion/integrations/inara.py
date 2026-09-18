@@ -1470,7 +1470,7 @@ def send_events(config, events, post=None, timeout=25):
             headers={
                 "Accept": "application/json",
                 "Content-Type": "application/json",
-                "User-Agent": f"ED-Engineering-Companion/{APP_VERSION}",
+                "User-Agent": f"ED-Frame/{APP_VERSION}",
             },
         )
     except HTTPError as exc:
@@ -1479,7 +1479,7 @@ def send_events(config, events, post=None, timeout=25):
         schema_error = status in {400, 404, 409, 422}
         raise InaraError(
             f"INARA returned HTTP {status}"
-            + (" · request/schema rejected; update EDEC before retrying."
+            + (" · request/schema rejected; update ED-Frame before retrying."
                if schema_error else "."),
             retryable=retryable, status_code=status, schema_error=schema_error,
             retry_after=_retry_after_seconds(exc.headers) if status == 429 else None,
@@ -1494,7 +1494,7 @@ def send_events(config, events, post=None, timeout=25):
         raise InaraError(
             f"INARA returned HTTP {status}"
             + (f" · {detail}" if detail else "")
-            + (" · request/schema rejected; update EDEC before retrying."
+            + (" · request/schema rejected; update ED-Frame before retrying."
                if schema_error else "."),
             retryable=retryable, status_code=status, schema_error=schema_error,
             retry_after=(
