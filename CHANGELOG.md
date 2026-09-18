@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.7 — 2026-09-19
+
+### Changed
+
+- **Frontier Companion API re-registered under a new Client ID** as
+  part of the ED-Frame rebrand (the Frontier developer portal entry
+  itself was re-created rather than renamed in place). **Anyone with
+  an existing Frontier CAPI login will be signed out once** and needs
+  to re-authenticate from Settings → Connections - the old stored
+  token was issued for the previous Client ID and Frontier will not
+  refresh it under the new one. No other data (Journal, Wishlist,
+  Materials, INARA, EDDN) is affected. The redirect endpoint
+  (`https://cmdrforcer.github.io/oauth/callback.html`) is unchanged.
+
 ## 1.5.6 — 2026-09-19
 
 ### Fixed

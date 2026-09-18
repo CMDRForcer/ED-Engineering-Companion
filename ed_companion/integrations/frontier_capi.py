@@ -42,7 +42,7 @@ def _configured(env_name, default, *, environ=None):
 # Operators who run their own instance and accepted the Frontier developer
 # terms can register a separate client and point ED-Frame at it without a code
 # change; a client secret is never used or accepted.
-_DEFAULT_FRONTIER_CLIENT_ID = "b17a6919-d902-430d-bb28-7fbb7cbbe5a9"
+_DEFAULT_FRONTIER_CLIENT_ID = "e1d78db9-525c-4374-8ac0-a83f4177f7d3"
 _DEFAULT_FRONTIER_REDIRECT_URI = "https://cmdrforcer.github.io/oauth/callback.html"
 FRONTIER_CLIENT_ID = _configured(
     "EDEC_FRONTIER_CLIENT_ID", _DEFAULT_FRONTIER_CLIENT_ID
