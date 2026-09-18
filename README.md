@@ -1,5 +1,7 @@
 # ED-Frame
 
+*(formerly ED Engineering Companion / EDEC)*
+
 **Turn the Elite Dangerous Journal into a live operations, engineering and Commander workspace.**
 
 [![Latest release](https://img.shields.io/github/v/release/CMDRForcer/ED-Frame?sort=semver&label=release)](https://github.com/CMDRForcer/ED-Frame/releases/latest)
