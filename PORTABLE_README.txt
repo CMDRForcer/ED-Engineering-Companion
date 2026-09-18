@@ -1,4 +1,4 @@
-ED-Frame 1.5.5 - Portable Windows Edition
+ED-Frame - Portable Windows Edition
 ===================================================================
 
 1. Extract the complete ZIP archive.
@@ -11,8 +11,9 @@ User settings, service credentials, caches and Journal cursors are stored under
 %LOCALAPPDATA%\ED-Frame and are not written into this folder.
 
 Documentation:
-- ED-Frame_User_Manual_Privacy_EN_1.5.5.pdf
-- ED-Frame_User_Manual_Privacy_DE_1.5.5.pdf
+- ED-Frame_User_Manual_Privacy_EN_<version>.pdf
+- ED-Frame_User_Manual_Privacy_DE_<version>.pdf
+(the enclosed English and German User Manual, named for this release's version)
 
 Project: https://github.com/CMDRForcer/ED-Frame
 License: GNU General Public License v3.0
