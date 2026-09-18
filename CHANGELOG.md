@@ -17,6 +17,9 @@
 - The window title now shows just the version number - Windows already
   appends the application name to the taskbar tooltip on its own, so
   including it in the title too just showed it twice.
+- Replaced the pre-rebrand English and German manuals with complete
+  ED-Frame 1.5.5 editions and updated portable-build packaging to ship
+  the new filenames.
 
 ## 1.5.4 — 2026-09-15
 

@@ -31,11 +31,8 @@ if exist "dist\ED-Frame\_internal\icudt78.dll" goto :contaminated
 
 copy /y "PORTABLE_README.txt" "dist\ED-Frame\README.txt" >nul
 copy /y "LICENSE" "dist\ED-Frame\LICENSE" >nul
-rem TODO(rebrand): these two source PDFs still carry the pre-rebrand name
-rem and cover page - copied as-is until the manuals themselves are
-rem re-authored under the ED-Frame name (out of scope for a text rename).
-copy /y "docs\EDEC_User_Manual_Privacy_EN_21.164.pdf" "dist\ED-Frame\EDEC_User_Manual_Privacy_EN_%EDEC_VERSION%.pdf" >nul
-copy /y "docs\EDEC_User_Manual_Privacy_DE_21.164.pdf" "dist\ED-Frame\EDEC_User_Manual_Privacy_DE_%EDEC_VERSION%.pdf" >nul
+copy /y "docs\ED-Frame_User_Manual_Privacy_EN_1.5.5.pdf" "dist\ED-Frame\ED-Frame_User_Manual_Privacy_EN_%EDEC_VERSION%.pdf" >nul
+copy /y "docs\ED-Frame_User_Manual_Privacy_DE_1.5.5.pdf" "dist\ED-Frame\ED-Frame_User_Manual_Privacy_DE_%EDEC_VERSION%.pdf" >nul
 
 if not exist "output" mkdir "output"
 powershell -NoProfile -Command "Compress-Archive -Path 'dist\ED-Frame\*' -DestinationPath 'output\ED-Frame-%EDEC_VERSION%-Windows.zip' -CompressionLevel Optimal -Force"

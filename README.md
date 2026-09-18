@@ -180,6 +180,8 @@ Personal settings, Journal cursors, caches, plans and service credentials live o
 
 ## Data and privacy
 
+The complete 1.5.5 manuals are available in [English](docs/ED-Frame_User_Manual_Privacy_EN_1.5.5.pdf) and [German](docs/ED-Frame_User_Manual_Privacy_DE_1.5.5.pdf).
+
 ED-Frame works locally from Elite Dangerous Journal files. Every network integration is optional and opt-in:
 
 - **INARA** — supported Commander events are batched, deduplicated, rate-limited, and written to local receipts before any upload.

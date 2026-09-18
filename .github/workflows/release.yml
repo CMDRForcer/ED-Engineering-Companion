@@ -110,11 +110,8 @@ jobs:
         run: |
           Copy-Item -LiteralPath "PORTABLE_README.txt" -Destination "dist/ED-Frame/README.txt"
           Copy-Item -LiteralPath "LICENSE" -Destination "dist/ED-Frame/LICENSE"
-          # TODO(rebrand): these two source PDFs still carry the pre-rebrand
-          # name and cover page - copied as-is until the manuals themselves
-          # are re-authored under the ED-Frame name (out of scope for a text rename).
-          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_EN_21.164.pdf" -Destination "dist/ED-Frame/EDEC_User_Manual_Privacy_EN_${env:EDEC_VERSION}.pdf"
-          Copy-Item -LiteralPath "docs/EDEC_User_Manual_Privacy_DE_21.164.pdf" -Destination "dist/ED-Frame/EDEC_User_Manual_Privacy_DE_${env:EDEC_VERSION}.pdf"
+          Copy-Item -LiteralPath "docs/ED-Frame_User_Manual_Privacy_EN_1.5.5.pdf" -Destination "dist/ED-Frame/ED-Frame_User_Manual_Privacy_EN_${env:EDEC_VERSION}.pdf"
+          Copy-Item -LiteralPath "docs/ED-Frame_User_Manual_Privacy_DE_1.5.5.pdf" -Destination "dist/ED-Frame/ED-Frame_User_Manual_Privacy_DE_${env:EDEC_VERSION}.pdf"
 
       - name: Run honest packaged smoke test
         shell: pwsh
