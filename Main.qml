@@ -8481,7 +8481,7 @@ ApplicationWindow {
                     objectName: "qa-about-github-link"
                     text: window.t("dialog.about.github", "OPEN GITHUB")
                     Layout.fillWidth: true
-                    onClicked: Qt.openUrlExternally("https://github.com/CMDRForcer/ED-Engineering-Companion")
+                    onClicked: Qt.openUrlExternally("https://github.com/CMDRForcer/ED-Frame")
                 }
                 CockpitButton {
                     objectName: "qa-about-kofi-link"

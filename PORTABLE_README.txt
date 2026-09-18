@@ -14,7 +14,7 @@ Documentation:
 - ED-Frame_User_Manual_Privacy_EN_1.5.5.pdf
 - ED-Frame_User_Manual_Privacy_DE_1.5.5.pdf
 
-Project: https://github.com/CMDRForcer/ED-Engineering-Companion
+Project: https://github.com/CMDRForcer/ED-Frame
 License: GNU General Public License v3.0
 
 ED-Frame is an independent third-party project and is not affiliated with

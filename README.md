@@ -2,15 +2,15 @@
 
 **Turn the Elite Dangerous Journal into a live operations, engineering and Commander workspace.**
 
-[![Latest release](https://img.shields.io/github/v/release/CMDRForcer/ED-Engineering-Companion?sort=semver&label=release)](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/CMDRForcer/ED-Engineering-Companion/total?label=downloads)](https://github.com/CMDRForcer/ED-Engineering-Companion/releases)
+[![Latest release](https://img.shields.io/github/v/release/CMDRForcer/ED-Frame?sort=semver&label=release)](https://github.com/CMDRForcer/ED-Frame/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/CMDRForcer/ED-Frame/total?label=downloads)](https://github.com/CMDRForcer/ED-Frame/releases)
 [![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-informational)
 ![Languages: EN · DE · ES · FR](https://img.shields.io/badge/languages-EN%20%C2%B7%20DE%20%C2%B7%20ES%20%C2%B7%20FR-informational)
 
 ED-Frame is a free, open-source Windows companion for [Elite Dangerous](https://www.elitedangerous.com/) — Fleet, Routes, Analytics, Materials and Engineering in one place. It reads your local Journal and turns it into one coherent cockpit for engineering, unlocks, materials, mining, state hunting, Powerplay, Commander finances, fleet management, exploration and exobiology.
 
-[**Download the latest release**](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/CMDRForcer/ED-Engineering-Companion/issues) · [Support ED-Frame on Ko-fi](https://ko-fi.com/cmdrforcer)
+[**Download the latest release**](https://github.com/CMDRForcer/ED-Frame/releases/latest) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/CMDRForcer/ED-Frame/issues) · [Support ED-Frame on Ko-fi](https://ko-fi.com/cmdrforcer)
 
 ![ED-Frame Commander Operations in the Orbital Dawn theme](docs/images/edec-operations.png)
 
@@ -165,7 +165,7 @@ Advanced Diagnostics exposes Journal watcher health, renderer and service pipeli
 
 ### Portable (recommended)
 
-1. Open the [latest release](https://github.com/CMDRForcer/ED-Engineering-Companion/releases/latest).
+1. Open the [latest release](https://github.com/CMDRForcer/ED-Frame/releases/latest).
 2. Under **Assets**, download `ED-Frame-<version>-Windows.zip`.
 3. Extract the whole ZIP to a writable folder.
 4. Run `ED-Frame.exe`, keeping the `_internal` folder beside it.
@@ -210,7 +210,7 @@ INSTALL_REQUIREMENTS.bat
 START_APP.bat
 ```
 
-See [`requirements.txt`](requirements.txt) for runtime dependencies. ED-Frame is under active development; bug reports, translations and feature suggestions are welcome through [GitHub Issues](https://github.com/CMDRForcer/ED-Engineering-Companion/issues).
+See [`requirements.txt`](requirements.txt) for runtime dependencies. ED-Frame is under active development; bug reports, translations and feature suggestions are welcome through [GitHub Issues](https://github.com/CMDRForcer/ED-Frame/issues).
 
 ## License and attribution
 
