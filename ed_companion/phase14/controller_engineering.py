@@ -634,6 +634,13 @@ class EngineeringMixin:
     )
 
 
+    shipPowerBudget = Property(
+        "QVariantMap",
+        lambda self: self._state.get("shipPowerBudget", {}),
+        notify=CoreControllerMixin.stateChanged,
+    )
+
+
     engineeringShipCatalog = Property(
         "QVariantList", lambda self: self._ship_catalog, constant=True,
     )

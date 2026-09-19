@@ -281,6 +281,22 @@ ApplicationWindow {
         return tf(days === 1 ? "logbook.day_ago" : "logbook.days_ago",
                   days === 1 ? "%1 day ago" : "%1 days ago", [days])
     }
+    function timeUntil(timestamp) {
+        var parsed = Date.parse(timestamp || "")
+        if (isNaN(parsed))
+            return ""
+        var seconds = Math.floor((parsed - sessionClock) / 1000)
+        if (seconds <= 0)
+            return t("missions.expired", "EXPIRED")
+        if (seconds < 3600)
+            return tf("missions.time_minutes", "%1M", [Math.ceil(seconds / 60)])
+        if (seconds < 86400)
+            return tf("missions.time_hours_minutes", "%1H %2M",
+                       [Math.floor(seconds / 3600), Math.floor((seconds % 3600) / 60)])
+        var days = Math.floor(seconds / 86400)
+        var hours = Math.floor((seconds % 86400) / 3600)
+        return tf("missions.time_days_hours", "%1D %2H", [days, hours])
+    }
     function powerplayPledgedHours(overview) {
         if (!overview || !overview.timePledgedKnown)
             return 0
@@ -366,6 +382,7 @@ ApplicationWindow {
         {"id": "cmdr", "label": t("nav.commander", "CMDR"), "icon": "\uE77B", "page": 10},
         {"id": "logbook", "label": t("nav.logbook", "LOGBOOK"), "icon": "\uE8FD", "page": 9},
         {"id": "exobiology", "label": t("nav.exobiology", "EXOBIOLOGY"), "icon": "", "iconKind": "dna", "page": 13},
+        {"id": "missions", "label": t("nav.missions", "MISSIONS"), "icon": "\uE71D", "page": 14},
         {"id": "settings", "label": t("nav.settings", "SETTINGS"), "icon": "\uE713", "page": 5}
     ]
     property var navigationOrder: cockpit.navigationOrder || []
@@ -493,6 +510,7 @@ ApplicationWindow {
         repeat: true
         running: (window.currentPage === 9 && !!cockpit.currentSession.active)
                  || window.currentPage === 11
+                 || window.currentPage === 14
         triggeredOnStart: true
         onTriggered: window.sessionClock = Date.now()
     }
@@ -3513,6 +3531,80 @@ ApplicationWindow {
                             }
                         }
                     }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        visible: cockpit.shipPowerBudget.capacityKnown === true
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Label {
+                                Layout.fillWidth: true
+                                text: window.t("engineering.power_budget", "POWER PLANT")
+                                color: muted; font.pixelSize: 9; font.bold: true
+                            }
+                            Label {
+                                text: Number(cockpit.shipPowerBudget.usedDrawMW || 0).toFixed(2) + " / "
+                                      + Number(cockpit.shipPowerBudget.capacityMW || 0).toFixed(2) + " MW"
+                                color: cockpit.shipPowerBudget.overloaded ? danger : textPrimary
+                                font.pixelSize: 12; font.bold: true
+                            }
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true; height: 8; radius: 4; color: borderTone
+                            Rectangle {
+                                height: parent.height; radius: parent.radius
+                                color: cockpit.shipPowerBudget.overloaded ? danger
+                                       : (cockpit.shipPowerBudget.capacityMW > 0
+                                          && cockpit.shipPowerBudget.usedDrawMW / cockpit.shipPowerBudget.capacityMW > 0.9)
+                                         ? orange : green
+                                width: parent.width * Math.max(0, Math.min(1,
+                                    cockpit.shipPowerBudget.capacityMW > 0
+                                    ? cockpit.shipPowerBudget.usedDrawMW / cockpit.shipPowerBudget.capacityMW : 0))
+                                Behavior on width { NumberAnimation { duration: 150 } }
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 4
+                            Repeater {
+                                model: cockpit.shipPowerBudget.groups || []
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: 24
+                                    radius: 5
+                                    color: modelData.shedByCascade ? errorBackground
+                                           : modelData.drawMW > 0 ? panelRaised : "transparent"
+                                    border.width: 1
+                                    border.color: modelData.shedByCascade ? danger : borderTone
+                                    ColumnLayout {
+                                        anchors.centerIn: parent
+                                        spacing: 0
+                                        Label {
+                                            Layout.alignment: Qt.AlignHCenter
+                                            text: window.tf("engineering.power_priority_label", "P%1", [modelData.priorityGroup])
+                                            color: modelData.shedByCascade ? danger : muted
+                                            font.pixelSize: 9; font.bold: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            visible: cockpit.shipPowerBudget.overloaded === true
+                            text: window.t("engineering.power_overloaded",
+                                "Power draw exceeds Power Plant capacity — Priority 5 modules shut down first, then 4, 3, 2.")
+                            color: danger; font.pixelSize: 9; wrapMode: Text.WordWrap
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            visible: (cockpit.shipPowerBudget.unknownModuleSlots || []).length > 0
+                            text: window.t("engineering.power_unknown_modules",
+                                "Power draw unknown for one or more installed modules — this budget may be understated.")
+                            color: muted; font.pixelSize: 9; wrapMode: Text.WordWrap
+                        }
+                    }
                     Label {
                         Layout.fillWidth: true
                         text: window.t("engineering.ship_help", "Select any ship in your fleet to plan without switching ships in-game.")
@@ -6427,14 +6519,63 @@ ApplicationWindow {
                 property string reserveFilter: "ALL RESERVES"
                 property string miningMethod: "LASER"
                 property var readiness: cockpit.miningLoadoutReadiness(miningMethod)
+                // cockpit.miningRevision bumps on essentially every Journal
+                // refresh (every ~1.2s while flying), far more often than the
+                // mining catalog actually changes. Rebuilding the combo box
+                // models and result list on every one of those ticks made the
+                // dropdowns feel unresponsive - a popup can be torn down
+                // mid-interaction by its own model resetting under it. This
+                // snapshot only advances on a slower timer, and never while
+                // one of this page's own popups is open, so a rebuild can
+                // never land in the middle of a click or an open dropdown.
+                property int _miningRevisionSnapshot: cockpit.miningRevision
+                Timer {
+                    interval: 2000
+                    repeat: true
+                    running: window.currentPage === 12
+                    onTriggered: {
+                        if (commodityBox.popup.visible || rangeBox.popup.visible
+                                || evidenceBox.popup.visible || reserveBox.popup.visible
+                                || miningFinderList.moving || miningFinderList.dragging)
+                            return
+                        miningFinderPage._miningRevisionSnapshot = cockpit.miningRevision
+                    }
+                }
                 property var commodityOptions: {
-                    let revision = cockpit.miningRevision
+                    let revision = miningFinderPage._miningRevisionSnapshot
                     return cockpit.miningCommodityFiltersForMethod(miningMethod)
                 }
                 property var resultRows: {
-                    let revision = cockpit.miningRevision
+                    let revision = miningFinderPage._miningRevisionSnapshot
                     return cockpit.miningFindPageForMethod(commodityFilter, nearbyLy, evidenceFilter, reserveFilter, miningMethod)
                 }
+                function pinKey(row) {
+                    return String(row.systemAddress || "") + "|" + String(row.ring || row.body || "")
+                }
+                // Pinned rows (see cockpit.pinnedMiningSystems) always sort
+                // first, so a system worth remembering never gets buried
+                // again by a later background refresh - everything else
+                // keeps the existing best-evidence-then-distance order.
+                property var sortedResultRows: {
+                    let pins = cockpit.pinnedMiningSystems || []
+                    let rows = miningFinderPage.resultRows || []
+                    if (!pins.length) return rows
+                    let pinned = []
+                    let rest = []
+                    for (let i = 0; i < rows.length; i++) {
+                        if (pins.indexOf(miningFinderPage.pinKey(rows[i])) !== -1) pinned.push(rows[i])
+                        else rest.push(rows[i])
+                    }
+                    return pinned.concat(rest)
+                }
+                // A model swap otherwise resets ListView scroll to the top -
+                // exactly the "scrolling down and it jumps back up" complaint.
+                // Restore the last known position after each swap instead.
+                property real _listScrollY: 0
+                onSortedResultRowsChanged: Qt.callLater(function() {
+                    let maxY = Math.max(0, miningFinderList.contentHeight - miningFinderList.height)
+                    miningFinderList.contentY = Math.min(miningFinderPage._listScrollY, maxY)
+                })
                 onMiningMethodChanged: {
                     commodityBox.currentIndex = 0
                     commodityFilter = "ALL COMMODITIES"
@@ -6550,14 +6691,18 @@ ApplicationWindow {
                     spacing: 9
                     clip: true
                     ScrollBar.vertical: CockpitScrollBar {}
-                    model: miningFinderPage.resultRows
+                    model: miningFinderPage.sortedResultRows
+                    onContentYChanged: miningFinderPage._listScrollY = contentY
                     delegate: Rectangle {
                         required property var modelData
+                        readonly property string pinKey: miningFinderPage.pinKey(modelData)
+                        readonly property bool pinned: cockpit.pinnedMiningSystems.indexOf(pinKey) !== -1
                         width: miningFinderList.width
                         height: Math.max(148, miningCard.implicitHeight + 34)
                         radius: 12; color: panelRaised
-                        border.width: 1
-                        border.color: modelData.evidence === "LOCAL_CONFIRMED" ? green
+                        border.width: pinned ? 2 : 1
+                        border.color: pinned ? orange
+                                      : modelData.evidence === "LOCAL_CONFIRMED" ? green
                                       : modelData.evidence === "LIVE_REPORTED" ? cyan
                                       : modelData.recheckRecommended ? muted : orange
                         RowLayout {
@@ -6606,10 +6751,19 @@ ApplicationWindow {
                                 Label { text: modelData.targetMatch === "PLANETARY_MINING_LOCATION" ? window.t("mining.planetary_unconfirmed", "PLANETARY LOCATION · COMMODITY UNCONFIRMED") : (modelData.targetMatchName || ""); color: cyan; font.pixelSize: 9; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
                                 Label { text: modelData.distanceToArrivalLs === null || modelData.distanceToArrivalLs === undefined ? window.t("mining.arrival_unknown", "ARRIVAL · UNKNOWN") : window.tf("mining.arrival", "ARRIVAL · %1 LS", [Number(modelData.distanceToArrivalLs).toFixed(0)]); color: muted; font.pixelSize: 10 }
                             }
-                            CockpitButton {
-                                text: window.t("common.copy_system", "COPY SYSTEM")
-                                enabled: Boolean(modelData.system)
-                                onClicked: cockpit.copySystem(modelData.system || "")
+                            ColumnLayout {
+                                spacing: 6
+                                CockpitButton {
+                                    Layout.fillWidth: true
+                                    text: window.t("common.copy_system", "COPY SYSTEM")
+                                    enabled: Boolean(modelData.system)
+                                    onClicked: cockpit.copySystem(modelData.system || "")
+                                }
+                                CockpitButton {
+                                    Layout.fillWidth: true
+                                    text: pinned ? window.t("mining.pinned", "★ PINNED") : window.t("mining.pin", "☆ PIN")
+                                    onClicked: cockpit.toggleMiningPin(pinKey)
+                                }
                             }
                         }
                     }
@@ -6648,6 +6802,19 @@ ApplicationWindow {
         asynchronous: false
         sourceComponent: Component {
             PowerplayPage {
+                appWindow: window
+                sidebarWidth: sidebar.width
+            }
+        }
+    }
+
+    Loader {
+        id: pageLoader14
+        anchors.fill: parent
+        active: window.currentPage === 14
+        asynchronous: false
+        sourceComponent: Component {
+            MissionsPage {
                 appWindow: window
                 sidebarWidth: sidebar.width
             }

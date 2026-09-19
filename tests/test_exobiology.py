@@ -206,6 +206,46 @@ class SessionAndCarriedSummaryTests(unittest.TestCase):
         self.assertEqual(summary["speciesCount"], 1)
         self.assertEqual(summary["totalValue"], 7252500)
 
+    def test_a_species_completed_before_a_death_is_no_longer_carried(self):
+        # Frontier wipes unsold Exobiology data when the ship is destroyed -
+        # a find from before the most recent death is gone, not carried,
+        # even though it was never sold.
+        events = [
+            *self._completed_species("2026-09-10T10:00:00Z"),
+            {"event": "Died", "timestamp": "2026-09-11T08:00:00Z"},
+        ]
+
+        summary = exobiology_carried_summary(events, SPECIES_CATALOG)
+
+        self.assertEqual(summary["speciesCount"], 0)
+        self.assertEqual(summary["totalValue"], 0)
+
+    def test_a_species_completed_after_a_death_stays_carried(self):
+        events = [
+            {"event": "Died", "timestamp": "2026-09-11T08:00:00Z"},
+            *self._completed_species("2026-09-12T10:00:00Z"),
+        ]
+
+        summary = exobiology_carried_summary(events, SPECIES_CATALOG)
+
+        self.assertEqual(summary["speciesCount"], 1)
+        self.assertEqual(summary["totalValue"], 7252500)
+
+    def test_carried_resets_at_whichever_of_sale_or_death_happened_last(self):
+        events = [
+            *self._completed_species("2026-09-10T10:00:00Z"),
+            {"event": "SellOrganicData", "timestamp": "2026-09-11T08:00:00Z"},
+            {"event": "Died", "timestamp": "2026-09-12T08:00:00Z"},
+            *self._completed_species(
+                "2026-09-12T09:00:00Z", body="Erda 1 b", Species="species_b",
+            ),
+        ]
+
+        summary = exobiology_carried_summary(events, SPECIES_CATALOG)
+
+        # Only the find after the later of the two (the death) still counts.
+        self.assertEqual(summary["speciesCount"], 1)
+
     def test_carried_and_session_are_independent_of_each_other(self):
         # Found two days ago (so not "this session"), never sold since (so
         # still fully "carried") - the two numbers are allowed to disagree.

@@ -1,5 +1,51 @@
 # Changelog
 
+## 1.5.8 — 2026-09-19
+
+### Added
+
+- **Power Plant budget** on the Engineering page: a live bar showing
+  total power draw against the installed Power Plant's output, plus
+  five Priority-group indicators that highlight exactly which groups
+  Frontier's own cascade (lowest priority shut down first) would
+  disable on overload. Base module power figures are ED-Frame's own
+  re-expression of the underlying game facts (not a copy of any
+  third-party data file), combined with each module's own known
+  engineering grade and experimental effect using the same
+  sequential-multiplier math the game itself uses. A small number of
+  modules with no published power figures anywhere yet (the classic
+  Size-8 Frame Shift Drive, the Size-1 Class-B Shield Generator, and
+  the Large/Mk II Large Planetary Vehicle Hangar) are reported as
+  unknown rather than guessed.
+- **Missions & Community Goals** page: a read-only view of currently
+  accepted missions (reward, destination, time left) and joined
+  Community Goals (contribution, tier reached, percentile rank),
+  built entirely from Journal events - nothing is sent back to the
+  game, and missions/goals cannot be accepted, abandoned or turned in
+  from here. Delivery-by-Cargo-Depot and salvage-collection missions
+  show a real progress bar; Frontier does not journal step-by-step
+  progress for kill-count or single-target missions, so none is shown
+  for those. A known-bugged Frontier mission type ("Permit Acquisition
+  Opportunity") that never closes on its own is filtered out
+  automatically.
+- **Mining Finder pins**: mark a system worth remembering and it sorts
+  to the top of the results list and survives filter and session
+  changes (stored per Commander profile).
+
+### Fixed
+
+- Exobiology's "Carried · Unsold" counter only reset on a Vista
+  Genomics sale - a ship lost to destruction wipes unsold Exobiology
+  data in-game too, but the counter kept counting it as still carried.
+  It now also resets on a `Died` event.
+- The Mining Finder's filter dropdowns and result list rebuilt on
+  almost every Journal refresh (roughly every 1.2 seconds while
+  flying), which could tear a dropdown's popup out from under an
+  in-progress click and reset list scroll position back to the top
+  mid-read. Both now refresh at a slower, throttled pace, never while
+  one of the page's own popups is open or the list is being scrolled,
+  and the list explicitly restores scroll position afterward.
+
 ## 1.5.7 — 2026-09-19
 
 ### Changed

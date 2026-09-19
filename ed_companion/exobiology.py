@@ -296,12 +296,19 @@ def exobiology_carried_summary(
     still sitting in the ship today. With no sale on record, the whole
     career's completed value counts as carried, which is correct - nothing
     has been banked yet.
+
+    A ``Died`` event resets this the same way a sale does: Frontier wipes
+    every unsold Exobiology sample on ship destruction, so a find from
+    before the Commander's most recent death is gone, not still carried,
+    even though it was never actually sold.
     """
     events = events or []
     last_sale = _latest_event_timestamp(events, "SellOrganicData")
+    last_death = _latest_event_timestamp(events, "Died")
+    cutoff = max(last_sale, last_death)
     carried = [
         row for row in exobiology_findings(events, species_catalog)
-        if row["complete"] and row["lastSeen"] > last_sale
+        if row["complete"] and row["lastSeen"] > cutoff
     ]
     return {
         "speciesCount": len(carried),

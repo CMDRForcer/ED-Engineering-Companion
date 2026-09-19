@@ -536,6 +536,8 @@ def ship_slot_layout(
             "experimentalEffect": str(
                 installed.get("experimentalEffect") or ""
             ),
+            "priorityGroup": max(1, min(5, int(installed.get("priorityGroup") or 1))),
+            "poweredOn": bool(installed.get("poweredOn", True)),
             "category": str(engineering.get("category") or ""),
             "blueprintCount": int(engineering.get("blueprintCount") or 0),
             "bindingKey": f"{slot}\u241f{module_id}" if module_id else slot,
@@ -584,6 +586,246 @@ def ship_slot_layout(
 
 
 
+@lru_cache(maxsize=1)
+def _module_power_catalog() -> dict[str, dict[str, float]]:
+    path = Path(__file__).resolve().parents[2] / "ed_data" / "module_power.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))["modules"]
+    except (OSError, ValueError, KeyError):
+        LOGGER.warning("Module power catalog unavailable: %s", path, exc_info=True)
+        return {}
+
+
+
+@lru_cache(maxsize=1)
+def _blueprint_effect_rows() -> tuple[dict[str, Any], ...]:
+    path = Path(__file__).resolve().parents[2] / "ed_data" / "blueprints.json"
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        LOGGER.warning("Blueprint catalog unavailable: %s", path, exc_info=True)
+        return ()
+    return tuple(
+        row for row in rows
+        if isinstance(row, dict) and row.get("Grade") is not None
+        and real_engineers(row)
+    )
+
+
+
+@lru_cache(maxsize=1)
+def _experimental_effect_rows() -> tuple[dict[str, Any], ...]:
+    path = Path(__file__).resolve().parents[2] / "ed_data" / "experimental_effects.json"
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        LOGGER.warning("Experimental effect catalog unavailable: %s", path, exc_info=True)
+        return ()
+    return tuple(row for row in rows if isinstance(row, dict))
+
+
+
+@lru_cache(maxsize=1)
+def _blueprint_types() -> tuple[str, ...]:
+    return tuple(sorted({
+        str(row.get("Type") or "").strip()
+        for row in _blueprint_effect_rows() + _experimental_effect_rows()
+        if str(row.get("Type") or "").strip()
+    }))
+
+
+
+def _matched_blueprint_type(module_id: str) -> str:
+    return next(
+        (kind for kind in _blueprint_types() if module_matches_type(module_id, kind)),
+        "",
+    )
+
+
+
+def _parse_percent_effect(value: object) -> float | None:
+    text = str(value or "").strip()
+    if not text.endswith("%"):
+        return None
+    try:
+        return float(text[:-1]) / 100.0
+    except ValueError:
+        return None
+
+
+
+def _power_property_percent(rows: tuple[dict[str, Any], ...]) -> float:
+    for row in rows:
+        for effect in row.get("Effects", []) or []:
+            if not isinstance(effect, dict):
+                continue
+            if str(effect.get("Property") or "") in ("Power Draw", "Power Generation"):
+                percent = _parse_percent_effect(effect.get("Effect"))
+                if percent is not None:
+                    return percent
+    return 0.0
+
+
+
+def _singular_key(value: object) -> str:
+    key = normalize(value)
+    return key[:-1] if len(key) > 1 and key.endswith("s") else key
+
+
+
+def power_modifier_multiplier(
+    module_id: object, engineering_blueprint: object, engineering_grade: object,
+    experimental_effect: object = "",
+) -> float:
+    """Fractional Power Draw/Generation change from a module's known
+    engineering blueprint grade and experimental effect, combined the way
+    Elite Dangerous applies engineering modifiers: as sequential multipliers
+    on the base stat, not summed percentages. Returns 1.0 (no change) for
+    any module, blueprint or grade this can't positively identify - never a
+    guessed value.
+    """
+    module = str(module_id or "")
+    matched_type = _matched_blueprint_type(module)
+    multiplier = 1.0
+    grade = int(engineering_grade or 0)
+    if matched_type and grade > 0 and engineering_blueprint:
+        installed_name = JOURNAL_BLUEPRINT_NAMES.get(
+            normalize(engineering_blueprint),
+            str(engineering_blueprint).replace("_", " "),
+        )
+        grade_rows = tuple(
+            row for row in _blueprint_effect_rows()
+            if row.get("Type") == matched_type
+            and normalize(str(row.get("Name") or "")) == normalize(installed_name)
+            and int(row.get("Grade") or 0) == grade
+        )
+        multiplier *= 1.0 + _power_property_percent(grade_rows)
+    if matched_type and experimental_effect:
+        installed_experimental = JOURNAL_EXPERIMENTAL_NAMES.get(
+            normalize(experimental_effect),
+            str(experimental_effect).replace("_", " "),
+        )
+        experimental_rows = tuple(
+            row for row in _experimental_effect_rows()
+            if row.get("Type") == matched_type
+            and _singular_key(row.get("Name")) == _singular_key(installed_experimental)
+        )
+        multiplier *= 1.0 + _power_property_percent(experimental_rows)
+    return multiplier
+
+
+
+def slot_power_mw(row: dict[str, Any]) -> tuple[float | None, float | None]:
+    """Return ``(powerDrawMW, powerGeneratedMW)`` for one installed slot,
+    applying its known engineering, or ``(None, None)`` if this module's
+    base power figures are not in ``ed_data/module_power.json``."""
+    module_id = str(row.get("moduleId") or "")
+    if not module_id:
+        return None, None
+    entry = _module_power_catalog().get(canonical_module_id(module_id).casefold())
+    if not entry:
+        return None, None
+    multiplier = power_modifier_multiplier(
+        module_id, row.get("engineeringBlueprint"),
+        row.get("engineeringGrade"), row.get("experimentalEffect"),
+    )
+    draw = entry.get("powerDrawMW")
+    generated = entry.get("powerGeneratedMW")
+    return (
+        float(draw) * multiplier if draw is not None else None,
+        float(generated) * multiplier if generated is not None else None,
+    )
+
+
+
+def ship_power_budget(slots: object) -> dict[str, Any]:
+    """Compute the Power Plant budget and Frontier's priority-cascade
+    shutdown state for one ship's slot layout (as built by
+    ``ship_slot_layout``).
+
+    Frontier disables whole priority groups - starting at the lowest
+    priority (5) and working up towards the highest (1) - until the
+    remaining "on" modules' total draw fits inside the Power Plant's
+    output. See https://elite-dangerous.fandom.com/wiki/Module_priority_control.
+    This models the static, worst-case loadout (every enabled module
+    treated as drawing power at once) since a Commander's real-time
+    hardpoint-deployed state is not part of a Journal Loadout event.
+    """
+    rows = [row for row in (slots or []) if isinstance(row, dict)]
+    power_plant = next(
+        (row for row in rows if row.get("slot") == "PowerPlant"), {}
+    )
+    _, capacity = slot_power_mw(power_plant) if power_plant.get("moduleId") else (None, None)
+    capacity = float(capacity or 0.0)
+    capacity_known = capacity > 0.0
+
+    consumers: list[dict[str, Any]] = []
+    unknown_slots: list[str] = []
+    for row in rows:
+        if row.get("empty") or not row.get("moduleId") or row is power_plant:
+            continue
+        draw, _generated = slot_power_mw(row)
+        if draw is None:
+            unknown_slots.append(str(row.get("slot") or ""))
+            continue
+        if draw <= 0.0:
+            continue
+        consumers.append({
+            "slot": str(row.get("slot") or ""),
+            "module": str(row.get("module") or ""),
+            "priorityGroup": max(1, min(5, int(row.get("priorityGroup") or 1))),
+            "poweredOn": bool(row.get("poweredOn", True)),
+            "drawMW": draw,
+        })
+
+    active = [row for row in consumers if row["poweredOn"]]
+    total_draw = sum(row["drawMW"] for row in active)
+
+    shed_groups: set[int] = set()
+    remaining = total_draw
+    if capacity_known:
+        for group in (5, 4, 3, 2):
+            if remaining <= capacity:
+                break
+            group_draw = sum(
+                row["drawMW"] for row in active if row["priorityGroup"] == group
+            )
+            if group_draw <= 0.0:
+                continue
+            shed_groups.add(group)
+            remaining -= group_draw
+
+    for row in consumers:
+        row["shutDown"] = row["poweredOn"] and row["priorityGroup"] in shed_groups
+        row["effectiveDrawMW"] = row["drawMW"] if (
+            row["poweredOn"] and not row["shutDown"]
+        ) else 0.0
+
+    groups_summary = [
+        {
+            "priorityGroup": group,
+            "drawMW": sum(
+                row["drawMW"] for row in active if row["priorityGroup"] == group
+            ),
+            "shedByCascade": group in shed_groups,
+        }
+        for group in (1, 2, 3, 4, 5)
+    ]
+
+    return {
+        "capacityMW": capacity,
+        "capacityKnown": capacity_known,
+        "totalDrawMW": total_draw,
+        "usedDrawMW": remaining if capacity_known else total_draw,
+        "overloaded": capacity_known and total_draw > capacity,
+        "groups": groups_summary,
+        "consumers": consumers,
+        "unknownModuleSlots": unknown_slots,
+    }
+
+
+
+
 MANDATORY_CORE_STOCK_FAMILIES = {
     "PowerPlant": "int_powerplant",
     "MainEngines": "int_engine",
@@ -627,7 +869,10 @@ def latest_loadout_slots_by_ship(
     events: list[dict[str, Any]],
 ) -> dict[str, list[dict[str, Any]]]:
     """Rebuild every ship's physical bindings in one chronological pass."""
-    def slot_record(module_id: object, engineering: object = None) -> dict[str, Any]:
+    def slot_record(
+        module_id: object, engineering: object = None,
+        priority: object = None, powered_on: object = None,
+    ) -> dict[str, Any]:
         details = engineering if isinstance(engineering, dict) else {}
         level = details.get("Level")
         try:
@@ -639,6 +884,13 @@ def latest_loadout_slots_by_ship(
             quality = max(0.0, min(1.0, float(details.get("Quality") or 0)))
         except (TypeError, ValueError):
             quality = 0.0
+        try:
+            # Frontier's Journal reports Priority 0-4; the in-game Functions
+            # panel shows the same groups as 1-5, so +1 here keeps EDEC's own
+            # value matching what a Commander actually sees on screen.
+            priority_group = max(1, min(5, int(priority) + 1))
+        except (TypeError, ValueError):
+            priority_group = 1
         return {
             "moduleId": canonical_module_id(module_id),
             "engineered": bool(details and grade > 0),
@@ -653,6 +905,8 @@ def latest_loadout_slots_by_ship(
                 details.get("ExperimentalEffect_Localised")
                 or details.get("ExperimentalEffect") or ""
             ),
+            "priorityGroup": priority_group,
+            "poweredOn": bool(powered_on) if powered_on is not None else True,
         }
     ordered = sorted(
         (
@@ -695,7 +949,10 @@ def latest_loadout_slots_by_ship(
                 if not isinstance(module, dict) or not module.get("Slot") or not module.get("Item"):
                     continue
                 slot = str(module.get("Slot"))
-                record = slot_record(module.get("Item"), module.get("Engineering"))
+                record = slot_record(
+                    module.get("Item"), module.get("Engineering"),
+                    module.get("Priority"), module.get("On"),
+                )
                 previous = previous_slots.get(slot, {})
                 # Loadout normally omits within-grade Quality. Preserve the
                 # last authoritative EngineerCraft value only while the same

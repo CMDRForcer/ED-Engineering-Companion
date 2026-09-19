@@ -146,7 +146,7 @@ COMMANDER_CARD_IDS = (
 NAVIGATION_IDS = (
     "operations", "engineering", "wishlist", "engineers", "materials",
     "mining-finder", "state-finds", "powerplay", "cmdr", "logbook",
-    "exobiology", "settings",
+    "exobiology", "missions", "settings",
 )
 LEGACY_DEFAULT_NAVIGATION_ORDERS = {
     (
@@ -315,6 +315,7 @@ class CockpitController(
         self.trader_catalog_file = user_trader_catalog_path(context)
         self.tech_broker_catalog_file = self.config_dir / "tech_broker_catalog_user.json"
         self.mining_catalog_file = self.config_dir / "mining_finder_catalog.json"
+        self.mining_pins_file = self.config_dir / "mining_finder_pins.json"
         self.history_archive_file = self.config_dir / "data_history.sqlite3"
         self.fleet_images_file = self.config_dir / "fleet_images.json"
         self.fleet_images_dir = self.config_dir / "fleet_images"
@@ -478,6 +479,10 @@ class CockpitController(
         self._mining_sync_status = "Ready"
         self._active_mining_request = None
         self.miningSyncFinished.connect(self._finish_mining_sync)
+        self._mining_pins = set(
+            str(item) for item in self._read_local_json(self.mining_pins_file, [])
+            if isinstance(item, str)
+        )
         self_test_count = sum(
             1 for row in self._hge_sightings
             if isinstance(row, dict) and row.get("self_test")
@@ -2272,6 +2277,10 @@ class CockpitController(
         self._mining_rows_cache = []
         self._mining_find_cache_key = None
         self._mining_find_cache = []
+        self._mining_pins = set(
+            str(item) for item in self._read_local_json(self.mining_pins_file, [])
+            if isinstance(item, str)
+        )
         if hasattr(self, "_network_threads_lock"):
             self._start_mining_catalog_load()
         else:

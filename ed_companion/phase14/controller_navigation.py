@@ -1116,6 +1116,27 @@ class NavigationMixin:
     )
 
 
+    pinnedMiningSystems = Property(
+        "QVariantList", lambda self: sorted(self._mining_pins),
+        notify=miningChanged,
+    )
+
+
+    @Slot(str)
+    def toggleMiningPin(self, key):
+        key = str(key or "").strip()
+        if not key:
+            return
+        if key in self._mining_pins:
+            self._mining_pins.discard(key)
+        else:
+            self._mining_pins.add(key)
+        self._persist_json(
+            self.mining_pins_file, sorted(self._mining_pins), "Mining Finder pins",
+        )
+        self.miningChanged.emit()
+
+
     miningCacheSummary = Property(
         "QVariantMap", lambda self: self._mining_cache_summary(),
         notify=CoreControllerMixin.stateChanged,

@@ -352,6 +352,24 @@ class CommanderMixin:
     )
 
 
+    activeMissions = Property(
+        "QVariantList", lambda self: self._get("activeMissions", []),
+        notify=CoreControllerMixin.stateChanged,
+    )
+
+
+    missionsSummary = Property(
+        "QVariantMap", lambda self: self._get("missionsSummary", {}),
+        notify=CoreControllerMixin.stateChanged,
+    )
+
+
+    communityGoals = Property(
+        "QVariantList", lambda self: self._get("communityGoals", []),
+        notify=CoreControllerMixin.stateChanged,
+    )
+
+
     commanderCards = Property(
         "QVariantMap", lambda self: self._commander_cards(),
         notify=commanderCardsChanged,

@@ -77,6 +77,11 @@ from ed_companion.exobiology import (
     landing_targets,
     remaining_signals_at_body,
 )
+from ed_companion.missions import (
+    active_missions,
+    community_goals_overview,
+    missions_summary,
+)
 
 # Journal/profile plumbing, plus a handful of constants shared across
 # domains - extracted to state_core.py so every domain module below can
@@ -172,8 +177,11 @@ from .state_fleet import (
     module_matches_type,
     module_purchase_identity,
     module_store_core_replacement,
+    power_modifier_multiplier,
     reconcile_fleet_cache,
+    ship_power_budget,
     ship_slot_layout,
+    slot_power_mw,
 )
 
 # Logbook and session history - depends on state_core and
@@ -1081,9 +1089,15 @@ def build_state(
     )
     exobiology_status_snapshot = read_json(journal_dir() / "Status.json", {})
 
+    mission_rows = active_missions(profile_events)
+    community_goal_rows = community_goals_overview(profile_events)
+
     return {
         "_profileContext": profile_context,
         "_craftBatch": craft_batch,
+        "activeMissions": mission_rows,
+        "missionsSummary": missions_summary(mission_rows),
+        "communityGoals": community_goal_rows,
         "exobiologyFindings": exobiology_rows,
         "exobiologySummary": exobiology_summary(exobiology_rows),
         "exobiologySessionSummary": exobiology_session_summary(
@@ -1128,6 +1142,7 @@ def build_state(
         "moduleSlots": module_slots,
         "engineeringModuleSlots": engineering_slots,
         "engineeringShipSlots": engineering_ship_slots,
+        "shipPowerBudget": ship_power_budget(engineering_ship_slots),
         "system": latest_location.get("StarSystem") or "Unknown system",
         "currentPosition": position or [],
         "techBrokerTrack": dict(tracked_row) if tracked_row else {},
